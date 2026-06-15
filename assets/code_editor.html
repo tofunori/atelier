@@ -53,6 +53,13 @@
 <header>
   <b id="fname"></b>
   <button id="openFile" style="background:transparent;color:#a1a1aa;border:1px solid #3f3f46;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer">Open…</button>
+  <select id="wrapSel" title="Word wrap" style="background:#27272a;color:#e4e4e7;border:1px solid #3f3f46;border-radius:6px;padding:3px 6px;font-size:12px;cursor:pointer">
+    <option value="win">Wrap: window</option>
+    <option value="off">Wrap: off</option>
+    <option value="80">Wrap: 80</option>
+    <option value="100">Wrap: 100</option>
+    <option value="120">Wrap: 120</option>
+  </select>
   <span id="state"></span>
   <span style="margin-left:auto;color:#a1a1aa">Cmd+S: save · selection visible to Claude</span>
 </header>
@@ -73,6 +80,16 @@ let cm = null, diskMtime = 0, dirty = false;
 
 const stateEl = document.getElementById("state");
 function setState(cls, txt){ stateEl.className = cls; stateEl.textContent = txt; }
+
+// word wrap (VS Code-style): off | window | fixed column (80/100/120)
+const wrapSel = document.getElementById("wrapSel");
+function applyWrap(v){
+  localStorage.setItem("cmWrap", v);
+  document.getElementById("ed").style.maxWidth = /^\d+$/.test(v) ? ("calc(" + v + "ch + 70px)") : "";
+  if(cm){ cm.setOption("lineWrapping", v !== "off"); cm.refresh(); }
+}
+wrapSel.value = localStorage.getItem("cmWrap") || "win";
+wrapSel.onchange = () => applyWrap(wrapSel.value);
 
 async function load(){
   const r = await fetch("/code?path=" + encodeURIComponent(path));
@@ -110,6 +127,7 @@ async function load(){
     cm.setValue(j.text);
     cm.setCursor(cur);
   }
+  applyWrap(wrapSel.value);
   dirty = false;
   setState("saved", "saved");
 }
