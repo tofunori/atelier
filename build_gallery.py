@@ -287,6 +287,15 @@ HTML = """<!DOCTYPE html>
   .cmpCell{flex:1;min-height:0;min-width:0;position:relative;display:flex;align-items:center;justify-content:center;background:#000;border-radius:4px;overflow:hidden}
   .cmpCell img{max-width:100%;max-height:100%;object-fit:contain}
   .cmpCell .clbl{position:absolute;top:6px;left:8px;font-size:11px;color:#e4e4e7;background:rgba(0,0,0,.6);padding:2px 7px;border-radius:5px;max-width:88%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #confirmModal{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center}
+  #confirmModal.show{display:flex}
+  #confirmBox{background:#1f1f23;border:1px solid #3f3f46;border-radius:12px;padding:20px 22px;max-width:440px;box-shadow:0 12px 50px rgba(0,0,0,.6)}
+  #confirmMsg{font-size:13.5px;color:#e4e4e7;line-height:1.5;white-space:pre-wrap;word-break:break-word;margin-bottom:16px}
+  #confirmBtns{display:flex;gap:10px;justify-content:flex-end}
+  #confirmBtns button{padding:7px 16px;font-size:12.5px;border-radius:7px;cursor:pointer;border:1px solid #3f3f46;background:transparent;color:#c9cfda}
+  #confirmCancel:hover{border-color:#5b6575;color:#fff}
+  #confirmOk{background:#5c1f1f;border-color:#7a2a2a;color:#fff}
+  #confirmOk:hover{background:#6e2626}
   footer{padding:20px;text-align:center;color:var(--muted);font-size:11px}
 </style>
 </head>
@@ -320,8 +329,9 @@ HTML = """<!DOCTYPE html>
     <button id="favExport" title="Copy fav commands to sync with the cmux Dock">Sync favs &#8594; clipboard</button>
     <button id="quoteClear" style="display:none" title="Clear the annotation pending in the Claude statusline">&#9998;&#10005; Annotation</button>
     <button id="rescan" title="Re-run build_figures_index.py and reload">&#8635; Rescan</button>
-    <button id="delSel" style="display:none;background:#5c1f1f;border-color:#7a2a2a">&#128465; Delete (0)</button>
     <button id="cmpSel" style="display:none" title="Show the selected images stacked, to compare">&#9636; Compare (0)</button>
+    <button id="delSel" style="display:none;background:#5c1f1f;border-color:#7a2a2a">&#128465; Delete (0)</button>
+    <button id="clrSel" style="display:none" title="Clear the selection">&#10005; Clear</button>
     <span class="count" id="count"></span>
   </div>
 </header>
@@ -352,6 +362,10 @@ HTML = """<!DOCTYPE html>
   </div>
   <div id="cmpInner"></div>
 </div>
+<div id="confirmModal"><div id="confirmBox">
+  <div id="confirmMsg"></div>
+  <div id="confirmBtns"><button id="confirmCancel">Cancel</button><button id="confirmOk">Delete</button></div>
+</div></div>
 <footer>Double-click a thumbnail or "Open" to view the file. This file must stay at the project root for the links to work. Re-run build_figures_index.py to refresh.</footer>
 <script>
 const FILES = __DATA__;
@@ -413,6 +427,7 @@ function updateDelBtn(){
   const c = document.getElementById('cmpSel');
   c.style.display = imgs.length >= 2 ? '' : 'none';
   c.textContent = '▤ Compare (' + imgs.length + ')';
+  document.getElementById('clrSel').style.display = selSet.size ? '' : 'none';
   b.textContent = '🗑 Delete (' + selSet.size + ')';
 }
 function toggleSel(rel, el){
@@ -446,11 +461,27 @@ document.getElementById('cmpOrient').onclick = function(){
 document.addEventListener('keydown', e => {
   if(e.key === 'Escape' && document.getElementById('cmp').classList.contains('show')) cmpClose();
 });
+function confirmDialog(msg){
+  return new Promise(resolve => {
+    const m = document.getElementById('confirmModal');
+    document.getElementById('confirmMsg').textContent = msg;
+    m.classList.add('show');
+    const ok = document.getElementById('confirmOk'), cancel = document.getElementById('confirmCancel');
+    function onKey(ev){ if(ev.key==='Escape'){ev.stopPropagation();done(false);} else if(ev.key==='Enter'){ev.stopPropagation();done(true);} }
+    function done(v){ m.classList.remove('show'); ok.onclick = cancel.onclick = m.onclick = null; document.removeEventListener('keydown', onKey, true); resolve(v); }
+    ok.onclick = () => done(true);
+    cancel.onclick = () => done(false);
+    m.onclick = e => { if(e.target.id === 'confirmModal') done(false); };
+    document.addEventListener('keydown', onKey, true);
+  });
+}
+function clearSel(){ selSet.clear(); updateDelBtn(); render(); }
+document.getElementById('clrSel').onclick = clearSel;
 function openDefault(rel){
   fetch('/open', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({rel})});
 }
 async function delOne(rel){
-  if(!confirm('Move to Trash? '+rel)) return;
+  if(!await confirmDialog('Move to Trash? '+rel)) return;
   try{
     const r=await fetch('/delete',{method:'POST',headers:{'Content-Type':'application/json'},
       body: JSON.stringify({rels:[rel]})});
@@ -652,7 +683,7 @@ document.getElementById('rescan').onclick=async function(){
 };
 document.getElementById('delSel').onclick=async function(){
   if(!selSet.size) return;
-  if(!confirm(selSet.size+' file(s) \u2192 trash?')) return;
+  if(!await confirmDialog(selSet.size+' file(s) \u2192 trash?')) return;
   const r=await fetch('/delete',{method:'POST',headers:{'Content-Type':'application/json'},
     body: JSON.stringify({rels:[...selSet]})});
   const j=await r.json();
