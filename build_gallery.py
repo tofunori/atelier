@@ -256,7 +256,7 @@ HTML = """<!DOCTYPE html>
             border-radius:10px;padding:6px 10px}
   #lb.annot #annotBar{display:flex}
   #annotBar button{padding:5px 9px;font-size:13px}
-  #annotBar button.sel{background:var(--accent);color:#fff}
+  #annotBar button.sel{background:#52525b;color:#fff;border-color:#52525b}
   #annotBar input[type=color]{width:30px;height:28px;border:none;background:none;cursor:pointer;padding:0}
   #lbWrap{position:relative;cursor:default}
   #annotCv{position:absolute;inset:0;display:none;touch-action:none}
@@ -319,7 +319,7 @@ HTML = """<!DOCTYPE html>
     <input type="color" id="annotColor" value="#ff2d2d" title="Color">
     <button id="annotUndo" title="Undo">&#8630;</button>
     <button id="annotClear" title="Clear all">&#10006;</button>
-    <button id="annotSend" title="Save the annotated PNG and paste the path into Claude Code" style="background:var(--accent);color:#fff">&#10148; Claude</button>
+    <button id="annotSend" title="Save the annotated PNG and paste the path into Claude Code" style="background:#3f3f46;color:#e4e4e7">&#10148; Claude</button>
   </div>
   <div id="lbWrap"><img id="lbImg" src="" alt=""><canvas id="annotCv"></canvas></div>
   <div id="annotNote"><span class="nb">1</span><input type="text" placeholder="Add a comment... (Enter)"><span class="del" title="Delete this annotation">&#128465;</span></div>
