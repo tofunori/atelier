@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <title>Markdown</title>
 <script src="marked.min.js"></script>
+<script src="purify.min.js"></script>
 <link rel="stylesheet" href="/.fig_thumbs/cm/codemirror.min.css">
 <link rel="stylesheet" href="/.fig_thumbs/cm/material-darker.min.css">
 <script src="/.fig_thumbs/cm/codemirror.min.js"></script>
@@ -89,7 +90,7 @@ if(file){
 
 let cm = null, diskMtime = 0, dirty = false, loaded = false, srcText = "";
 function setState(cls, txt){ stateEl.className = cls; stateEl.textContent = txt; }
-function renderPreview(text){ srcText = text || ""; wrap.innerHTML = marked.parse(srcText); }
+function renderPreview(text){ srcText = text || ""; wrap.innerHTML = DOMPurify.sanitize(marked.parse(srcText)); }
 
 // --- chargement via /code (text + mtime) ; repli lecture seule via fetch brut ---
 async function load(){

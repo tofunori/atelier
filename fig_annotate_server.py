@@ -143,16 +143,16 @@ class Handler(SimpleHTTPRequestHandler):
             try:
                 from urllib.parse import parse_qs, urlparse
                 q = parse_qs(urlparse(self.path).query)
-                d = self._safe_path(q.get("dir", ["~/Documents"])[0]) or os.path.realpath(os.path.expanduser("~/Documents"))
+                d = self._safe_path(q.get("dir", [PROJECT])[0]) or PROJECT
                 if not os.path.isdir(d):
-                    return self._respond(404, {"error": "pas un dossier"})
+                    return self._respond(404, {"error": "not a directory"})
                 items = []
                 for name in sorted(os.listdir(d), key=str.lower):
                     if name.startswith("."):
                         continue
                     p = os.path.join(d, name)
                     items.append({"name": name, "dir": os.path.isdir(p)})
-                root = os.path.realpath(os.path.expanduser("~/Documents"))
+                root = PROJECT
                 parent = os.path.dirname(d) if d != root else None
                 return self._respond(200, {"path": d, "parent": parent, "items": items})
             except Exception as e:
@@ -331,7 +331,7 @@ class Handler(SimpleHTTPRequestHandler):
                         for k in ("Page:", "x:", "y:"):
                             if ln.startswith(k):
                                 out[k[:-1].lower()] = float(ln.split(":")[1])
-                    return self._respond(200, out or {"error": "pas de correspondance"})
+                    return self._respond(200, out or {"error": "no match"})
                 else:  # PDF -> source
                     r = subprocess.run(
                         ["/Library/TeX/texbin/synctex", "edit",
@@ -343,7 +343,7 @@ class Handler(SimpleHTTPRequestHandler):
                             out["line"] = int(ln.split(":")[1])
                         if ln.startswith("Input:"):
                             out["input"] = ln.split(":", 1)[1]
-                    return self._respond(200, out or {"error": "pas de correspondance"})
+                    return self._respond(200, out or {"error": "no match"})
             except Exception as e:
                 return self._respond(500, {"error": str(e)})
         if self.path == "/codesave":

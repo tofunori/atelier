@@ -175,7 +175,7 @@ function openTarget(target){
 // --- mini explorateur de fichiers (bouton Ouvrir) ---
 const EDITABLE = /\.(tex|sty|bib|py|r|R|md|jl|sh|bash|txt|csv|json|yaml|yml|toml)$/;
 async function pickerShow(dir){
-  const r = await fetch("/ls?dir=" + encodeURIComponent(dir || (path ? path.replace(/\/[^/]*$/, "") : "~/Documents")));
+  const r = await fetch("/ls?dir=" + encodeURIComponent(dir || (path ? path.replace(/\/[^/]*$/, "") : "")));
   const j = await r.json();
   if(j.error) return;
   document.getElementById("picker").classList.add("show");
