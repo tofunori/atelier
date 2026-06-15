@@ -3,7 +3,7 @@
     {
       "id": "gallery",
       "title": "Project Gallery",
-      "command": "project-gallery run --root .",
+      "command": "cmux-gallery run --root .",
       "cwd": ".",
       "height": 260
     }

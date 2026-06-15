@@ -20,7 +20,7 @@
         "layout": {
           "direction": "vertical",
           "children": [
-            { "pane": { "surfaces": [ { "type": "terminal", "name": "gallery", "command": "project-gallery run --root ." } ] } }
+            { "pane": { "surfaces": [ { "type": "terminal", "name": "gallery", "command": "cmux-gallery run --root ." } ] } }
           ]
         }
       }

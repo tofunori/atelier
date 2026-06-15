@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""project-gallery — a full-featured artifact gallery + annotation, as a cmux plugin.
+"""cmux-gallery — a full-featured artifact gallery + annotation, as a cmux plugin.
 
 Generalises an existing figures-index builder and fig-annotate server so they
 work in ANY project. `run` builds the gallery, provisions the viewer assets into
@@ -91,32 +91,32 @@ def wait_up(port: int, timeout: float = 8.0) -> bool:
 
 def cmd_build(a) -> None:
     out = build(a.root)
-    print(f"[project-gallery] built {out}  (+ viewers provisioned)")
+    print(f"[cmux-gallery] built {out}  (+ viewers provisioned)")
 
 
 def cmd_run(a) -> None:
     out = build(a.root)
-    print(f"[project-gallery] built {out}")
+    print(f"[cmux-gallery] built {out}")
     if a.port == 0:
         port = free_port()
     else:
         port = a.port
         if _port_busy(port):
-            print(f"[project-gallery] port {port} busy → using a free port", file=sys.stderr)
+            print(f"[cmux-gallery] port {port} busy → using a free port", file=sys.stderr)
             port = free_port()
     env = dict(os.environ, FIG_PORT=str(port), GALLERY_ROOT=a.root)
-    print(f"[project-gallery] starting server on :{port}  (cwd={a.root})")
+    print(f"[cmux-gallery] starting server on :{port}  (cwd={a.root})")
     srv = subprocess.Popen([sys.executable, SERVER], cwd=a.root, env=env)
     try:
         if not wait_up(port):
-            print("[project-gallery] warning: server /ping did not answer", file=sys.stderr)
+            print("[cmux-gallery] warning: server /ping did not answer", file=sys.stderr)
         url = f"http://127.0.0.1:{port}/{OUT}"
         res = subprocess.run(["cmux", "browser", "open", url], capture_output=True, text=True)
         print(res.stdout.strip() or res.stderr.strip())
-        print(f"[project-gallery] gallery → {url}   (Ctrl-C to stop)")
+        print(f"[cmux-gallery] gallery → {url}   (Ctrl-C to stop)")
         srv.wait()
     except KeyboardInterrupt:
-        print("\n[project-gallery] stopping server")
+        print("\n[cmux-gallery] stopping server")
     finally:
         srv.terminate()
         try:
@@ -126,7 +126,7 @@ def cmd_run(a) -> None:
 
 
 def main(argv=None) -> int:
-    p = argparse.ArgumentParser(prog="project-gallery", description=__doc__,
+    p = argparse.ArgumentParser(prog="cmux-gallery", description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
     b = sub.add_parser("build", help="build the gallery HTML + provision viewers")
