@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Éditeur</title>
+<link rel="stylesheet" href="/.fig_thumbs/cm/codemirror.min.css">
+<link rel="stylesheet" href="/.fig_thumbs/cm/material-darker.min.css">
+<script src="/.fig_thumbs/cm/codemirror.min.js"></script>
+<script src="/.fig_thumbs/cm/mark-selection.min.js"></script>
+<script src="/.fig_thumbs/cm/stex.min.js"></script>
+<script src="/.fig_thumbs/cm/python.min.js"></script>
+<script src="/.fig_thumbs/cm/r.min.js"></script>
+<script src="/.fig_thumbs/cm/markdown.min.js"></script>
+<script src="/.fig_thumbs/cm/julia.min.js"></script>
+<script src="/.fig_thumbs/cm/shell.min.js"></script>
+<style>
+  html,body{margin:0;height:100%;background:#212121;color:#e6e8ec;
+            font-family:-apple-system,sans-serif;display:flex;flex-direction:column}
+  header{background:#1a1a1a;border-bottom:1px solid #333;padding:8px 14px;
+         display:flex;gap:12px;align-items:center;font-size:12.5px;flex-shrink:0}
+  #fname{font-weight:600}
+  #state{color:#9aa3b2}
+  #state.dirty{color:#ffd54a}
+  #state.saved{color:#7ec97e}
+  #state.conflict{color:#ff6b6b}
+  .CodeMirror{flex:1;height:auto;font-size:13px;
+              font-family:"SF Mono",Menlo,monospace;line-height:1.5}
+  /* la selection colle au texte (mark-selection) au lieu de remplir la ligne */
+  .CodeMirror .CodeMirror-selected{background:transparent !important}
+  .CodeMirror-focused .CodeMirror-selected{background:transparent !important}
+  .CodeMirror-selectedtext{background:rgba(91,157,255,.45) !important;box-shadow:none !important;border-radius:2px}
+  /* derniere selection envoyee a Claude : marque persistante */
+  .cm-clsel{background:rgba(255,213,74,.16);box-shadow:0 1px 0 rgba(255,213,74,.4)}
+  #picker{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;z-index:200;
+          align-items:flex-start;justify-content:center;padding-top:8vh}
+  #picker.show{display:flex}
+  #pickerBox{background:#1d1f26;border:1px solid #3a3f4a;border-radius:10px;width:520px;
+             max-height:70vh;display:flex;flex-direction:column;overflow:hidden;
+             box-shadow:0 8px 40px rgba(0,0,0,.6)}
+  #pickerPath{padding:10px 14px;font-size:11.5px;color:#9aa3b2;border-bottom:1px solid #2a2f3a;
+              white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #pickerList{overflow-y:auto;flex:1}
+  #pickerList div{padding:7px 14px;font-size:13px;cursor:pointer;display:flex;gap:8px}
+  #pickerList div:hover{background:#2a2f3a}
+  #pickerList .d{color:#5b9dff}
+</style>
+</head>
+<body>
+<header>
+  <b id="fname"></b>
+  <button id="openFile" style="background:transparent;color:#9aa3b2;border:1px solid #3a3f4a;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer">Ouvrir…</button>
+  <span id="state"></span>
+  <span style="margin-left:auto;color:#9aa3b2">Cmd+S : sauvegarder · sélection visible par Claude</span>
+</header>
+<div id="ed" style="flex:1;display:flex;flex-direction:column;min-height:0"></div>
+<div id="picker"><div id="pickerBox">
+  <div id="pickerPath"></div>
+  <div id="pickerList"></div>
+</div></div>
+<script>
+const path = new URLSearchParams(location.search).get("path");
+document.getElementById("fname").textContent = path ? path.split("/").pop() : "(aucun fichier)";
+document.title = path ? path.split("/").pop() : "Éditeur";
+
+const MODES = {tex:"stex", sty:"stex", bib:"stex", py:"python", r:"r", R:"r",
+               md:"markdown", jl:"julia", sh:"shell", bash:"shell"};
+const ext = path ? path.split(".").pop() : "";
+let cm = null, diskMtime = 0, dirty = false;
+
+const stateEl = document.getElementById("state");
+function setState(cls, txt){ stateEl.className = cls; stateEl.textContent = txt; }
+
+async function load(){
+  const r = await fetch("/code?path=" + encodeURIComponent(path));
+  const j = await r.json();
+  if(j.error){ setState("conflict", j.error); return; }
+  recentsAdd(path);
+  diskMtime = j.mtime;
+  if(!cm){
+    cm = CodeMirror(document.getElementById("ed"), {
+      value: j.text, mode: MODES[ext] || null, theme: "material-darker",
+      lineNumbers: true, lineWrapping: true, viewportMargin: 50, styleSelectedText: true
+    });
+    cm.on("change", (_, ch) => { if(ch.origin !== "setValue"){ dirty = true; setState("dirty", "modifié"); } });
+    let selT = null;
+    cm.on("cursorActivity", () => {
+      clearTimeout(selT);
+      selT = setTimeout(() => {
+        const sel = cm.getSelection();
+        if(sel && sel.trim()){
+          const f = cm.getCursor("from"), t = cm.getCursor("to");
+          if(window._clMark) window._clMark.clear();
+          window._clMark = cm.markText(f, t, {className: "cm-clsel"});
+          fetch("/selinfo", {method:"POST", headers:{"Content-Type":"application/json"},
+            body: JSON.stringify({
+              lines: t.line - f.line + 1,
+              words: sel.trim().split(/\s+/).length,
+              text: sel, rel: path, name: path.split("/").pop(),
+              page: "L" + (f.line+1) + "-" + (t.line+1)
+            })}).catch(()=>{});
+        }
+      }, 200);
+    });
+  } else {
+    const cur = cm.getCursor();
+    cm.setValue(j.text);
+    cm.setCursor(cur);
+  }
+  dirty = false;
+  setState("saved", "à jour");
+}
+
+async function save(){
+  if(!cm) return;
+  const r = await fetch("/codesave", {method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({path, text: cm.getValue(), mtime: diskMtime})});
+  const j = await r.json();
+  if(j.error === "conflit"){
+    setState("conflict", "conflit : le fichier a changé sur disque (Claude?) — recharge ou re-sauvegarde pour écraser");
+    diskMtime = j.mtime;
+    return;
+  }
+  diskMtime = j.mtime;
+  dirty = false;
+  setState("saved", "sauvegardé " + new Date().toLocaleTimeString());
+}
+
+document.addEventListener("keydown", e => {
+  if(e.key === "Escape"){
+    if(cm){ cm.setCursor(cm.getCursor()); }
+    if(window._clMark){ window._clMark.clear(); window._clMark = null; }
+    fetch("/selinfo", {method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({lines:0, words:0})}).catch(()=>{});
+    return;
+  }
+  if((e.metaKey || e.ctrlKey) && e.key === "s"){ e.preventDefault(); save(); }
+});
+
+// si Claude (ou autre) modifie le fichier sur disque et que le buffer est propre → recharge
+setInterval(async () => {
+  if(dirty || !cm) return;
+  try{
+    const r = await fetch("/code?path=" + encodeURIComponent(path));
+    const j = await r.json();
+    if(j.mtime && Math.abs(j.mtime - diskMtime) > 0.001){
+      diskMtime = j.mtime;
+      const cur = cm.getCursor(), scroll = cm.getScrollInfo();
+      cm.setValue(j.text);
+      cm.setCursor(cur);
+      cm.scrollTo(scroll.left, scroll.top);
+      dirty = false;
+      setState("saved", "rechargé (modifié sur disque) " + new Date().toLocaleTimeString());
+    }
+  }catch(e){}
+}, 2000);
+
+if(path) load();
+
+
+// fichiers recents (partages entre studio et editeur via localStorage)
+function recentsGet(){ try{return JSON.parse(localStorage.getItem("studioRecents")||"[]")}catch(e){return []} }
+function recentsAdd(p){
+  let r = recentsGet().filter(x => x !== p);
+  r.unshift(p); r = r.slice(0, 10);
+  localStorage.setItem("studioRecents", JSON.stringify(r));
+}
+function openTarget(target){
+  const page = target.endsWith(".tex") ? "latex_studio.html" : "code_editor.html";
+  location.href = "/.fig_thumbs/" + page + "?path=" + encodeURIComponent(target);
+}
+// --- mini explorateur de fichiers (bouton Ouvrir) ---
+const EDITABLE = /\.(tex|sty|bib|py|r|R|md|jl|sh|bash|txt|csv|json|yaml|yml|toml)$/;
+async function pickerShow(dir){
+  const r = await fetch("/ls?dir=" + encodeURIComponent(dir || (path ? path.replace(/\/[^/]*$/, "") : "~/Documents")));
+  const j = await r.json();
+  if(j.error) return;
+  document.getElementById("picker").classList.add("show");
+  document.getElementById("pickerPath").textContent = j.path.replace(/^\/Users\/[^/]+/, "~");
+  const list = document.getElementById("pickerList");
+  list.innerHTML = "";
+  const mk = (label, cls, fn) => {
+    const d = document.createElement("div");
+    d.innerHTML = label; d.className = cls; d.onclick = fn;
+    list.appendChild(d);
+  };
+  const rec = recentsGet().filter(p => p !== path);
+  if(rec.length){
+    rec.forEach(p => mk("&#128337; " + p.split("/").pop() +
+      ' <span style="color:#5a6170;font-size:11px">' + p.replace(/^\/Users\/[^/]+\/Documents\//, "").replace(/\/[^/]*$/, "") + "</span>",
+      "", () => openTarget(p)));
+    const sep = document.createElement("div");
+    sep.style.cssText = "border-bottom:1px solid #2a2f3a;margin:4px 0;padding:0;height:1px;cursor:default";
+    list.appendChild(sep);
+  }
+  if(j.parent) mk("&#8617; ..", "d", () => pickerShow(j.parent));
+  j.items.filter(i => i.dir).forEach(i => mk("&#128193; " + i.name, "d", () => pickerShow(j.path + "/" + i.name)));
+  j.items.filter(i => !i.dir && EDITABLE.test(i.name)).forEach(i =>
+    mk(i.name, "", () => openTarget(j.path + "/" + i.name)));
+}
+document.getElementById("picker").onclick = e => { if(e.target.id === "picker") e.target.classList.remove("show"); };
+document.addEventListener("keydown", e => { if(e.key === "Escape") document.getElementById("picker").classList.remove("show"); });
+
+document.getElementById("openFile").onclick = () => pickerShow();
+</script>
+</body>
+</html>

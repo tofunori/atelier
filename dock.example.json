@@ -1,0 +1,11 @@
+{
+  "controls": [
+    {
+      "id": "gallery",
+      "title": "Project Gallery",
+      "command": "project-gallery run --root .",
+      "cwd": ".",
+      "height": 260
+    }
+  ]
+}

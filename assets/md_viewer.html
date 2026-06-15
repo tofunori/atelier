@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Markdown</title>
+<script src="marked.min.js"></script>
+<link rel="stylesheet" href="/.fig_thumbs/cm/codemirror.min.css">
+<link rel="stylesheet" href="/.fig_thumbs/cm/material-darker.min.css">
+<script src="/.fig_thumbs/cm/codemirror.min.js"></script>
+<script src="/.fig_thumbs/cm/mark-selection.min.js"></script>
+<script src="/.fig_thumbs/cm/markdown.min.js"></script>
+<style>
+  html,body{margin:0;height:100%;background:#14171d;color:#e6e8ec;
+       font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+       font-size:15px;line-height:1.6;display:flex;flex-direction:column}
+  header{background:#1a1d24;border-bottom:1px solid #2a2f3a;padding:7px 14px;
+         display:flex;gap:10px;align-items:center;font-size:12.5px;flex-shrink:0}
+  #fname{font-weight:600}
+  header .seg{display:flex;border:1px solid #313640;border-radius:6px;overflow:hidden;flex-shrink:0}
+  header .seg button{background:transparent;border:none;border-right:1px solid #313640;
+         color:#868e9c;padding:0 12px;height:24px;line-height:24px;font-size:11.5px;
+         white-space:nowrap;cursor:pointer;transition:background .12s,color .12s}
+  header .seg button:last-child{border-right:none}
+  header .seg button:hover{color:#c9cfda}
+  header .seg button.on{background:#2a3140;color:#fff}
+  #state{color:#9aa3b2;margin-left:4px}
+  #state.dirty{color:#ffd54a}
+  #state.saved{color:#7ec97e}
+  #state.conflict{color:#ff6b6b}
+  #hint{margin-left:auto;color:#5a6170;font-size:11.5px}
+  #body{flex:1;display:flex;min-height:0}
+  #edPane{flex:1;min-width:0;display:none;flex-direction:column;border-right:1px solid #2a2f3a}
+  #edPane.show{display:flex}
+  .CodeMirror{flex:1;height:auto;font-size:13px;font-family:"SF Mono",Menlo,monospace;line-height:1.55}
+  .CodeMirror .CodeMirror-selected{background:transparent !important}
+  .CodeMirror-focused .CodeMirror-selected{background:transparent !important}
+  .CodeMirror-selectedtext{background:rgba(91,157,255,.45) !important;border-radius:2px}
+  .cm-clsel{background:rgba(255,213,74,.16);box-shadow:0 1px 0 rgba(255,213,74,.4)}
+  #prevPane{flex:1;min-width:0;overflow-y:auto;display:none}
+  #prevPane.show{display:block}
+  #wrap{max-width:860px;margin:0 auto;padding:24px 36px 60px}
+  h1,h2,h3{line-height:1.3;border-bottom:1px solid #2a2f3a;padding-bottom:6px}
+  a{color:#5b9dff}
+  code{background:#21252e;padding:2px 5px;border-radius:4px;font-size:13px}
+  pre{background:#1a1d24;border:1px solid #2a2f3a;border-radius:8px;padding:14px;overflow-x:auto}
+  pre code{background:none;padding:0}
+  table{border-collapse:collapse;margin:14px 0;display:block;overflow-x:auto}
+  th,td{border:1px solid #2a2f3a;padding:6px 12px}
+  th{background:#21252e}
+  blockquote{margin:0;padding:2px 16px;border-left:3px solid #5b9dff;color:#9aa3b2}
+  img{max-width:100%}
+  hr{border:none;border-top:1px solid #2a2f3a}
+  #err{color:#ff6b6b;padding:40px;text-align:center}
+</style>
+</head>
+<body>
+<header>
+  <b id="fname"></b>
+  <div class="seg">
+    <button id="mPrev" class="on">Aperçu</button>
+    <button id="mSplit">Côte à côte</button>
+    <button id="mEdit">Éditer</button>
+  </div>
+  <span id="state"></span>
+  <span id="hint">Cmd+S : sauvegarder · sélection visible par Claude</span>
+</header>
+<div id="body">
+  <div id="edPane"></div>
+  <div id="prevPane" class="show"><div id="wrap">Chargement…</div></div>
+</div>
+<script>
+const params = new URLSearchParams(location.search);
+// path = chemin absolu (pour /code + /codesave) ; file = chemin relatif (pour <base> images)
+const path = params.get("path");
+const file = params.get("file") || "";
+const wrap = document.getElementById("wrap");
+const stateEl = document.getElementById("state");
+const fname = path ? path.split("/").pop() : (file.split("/").pop() || "(markdown)");
+document.getElementById("fname").textContent = fname;
+document.title = fname;
+
+// base pour que les images relatives du markdown se resolvent contre le serveur statique du projet
+if(file){
+  const dir = file.split("/").slice(0,-1).join("/");
+  const b = document.createElement("base");
+  b.href = "/" + (dir ? dir.split("/").map(encodeURIComponent).join("/") + "/" : "");
+  document.head.appendChild(b);
+}
+
+let cm = null, diskMtime = 0, dirty = false, loaded = false, srcText = "";
+function setState(cls, txt){ stateEl.className = cls; stateEl.textContent = txt; }
+function renderPreview(text){ srcText = text || ""; wrap.innerHTML = marked.parse(srcText); }
+
+// --- chargement via /code (text + mtime) ; repli lecture seule via fetch brut ---
+async function load(){
+  if(!path){
+    try{
+      const r = await fetch("/" + file.split("/").map(encodeURIComponent).join("/"));
+      if(!r.ok) throw new Error(r.status);
+      renderPreview(await r.text());
+    }catch(e){ wrap.innerHTML = '<div id="err">Impossible de charger ' + file + ' (' + e.message + ')</div>'; }
+    return;
+  }
+  try{
+    const r = await fetch("/code?path=" + encodeURIComponent(path));
+    const j = await r.json();
+    if(j.error){ wrap.innerHTML = '<div id="err">' + j.error + '</div>'; return; }
+    diskMtime = j.mtime;
+    renderPreview(j.text);
+    if(cm){ const cur = cm.getCursor(); cm.setValue(j.text); cm.setCursor(cur); }
+    loaded = true; dirty = false; setState("saved", "à jour");
+  }catch(e){ wrap.innerHTML = '<div id="err">Serveur off — ' + e.message + '</div>'; }
+}
+
+function initEditor(text){
+  if(cm) return;
+  cm = CodeMirror(document.getElementById("edPane"), {
+    value: text != null ? text : "", mode: "markdown", theme: "material-darker",
+    lineNumbers: true, lineWrapping: true, viewportMargin: 50, styleSelectedText: true
+  });
+  cm.on("change", (_, ch) => {
+    renderPreview(cm.getValue());
+    if(ch.origin !== "setValue"){ dirty = true; setState("dirty", "modifié"); }
+  });
+  let selT = null;
+  cm.on("cursorActivity", () => {
+    clearTimeout(selT);
+    selT = setTimeout(() => {
+      const sel = cm.getSelection();
+      if(sel && sel.trim() && path){
+        const f = cm.getCursor("from"), t = cm.getCursor("to");
+        if(window._clMark) window._clMark.clear();
+        window._clMark = cm.markText(f, t, {className: "cm-clsel"});
+        fetch("/selinfo", {method:"POST", headers:{"Content-Type":"application/json"},
+          body: JSON.stringify({
+            lines: t.line - f.line + 1, words: sel.trim().split(/\s+/).length,
+            text: sel, rel: file || path, name: fname, page: "L" + (f.line+1) + "-" + (t.line+1)
+          })}).catch(()=>{});
+      }
+    }, 200);
+  });
+}
+
+async function save(){
+  if(!cm || !path) return;
+  const r = await fetch("/codesave", {method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({path, text: cm.getValue(), mtime: diskMtime})});
+  const j = await r.json();
+  if(j.error === "conflit"){
+    setState("conflict", "conflit : le fichier a changé sur disque — recharge ou re-sauvegarde pour écraser");
+    diskMtime = j.mtime; return;
+  }
+  if(j.error){ setState("conflict", j.error); return; }
+  diskMtime = j.mtime; dirty = false;
+  setState("saved", "sauvegardé " + new Date().toLocaleTimeString());
+}
+
+// --- modes d'affichage ---
+const edPane = document.getElementById("edPane"), prevPane = document.getElementById("prevPane");
+const btns = {prev: document.getElementById("mPrev"), split: document.getElementById("mSplit"), edit: document.getElementById("mEdit")};
+function setMode(m){
+  if((m === "split" || m === "edit") && !path){ return; } // pas de chemin absolu → pas d'edition
+  Object.values(btns).forEach(b => b.classList.remove("on"));
+  btns[m].classList.add("on");
+  edPane.classList.toggle("show", m === "split" || m === "edit");
+  prevPane.classList.toggle("show", m === "prev" || m === "split");
+  if(m === "split" || m === "edit"){
+    if(!cm) initEditor(srcText);   // 1er passage : remplit l'editeur avec le texte charge
+    setTimeout(() => cm && cm.refresh(), 0);
+  }
+  document.getElementById("hint").style.display = (m === "prev") ? "none" : "";
+}
+btns.prev.onclick = () => setMode("prev");
+btns.split.onclick = () => setMode("split");
+btns.edit.onclick = () => setMode("edit");
+
+document.addEventListener("keydown", e => {
+  if((e.metaKey || e.ctrlKey) && e.key === "s"){ e.preventDefault(); save(); }
+  if((e.metaKey || e.ctrlKey) && e.key === "e"){ e.preventDefault(); setMode(edPane.classList.contains("show") ? "prev" : "split"); }
+  if(e.key === "Escape"){
+    if(window._clMark){ window._clMark.clear(); window._clMark = null; }
+    fetch("/selinfo", {method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({lines:0, words:0})}).catch(()=>{});
+  }
+});
+
+// auto-reload si le fichier change sur disque et que le buffer est propre (Claude qui edite)
+setInterval(async () => {
+  if(dirty || !path) return;
+  try{
+    const r = await fetch("/code?path=" + encodeURIComponent(path));
+    const j = await r.json();
+    if(j.mtime && Math.abs(j.mtime - diskMtime) > 0.001){
+      diskMtime = j.mtime; renderPreview(j.text);
+      if(cm){ const cur = cm.getCursor(), sc = cm.getScrollInfo(); cm.setValue(j.text); cm.setCursor(cur); cm.scrollTo(sc.left, sc.top); }
+      setState("saved", "rechargé (modifié sur disque) " + new Date().toLocaleTimeString());
+    }
+  }catch(e){}
+}, 2000);
+
+load();
+</script>
+</body>
+</html>
