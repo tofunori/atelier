@@ -137,8 +137,9 @@ def cmd_run(a) -> None:
             url = f"http://127.0.0.1:{port}/{OUT}"
             print(f"[cmux-gallery] gallery already running on :{port} → reusing it "
                   f"(rebuilt; stable URL, no duplicate server)")
-            res = subprocess.run(["cmux", "browser", "open", url], capture_output=True, text=True)
-            print(res.stdout.strip() or res.stderr.strip())
+            if a.open:
+                res = subprocess.run(["cmux", "browser", "open", url], capture_output=True, text=True)
+                print(res.stdout.strip() or res.stderr.strip())
             print(f"[cmux-gallery] gallery → {url}")
             return
         print(f"[cmux-gallery] port {port} busy (not our gallery) → using a free port", file=sys.stderr)
@@ -150,8 +151,9 @@ def cmd_run(a) -> None:
         if not wait_up(port):
             print("[cmux-gallery] warning: server /ping did not answer", file=sys.stderr)
         url = f"http://127.0.0.1:{port}/{OUT}"
-        res = subprocess.run(["cmux", "browser", "open", url], capture_output=True, text=True)
-        print(res.stdout.strip() or res.stderr.strip())
+        if a.open:
+            res = subprocess.run(["cmux", "browser", "open", url], capture_output=True, text=True)
+            print(res.stdout.strip() or res.stderr.strip())
         print(f"[cmux-gallery] gallery → {url}   (Ctrl-C to stop)")
         srv.wait()
     except KeyboardInterrupt:
@@ -174,6 +176,9 @@ def main(argv=None) -> int:
     r.add_argument("--root", default=os.getcwd(), type=os.path.abspath)
     r.add_argument("--port", type=int, default=0,
                    help="server port (default: a stable port derived from the project path)")
+    r.add_argument("--no-open", dest="open", action="store_false",
+                   help="start (or reuse) the server without opening a cmux browser tab — "
+                        "for a Dock control that just keeps the server alive at launch")
     a = p.parse_args(argv)
     {"build": cmd_build, "run": cmd_run}[a.cmd](a)
     return 0
