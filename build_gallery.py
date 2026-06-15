@@ -397,7 +397,7 @@ function openDefault(rel){
   fetch('/open', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({rel})});
 }
 async function delOne(rel){
-  if(!confirm('Move to Trash?\n'+rel)) return;
+  if(!confirm('Move to Trash? '+rel)) return;
   try{
     const r=await fetch('/delete',{method:'POST',headers:{'Content-Type':'application/json'},
       body: JSON.stringify({rels:[rel]})});
