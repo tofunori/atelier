@@ -17,6 +17,7 @@ Subcommands:
 import argparse
 import hashlib
 import http.client
+import json
 import os
 import shutil
 import socket
@@ -59,6 +60,26 @@ def _port_busy(port: int) -> bool:
         return True
     finally:
         s.close()
+
+
+def server_project(port: int):
+    """If one of our gallery servers answers on `port`, return the project root
+    it serves (realpath); otherwise None. Lets `run` reuse an already-running
+    server for the same project instead of spawning a duplicate on a new port."""
+    try:
+        c = http.client.HTTPConnection("127.0.0.1", port, timeout=1)
+        c.request("GET", "/ping")
+        r = c.getresponse()
+        body = r.read()
+        c.close()
+        if r.status != 200:
+            return None
+        d = json.loads(body or b"{}")
+        if d.get("service") == "fig-annotate" and d.get("project"):
+            return os.path.realpath(d["project"])
+    except (OSError, ValueError):
+        pass
+    return None
 
 
 def provision_viewers(root: str) -> None:
@@ -107,8 +128,20 @@ def cmd_run(a) -> None:
     out = build(a.root)
     print(f"[cmux-gallery] built {out}")
     port = a.port or project_port(a.root)
-    if _port_busy(port):
-        print(f"[cmux-gallery] port {port} busy → using a free port", file=sys.stderr)
+    # The build above already refreshed figures_index.html + viewers. If our own
+    # gallery for THIS project is already running on its stable port, reuse it
+    # (the live server serves the fresh file) instead of starting a duplicate on
+    # a random port — that's what was leaking a new port on every run.
+    if not a.port and _port_busy(port):
+        if server_project(port) == os.path.realpath(a.root):
+            url = f"http://127.0.0.1:{port}/{OUT}"
+            print(f"[cmux-gallery] gallery already running on :{port} → reusing it "
+                  f"(rebuilt; stable URL, no duplicate server)")
+            res = subprocess.run(["cmux", "browser", "open", url], capture_output=True, text=True)
+            print(res.stdout.strip() or res.stderr.strip())
+            print(f"[cmux-gallery] gallery → {url}")
+            return
+        print(f"[cmux-gallery] port {port} busy (not our gallery) → using a free port", file=sys.stderr)
         port = free_port()
     env = dict(os.environ, FIG_PORT=str(port), GALLERY_ROOT=a.root)
     print(f"[cmux-gallery] starting server on :{port}  (cwd={a.root})")

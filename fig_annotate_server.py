@@ -201,7 +201,8 @@ class Handler(SimpleHTTPRequestHandler):
             except Exception as e:
                 return self._respond(500, {"error": str(e)})
         if self.path == "/ping":
-            return self._respond(200, {"ok": True, "service": "fig-annotate"})
+            return self._respond(200, {"ok": True, "service": "fig-annotate",
+                                       "project": os.path.realpath(PROJECT)})
         if self.path == "/quote":
             try:
                 qf = os.path.expanduser("~/.claude/fig-last-quote.txt")
