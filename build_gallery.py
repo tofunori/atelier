@@ -217,11 +217,11 @@ HTML = """<!DOCTYPE html>
   .row{display:flex;gap:8px;align-items:center;font-size:11px;color:var(--muted);margin-top:auto}
   .tag{padding:2px 7px;border-radius:5px;background:var(--card2);font-size:10px;text-transform:uppercase}
   .tag.archive{background:var(--arch);color:#d9a441}
-  .acts{display:flex;gap:6px;padding:0 12px 12px}
-  .acts a,.acts button{flex:1;text-align:center;text-decoration:none;font-size:12px;padding:6px 4px;
-        background:transparent;border:1px solid #3a3f4a;border-radius:7px;color:#c9cfda;cursor:pointer;transition:.12s}
+  .acts{display:flex;gap:5px;padding:0 12px 11px}
+  .acts a,.acts button{flex:1;text-align:center;text-decoration:none;font-size:10.5px;padding:3px 4px;
+        background:transparent;border:1px solid #3a3f4a;border-radius:6px;color:#c9cfda;cursor:pointer;transition:.12s}
   .acts a:hover,.acts button:hover{border-color:#5b6575;color:#fff;background:rgba(255,255,255,.04)}
-  .acts .ico{flex:0 0 auto;min-width:34px;padding:6px 8px;font-size:13px;line-height:1}
+  .acts .ico{flex:0 0 auto;min-width:25px;padding:3px 6px;font-size:11.5px;line-height:1}
   .acts .ico.on{color:#ffce3a;border-color:#ffce3a}
   .acts .del:hover{color:#ff9a9a;border-color:#7a2a2a;background:rgba(255,80,80,.08)}
   .selbox{position:absolute;top:6px;left:6px;font-size:15px;cursor:pointer;line-height:1;
