@@ -240,7 +240,7 @@ HTML = """<!DOCTYPE html>
   #lb.fs img{max-width:100vw;max-height:100vh;border-radius:0}
   #lb.fs #lbCap,#lb.fs .lbBtn,#lb.fs #lbClose{display:none}
   #lb.vw{justify-content:flex-start}
-  #lb.vw #lbPdf{width:100vw;height:100vh;border-radius:0}
+  #lb.vw #lbPdf{width:100vw !important;height:100vh !important;border-radius:0}
   #lb.vw #lbCap,#lb.vw .lbBtn,#lb.vw #lbFs{display:none}
   #lbFs{position:fixed;top:12px;right:58px;font-size:20px;color:#bbb;cursor:pointer;z-index:101}
   #lbFs:hover{color:#fff}
