@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <title>LaTeX Studio</title>
@@ -53,15 +53,15 @@
 <body>
 <header>
   <b id="fname"></b>
-  <button id="build">Compiler</button>
-  <button id="openFile" style="background:transparent;color:#9aa3b2;border:1px solid #3a3f4a;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer">Ouvrir…</button>
+  <button id="build">Compile</button>
+  <button id="openFile" style="background:transparent;color:#9aa3b2;border:1px solid #3a3f4a;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer">Open…</button>
   <button id="togglePdf">PDF</button>
-  <button id="popPdf" title="Ouvrir le PDF dans un onglet séparé">↗</button>
-  <button id="zoomOut" title="Zoom arrière">−</button>
-  <button id="zoomFit" title="Ajuster à la largeur">⤢</button>
-  <button id="zoomIn" title="Zoom avant">+</button>
+  <button id="popPdf" title="Open the PDF in a separate tab">↗</button>
+  <button id="zoomOut" title="Zoom out">−</button>
+  <button id="zoomFit" title="Fit to width">⤢</button>
+  <button id="zoomIn" title="Zoom in">+</button>
   <span id="state"></span>
-  <span style="margin-left:auto;color:#9aa3b2">⌘S sauver · ⌘J source→PDF · clic PDF→source</span>
+  <span style="margin-left:auto;color:#9aa3b2">⌘S save · ⌘J source→PDF · click PDF→source</span>
 </header>
 <div id="split">
   <div id="left"></div>
@@ -78,7 +78,7 @@ let pdfPath = path ? path.replace(/\.tex$/, ".pdf") : null;
 if(path) fetch("/texroot?path=" + encodeURIComponent(path)).then(r=>r.json()).then(j=>{
   if(j.pdf){ pdfPath = j.pdf; loadPdf(); }
 }).catch(()=>{});
-document.getElementById("fname").textContent = path ? path.split("/").pop() : "(aucun fichier)";
+document.getElementById("fname").textContent = path ? path.split("/").pop() : "(no file)";
 document.title = path ? path.split("/").pop() : "LaTeX Studio";
 
 let cm = null, diskMtime = 0, dirty = false, pdfDoc = null, pageEls = [], pdfVps = [];
@@ -96,7 +96,7 @@ async function load(){
     value: j.text, mode: "stex", theme: "material-darker",
     lineNumbers: true, lineWrapping: true, viewportMargin: 50, styleSelectedText: true
   });
-  cm.on("change", (_, ch) => { if(ch.origin !== "setValue"){ dirty = true; setState("dirty", "modifié"); } });
+  cm.on("change", (_, ch) => { if(ch.origin !== "setValue"){ dirty = true; setState("dirty", "modified"); } });
   let selT = null;
   cm.on("cursorActivity", () => {
     clearTimeout(selT);
@@ -122,20 +122,20 @@ async function save(){
   const r = await fetch("/codesave", {method:"POST", headers:{"Content-Type":"application/json"},
     body: JSON.stringify({path, text: cm.getValue(), mtime: diskMtime})});
   const j = await r.json();
-  if(j.error === "conflit"){ setState("err", "conflit disque — re-⌘S pour écraser"); diskMtime = j.mtime; return false; }
-  diskMtime = j.mtime; dirty = false; setState("ok", "sauvegardé");
+  if(j.error === "conflit"){ setState("err", "disk conflict — re-⌘S to overwrite"); diskMtime = j.mtime; return false; }
+  diskMtime = j.mtime; dirty = false; setState("ok", "saved");
   return true;
 }
 
 async function compile(){
   if(dirty && !(await save())) return;
-  setState("dirty", "compilation…");
+  setState("dirty", "compiling…");
   const r = await fetch("/compile", {method:"POST", headers:{"Content-Type":"application/json"},
     body: JSON.stringify({path})});
   const j = await r.json();
-  if(!j.ok) return setState("err", "✗ " + (j.error || "échec"));
+  if(!j.ok) return setState("err", "✗ " + (j.error || "failed"));
   if(j.pdf) pdfPath = j.pdf;
-  setState("ok", "✓ compilé " + new Date().toLocaleTimeString());
+  setState("ok", "✓ compiled " + new Date().toLocaleTimeString());
   loadPdf();
 }
 
@@ -186,7 +186,7 @@ async function synctexView(){
   const r = await fetch("/synctex", {method:"POST", headers:{"Content-Type":"application/json"},
     body: JSON.stringify({dir:"view", tex: path, pdf: pdfPath, line})});
   const j = await r.json();
-  if(!j.page || !pageEls[j.page]) return setState("err", "synctex : pas de correspondance");
+  if(!j.page || !pageEls[j.page]) return setState("err", "synctex: no match");
   const el = pageEls[j.page], vp = pdfVps[j.page];
   const y = j.y * vp.scale;
   const marker = document.getElementById("marker");
@@ -203,7 +203,7 @@ async function synctexEdit(page, x, y){
   const r = await fetch("/synctex", {method:"POST", headers:{"Content-Type":"application/json"},
     body: JSON.stringify({dir:"edit", tex: path, pdf: pdfPath, page, x, y})});
   const j = await r.json();
-  if(!j.line) return setState("err", "synctex : pas de correspondance");
+  if(!j.line) return setState("err", "synctex: no match");
   const ln = j.line - 1;
   cm.setCursor({line: ln, ch: 0});
   cm.scrollIntoView({line: ln, ch: 0}, 120);
@@ -267,14 +267,14 @@ setInterval(async () => {
       diskMtime = j.mtime;
       const cur = cm.getCursor(), s = cm.getScrollInfo();
       cm.setValue(j.text); cm.setCursor(cur); cm.scrollTo(s.left, s.top);
-      dirty = false; setState("ok", "rechargé (modifié sur disque)");
+      dirty = false; setState("ok", "reloaded (modified on disk)");
     }
   }catch(e){}
 }, 2000);
 
 if(path) load();
 else {
-  setState("ok", "choisis un fichier .tex");
+  setState("ok", "choose a .tex file");
   pickerShow("~/Documents/UTQR");
 }
 

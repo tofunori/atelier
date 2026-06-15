@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <title>Markdown</title>
@@ -57,16 +57,16 @@
 <header>
   <b id="fname"></b>
   <div class="seg">
-    <button id="mPrev" class="on">Aperçu</button>
-    <button id="mSplit">Côte à côte</button>
-    <button id="mEdit">Éditer</button>
+    <button id="mPrev" class="on">Preview</button>
+    <button id="mSplit">Side by side</button>
+    <button id="mEdit">Edit</button>
   </div>
   <span id="state"></span>
-  <span id="hint">Cmd+S : sauvegarder · sélection visible par Claude</span>
+  <span id="hint">Cmd+S: save · selection visible to Claude</span>
 </header>
 <div id="body">
   <div id="edPane"></div>
-  <div id="prevPane" class="show"><div id="wrap">Chargement…</div></div>
+  <div id="prevPane" class="show"><div id="wrap">Loading…</div></div>
 </div>
 <script>
 const params = new URLSearchParams(location.search);
@@ -98,7 +98,7 @@ async function load(){
       const r = await fetch("/" + file.split("/").map(encodeURIComponent).join("/"));
       if(!r.ok) throw new Error(r.status);
       renderPreview(await r.text());
-    }catch(e){ wrap.innerHTML = '<div id="err">Impossible de charger ' + file + ' (' + e.message + ')</div>'; }
+    }catch(e){ wrap.innerHTML = '<div id="err">Unable to load ' + file + ' (' + e.message + ')</div>'; }
     return;
   }
   try{
@@ -108,8 +108,8 @@ async function load(){
     diskMtime = j.mtime;
     renderPreview(j.text);
     if(cm){ const cur = cm.getCursor(); cm.setValue(j.text); cm.setCursor(cur); }
-    loaded = true; dirty = false; setState("saved", "à jour");
-  }catch(e){ wrap.innerHTML = '<div id="err">Serveur off — ' + e.message + '</div>'; }
+    loaded = true; dirty = false; setState("saved", "saved");
+  }catch(e){ wrap.innerHTML = '<div id="err">Server off — ' + e.message + '</div>'; }
 }
 
 function initEditor(text){
@@ -120,7 +120,7 @@ function initEditor(text){
   });
   cm.on("change", (_, ch) => {
     renderPreview(cm.getValue());
-    if(ch.origin !== "setValue"){ dirty = true; setState("dirty", "modifié"); }
+    if(ch.origin !== "setValue"){ dirty = true; setState("dirty", "modified"); }
   });
   let selT = null;
   cm.on("cursorActivity", () => {
@@ -147,12 +147,12 @@ async function save(){
     body: JSON.stringify({path, text: cm.getValue(), mtime: diskMtime})});
   const j = await r.json();
   if(j.error === "conflit"){
-    setState("conflict", "conflit : le fichier a changé sur disque — recharge ou re-sauvegarde pour écraser");
+    setState("conflict", "conflict: the file changed on disk — reload or re-save to overwrite");
     diskMtime = j.mtime; return;
   }
   if(j.error){ setState("conflict", j.error); return; }
   diskMtime = j.mtime; dirty = false;
-  setState("saved", "sauvegardé " + new Date().toLocaleTimeString());
+  setState("saved", "saved " + new Date().toLocaleTimeString());
 }
 
 // --- modes d'affichage ---
@@ -193,7 +193,7 @@ setInterval(async () => {
     if(j.mtime && Math.abs(j.mtime - diskMtime) > 0.001){
       diskMtime = j.mtime; renderPreview(j.text);
       if(cm){ const cur = cm.getCursor(), sc = cm.getScrollInfo(); cm.setValue(j.text); cm.setCursor(cur); cm.scrollTo(sc.left, sc.top); }
-      setState("saved", "rechargé (modifié sur disque) " + new Date().toLocaleTimeString());
+      setState("saved", "reloaded (modified on disk) " + new Date().toLocaleTimeString());
     }
   }catch(e){}
 }, 2000);

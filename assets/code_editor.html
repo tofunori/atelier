@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Éditeur</title>
+<title>Editor</title>
 <link rel="stylesheet" href="/.fig_thumbs/cm/codemirror.min.css">
 <link rel="stylesheet" href="/.fig_thumbs/cm/material-darker.min.css">
 <script src="/.fig_thumbs/cm/codemirror.min.js"></script>
@@ -52,9 +52,9 @@
 <body>
 <header>
   <b id="fname"></b>
-  <button id="openFile" style="background:transparent;color:#9aa3b2;border:1px solid #3a3f4a;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer">Ouvrir…</button>
+  <button id="openFile" style="background:transparent;color:#9aa3b2;border:1px solid #3a3f4a;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer">Open…</button>
   <span id="state"></span>
-  <span style="margin-left:auto;color:#9aa3b2">Cmd+S : sauvegarder · sélection visible par Claude</span>
+  <span style="margin-left:auto;color:#9aa3b2">Cmd+S: save · selection visible to Claude</span>
 </header>
 <div id="ed" style="flex:1;display:flex;flex-direction:column;min-height:0"></div>
 <div id="picker"><div id="pickerBox">
@@ -63,8 +63,8 @@
 </div></div>
 <script>
 const path = new URLSearchParams(location.search).get("path");
-document.getElementById("fname").textContent = path ? path.split("/").pop() : "(aucun fichier)";
-document.title = path ? path.split("/").pop() : "Éditeur";
+document.getElementById("fname").textContent = path ? path.split("/").pop() : "(no file)";
+document.title = path ? path.split("/").pop() : "Editor";
 
 const MODES = {tex:"stex", sty:"stex", bib:"stex", py:"python", r:"r", R:"r",
                md:"markdown", jl:"julia", sh:"shell", bash:"shell"};
@@ -85,7 +85,7 @@ async function load(){
       value: j.text, mode: MODES[ext] || null, theme: "material-darker",
       lineNumbers: true, lineWrapping: true, viewportMargin: 50, styleSelectedText: true
     });
-    cm.on("change", (_, ch) => { if(ch.origin !== "setValue"){ dirty = true; setState("dirty", "modifié"); } });
+    cm.on("change", (_, ch) => { if(ch.origin !== "setValue"){ dirty = true; setState("dirty", "modified"); } });
     let selT = null;
     cm.on("cursorActivity", () => {
       clearTimeout(selT);
@@ -111,7 +111,7 @@ async function load(){
     cm.setCursor(cur);
   }
   dirty = false;
-  setState("saved", "à jour");
+  setState("saved", "saved");
 }
 
 async function save(){
@@ -120,13 +120,13 @@ async function save(){
     body: JSON.stringify({path, text: cm.getValue(), mtime: diskMtime})});
   const j = await r.json();
   if(j.error === "conflit"){
-    setState("conflict", "conflit : le fichier a changé sur disque (Claude?) — recharge ou re-sauvegarde pour écraser");
+    setState("conflict", "conflict: the file changed on disk (Claude?) — reload or re-save to overwrite");
     diskMtime = j.mtime;
     return;
   }
   diskMtime = j.mtime;
   dirty = false;
-  setState("saved", "sauvegardé " + new Date().toLocaleTimeString());
+  setState("saved", "saved " + new Date().toLocaleTimeString());
 }
 
 document.addEventListener("keydown", e => {
@@ -153,7 +153,7 @@ setInterval(async () => {
       cm.setCursor(cur);
       cm.scrollTo(scroll.left, scroll.top);
       dirty = false;
-      setState("saved", "rechargé (modifié sur disque) " + new Date().toLocaleTimeString());
+      setState("saved", "reloaded (modified on disk) " + new Date().toLocaleTimeString());
     }
   }catch(e){}
 }, 2000);

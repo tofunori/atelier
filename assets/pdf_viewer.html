@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
 <meta charset="utf-8">
-<title>PDF — sélectionne et envoie à Claude</title>
+<title>PDF — select and send to Claude</title>
 <script src="/.fig_thumbs/pdfjs/pdf.min.js"></script>
 <style>
   body{margin:0;background:#15171c;color:#e6e8ec;font-family:-apple-system,sans-serif}
@@ -22,7 +22,7 @@
 <body>
 <header>
   <b id="fname">PDF</b>
-  <span class="muted">Surligne un passage — Claude y a accès automatiquement (« ma sélection »)</span>
+  <span class="muted">Highlight a passage — Claude can access it automatically ("my selection")</span>
   <span id="selinfo" style="margin-left:auto;color:#ffd54a"></span>
   <span class="muted" id="status"></span>
 </header>
@@ -32,7 +32,7 @@
 pdfjsLib.GlobalWorkerOptions.workerSrc = "/.fig_thumbs/pdfjs/pdf.worker.min.js";
 
 const rel = new URLSearchParams(location.search).get("file");
-document.getElementById("fname").textContent = rel ? rel.split("/").pop() : "(aucun fichier)";
+document.getElementById("fname").textContent = rel ? rel.split("/").pop() : "(no file)";
 let selPage = 1;
 
 async function main(){
@@ -195,9 +195,9 @@ btn.onclick = async () => {
       body: JSON.stringify({rel, page: selPage, text})});
     const j = await r.json();
     document.getElementById("status").textContent =
-      j.sentToClaude ? "Collé dans Claude ✓" : "Copié dans le presse-papier ✓";
+      j.sentToClaude ? "Pasted into Claude ✓" : "Copied to clipboard ✓";
   }catch(e){
-    document.getElementById("status").textContent = "Erreur serveur";
+    document.getElementById("status").textContent = "Server error";
   }
   btn.textContent = "➜ Claude"; btn.style.display = "none";
   setTimeout(()=>document.getElementById("status").textContent="", 3000);
