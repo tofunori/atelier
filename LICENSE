@@ -26,3 +26,5 @@ This project bundles third-party components under their own licenses:
 
 - assets/pdfjs/ — Mozilla pdf.js, licensed under Apache License 2.0.
   See assets/pdfjs/NOTICE and https://github.com/mozilla/pdf.js
+- assets/cm/ — CodeMirror 5 (https://codemirror.net), MIT License.
+- assets/marked.min.js — marked (https://marked.js.org), MIT License.
