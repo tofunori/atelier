@@ -239,6 +239,9 @@ HTML = """<!DOCTYPE html>
   #lb img{max-width:94vw;max-height:86vh;object-fit:contain;background:#fff;border-radius:6px;cursor:zoom-in}
   #lb.fs img{max-width:100vw;max-height:100vh;border-radius:0}
   #lb.fs #lbCap,#lb.fs .lbBtn,#lb.fs #lbClose{display:none}
+  #lb.vw{justify-content:flex-start}
+  #lb.vw #lbPdf{width:100vw;height:100vh;border-radius:0}
+  #lb.vw #lbCap,#lb.vw .lbBtn,#lb.vw #lbFs{display:none}
   #lbFs{position:fixed;top:12px;right:58px;font-size:20px;color:#bbb;cursor:pointer;z-index:101}
   #lbFs:hover{color:#fff}
   #lbCap{color:#ddd;font-size:13px;margin-top:10px;display:flex;gap:14px;align-items:center;flex-wrap:wrap;justify-content:center;max-width:94vw;text-align:center}
@@ -400,6 +403,7 @@ function lbShow(i){
   const img=document.getElementById('lbImg'), pdf=document.getElementById('lbPdf');
   img.style.display=(isPdf||isMd||isCode)?'none':'';
   pdf.style.display=(isPdf||isMd||isCode)?'':'none';
+  lb().classList.toggle('vw', isPdf||isMd||isCode);  // full-window editor/viewer
   if(isPdf){pdf.src='/.fig_thumbs/pdf_viewer.html?file='+encodeURIComponent(f.rel);img.src='';}
   else if(isMd){pdf.src='/.fig_thumbs/md_viewer.html?path='+encodeURIComponent('__ROOT__/'+f.rel)+'&file='+encodeURIComponent(f.rel);img.src='';}
   else if(isCode){pdf.src='/.fig_thumbs/code_editor.html?path='+encodeURIComponent('__ROOT__/'+f.rel);img.src='';}
