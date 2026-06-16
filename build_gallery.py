@@ -327,7 +327,6 @@ HTML = """<!DOCTYPE html>
     <span class="chip on" id="archChip">Include archives</span>
     <span class="chip off" id="favChip">&#9733; Favorites</span>
     <span id="rateFilter" style="display:none"></span>
-    <button id="favExport" title="Copy fav commands to sync with the cmux Dock">Sync favs &#8594; clipboard</button>
     <button id="quoteClear" style="display:none" title="Clear the annotation pending in the Claude statusline">&#9998;&#10005; Annotation</button>
     <button id="rescan" title="Rebuild the gallery index and reload">&#8635; Rescan</button>
     <button id="cmpSel" style="display:none" title="Show the selected images stacked, to compare">&#9636; Compare (0)</button>
@@ -678,13 +677,6 @@ rateFilter.querySelectorAll('.rf').forEach(c=>{
   };
 });
 favChip.onclick=()=>{onlyFavs=!onlyFavs;favChip.classList.toggle('off',!onlyFavs);favChip.classList.toggle('on',onlyFavs);rateFilter.style.display=onlyFavs?'inline-flex':'none';if(!onlyFavs){rateMin=0;rateFilter.querySelectorAll('.rf').forEach(x=>{x.classList.remove('on');x.classList.add('off');});}render();};
-document.getElementById('favExport').onclick=function(){
-  const root='__ROOT__';
-  const cmds=[...favs].map(r=>`fav "${root}/${r}"`).join('\\n');
-  navigator.clipboard.writeText(cmds||'# no favorites');
-  this.textContent='Copied \u2713 ('+favs.size+')';
-  setTimeout(()=>this.textContent='Sync favs \u2192 clipboard',1500);
-};
 const quoteBtn=document.getElementById('quoteClear');
 function quoteCheck(){fetch('/quote').then(r=>r.json()).then(j=>{quoteBtn.style.display=j.pending?'':'none';}).catch(()=>{});}
 quoteCheck(); setInterval(quoteCheck, 30000);
