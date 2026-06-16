@@ -11,7 +11,7 @@ Run it again any time to refresh the index after producing new figures.
 import os, json, time, hashlib, subprocess
 
 ROOT = os.path.abspath(os.environ.get("GALLERY_ROOT") or os.getcwd())
-EXTS = {".png", ".pdf", ".html", ".docx", ".xlsx", ".xls", ".csv", ".md", ".py", ".r", ".jl", ".tex", ".sh"}
+EXTS = {".png", ".jpg", ".jpeg", ".svg", ".pdf", ".html", ".docx", ".xlsx", ".xls", ".csv", ".md", ".py", ".r", ".jl", ".tex", ".sh"}
 # Skip these directories entirely (virtualenvs, git, caches, worktrees, the index itself)
 EXCLUDE_PARTS = {".git", ".venv", ".venv-era5", ".venv-codex", "node_modules",
                  "__pycache__", ".ipynb_checkpoints", "worktrees", ".claude", ".fig_thumbs"}
@@ -551,7 +551,7 @@ function toggleFav(rel, el){
   render();
 }
 const FOLDERS = __FOLDERS__;
-const DEFAULT_EXTS = {png:true,pdf:false,html:false,docx:false,xlsx:false,xls:false,csv:false,md:false,py:false,r:false,jl:false,tex:false,sh:false};
+const DEFAULT_EXTS = {png:true,jpg:true,jpeg:true,svg:true,pdf:false,html:false,docx:false,xlsx:false,xls:false,csv:false,md:false,py:false,r:false,jl:false,tex:false,sh:false};
 const exts = Object.assign({}, DEFAULT_EXTS, JSON.parse(localStorage.getItem('figExts')||'{}'));
 const saveExts = ()=>localStorage.setItem('figExts', JSON.stringify(exts));
 let showArch = true;
@@ -872,7 +872,7 @@ def main():
     project = _esc(os.path.basename(ROOT.rstrip("/")) or "project")
     # __ROOT__ lands inside single-quoted JS string literals ('__ROOT__/'+rel);
     # escape it for that context so a path with a quote/backslash can't break the script.
-    root_js = ROOT.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n").replace("\r", "")
+    root_js = ROOT.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n").replace("\r", "").replace("</", "<\\/")
     html = (HTML
             .replace("__TITLE__", f"{wordmark} · {project}")
             .replace("__WORDMARK__", wordmark)
@@ -880,9 +880,9 @@ def main():
             .replace("__COUNT__", f"{len(rows):,}")
             .replace("__GEN__", gen)
             .replace("__VER__", str(int(time.time())))
-            .replace("__DATA__", json.dumps(rows, ensure_ascii=False))
-            .replace("__FOLDERS__", json.dumps(folders, ensure_ascii=False))
-            .replace("__FAVS__", json.dumps(sorted(cmux_favorites()), ensure_ascii=False))
+            .replace("__DATA__", json.dumps(rows, ensure_ascii=False).replace("</", "<\\/"))
+            .replace("__FOLDERS__", json.dumps(folders, ensure_ascii=False).replace("</", "<\\/"))
+            .replace("__FAVS__", json.dumps(sorted(cmux_favorites()), ensure_ascii=False).replace("</", "<\\/"))
             .replace("__ROOT__", root_js))
     out = os.path.join(ROOT, SELF)
     with open(out, "w") as f:
