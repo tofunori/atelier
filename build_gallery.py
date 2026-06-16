@@ -870,6 +870,9 @@ def main():
     _esc = lambda s: s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
     wordmark = _esc(os.environ.get("GALLERY_TITLE") or "Gallery")
     project = _esc(os.path.basename(ROOT.rstrip("/")) or "project")
+    # __ROOT__ lands inside single-quoted JS string literals ('__ROOT__/'+rel);
+    # escape it for that context so a path with a quote/backslash can't break the script.
+    root_js = ROOT.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n").replace("\r", "")
     html = (HTML
             .replace("__TITLE__", f"{wordmark} · {project}")
             .replace("__WORDMARK__", wordmark)
@@ -880,7 +883,7 @@ def main():
             .replace("__DATA__", json.dumps(rows, ensure_ascii=False))
             .replace("__FOLDERS__", json.dumps(folders, ensure_ascii=False))
             .replace("__FAVS__", json.dumps(sorted(cmux_favorites()), ensure_ascii=False))
-            .replace("__ROOT__", ROOT))
+            .replace("__ROOT__", root_js))
     out = os.path.join(ROOT, SELF)
     with open(out, "w") as f:
         f.write(html)

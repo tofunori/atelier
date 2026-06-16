@@ -138,6 +138,17 @@ class Handler(SimpleHTTPRequestHandler):
         root = os.path.realpath(PROJECT)
         return p if p == root or p.startswith(root + os.sep) else None
 
+    def translate_path(self, path):
+        # SimpleHTTPRequestHandler serves symlink targets without bound-checking.
+        # Pin static GETs to PROJECT with the same realpath rule as the JSON API,
+        # so an in-tree symlink pointing outside the project can't be read.
+        full = super().translate_path(path)
+        root = os.path.realpath(PROJECT)
+        rp = os.path.realpath(full)
+        if rp == root or rp.startswith(root + os.sep):
+            return full
+        return os.path.join(root, "__forbidden_symlink_escape__")  # nonexistent -> 404
+
     def do_GET(self):
         if self.path.startswith("/ls?"):
             try:
