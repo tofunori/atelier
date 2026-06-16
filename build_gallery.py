@@ -11,7 +11,8 @@ Run it again any time to refresh the index after producing new figures.
 import os, json, time, hashlib, subprocess, sys, concurrent.futures
 
 ROOT = os.path.abspath(os.environ.get("GALLERY_ROOT") or os.getcwd())
-EXTS = {".png", ".jpg", ".jpeg", ".svg", ".pdf", ".html", ".docx", ".xlsx", ".xls", ".csv", ".md", ".py", ".r", ".jl", ".tex", ".sh"}
+EXTS = {".png", ".jpg", ".jpeg", ".svg", ".pdf", ".html", ".docx", ".xlsx", ".xls", ".csv", ".md", ".py", ".r", ".jl", ".tex", ".sh",
+        ".mp4", ".m4v", ".mov", ".webm"}
 # Skip these directories entirely (virtualenvs, git, caches, worktrees, the index itself)
 EXCLUDE_PARTS = {".git", ".venv", ".venv-era5", ".venv-codex", "node_modules",
                  "__pycache__", ".ipynb_checkpoints", "worktrees", ".claude", ".fig_thumbs"}
@@ -25,9 +26,11 @@ SNIP_EXTS = (".py", ".r", ".jl", ".sh", ".tex", ".md", ".csv")
 SHOW_FRAMES = bool(os.environ.get("GALLERY_SHOW_FRAMES"))
 
 def is_frames_dir(name):
+    # Still-sequence dirs only (f000.png…). NOT "*_animations" dirs — those hold the
+    # playable .mp4/.gif we want to keep.
     n = name.lower()
-    return (n in ("frames", "frame", "animations", "animation")
-            or n.endswith(("_frames", "_frame", "_animations", "_animation"))
+    return (n in ("frames", "frame")
+            or n.endswith(("_frames", "_frame"))
             or "html_frames" in n)
 
 
@@ -121,7 +124,7 @@ def scan():
                 continue
             low = rel.lower()
             thumb = None
-            if ext in (".pdf", ".docx", ".xlsx", ".xls") and not NO_THUMBS:
+            if ext in (".pdf", ".docx", ".xlsx", ".xls", ".mp4", ".m4v", ".mov", ".webm") and not NO_THUMBS:
                 key = thumb_key(rel, int(st.st_mtime))
                 keys_seen.add(key)
                 if os.path.exists(os.path.join(THUMB_DIR, key + ".png")):
@@ -204,6 +207,10 @@ HTML = """<!DOCTYPE html>
   .chip{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:20px;
         border:1px solid var(--border);background:var(--card);cursor:pointer;user-select:none;font-size:12px}
   .chip.off{opacity:.4}
+  .playbtn{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:3;
+        width:48px;height:48px;border-radius:50%;background:rgba(0,0,0,.5);color:#fff;
+        display:flex;align-items:center;justify-content:center;font-size:17px;padding-left:3px;
+        pointer-events:none;border:2px solid rgba(255,255,255,.9)}
   #fmtMenu{position:absolute;z-index:50;display:none;flex-direction:column;gap:2px;margin-top:6px;
       background:#27272a;border:1px solid #3f3f46;border-radius:10px;padding:8px;min-width:140px;
       box-shadow:0 8px 28px rgba(0,0,0,.5)}
@@ -339,6 +346,7 @@ HTML = """<!DOCTYPE html>
     <span class="chip" data-ext="png">PNG</span>
     <span class="chip" data-ext="pdf">PDF</span>
     <span class="chip" data-ext="svg" title="Vector plots — open one to select its elements">&#9672; SVG</span>
+    <span class="chip" data-ext="mp4" title="Videos (mp4 / mov / webm) — play in the lightbox">&#9654; Video</span>
     <span class="chip" id="fmtChip">Formats &#9662;</span>
     <div id="fmtMenu"></div>
     <span class="chip on" id="archChip">Include archives</span>
@@ -371,6 +379,7 @@ HTML = """<!DOCTYPE html>
   <div id="lbWrap"><img id="lbImg" src="" alt=""><canvas id="annotCv"></canvas></div>
   <div id="annotNote"><span class="nb">1</span><input type="text" placeholder="Add a comment... (Enter)"><span class="del" title="Delete this annotation">&#128465;</span></div>
   <iframe id="lbPdf" style="display:none;width:94vw;height:86vh;border:none;border-radius:6px;background:#fff"></iframe>
+  <video id="lbVid" controls playsinline style="display:none;max-width:94vw;max-height:86vh;border-radius:6px;background:#000"></video>
   <div id="lbCap"></div>
 </div>
 <div id="cmp">
@@ -548,13 +557,16 @@ async function lbShow(i){
   if(lbIdx>=0 && i!==lbIdx && !(await annotGuard())) return;
   if(i<0||i>=lbList.length) return;
   lbIdx=i; const f=lbList[i]; lb().classList.remove('annot');
-  const isTex=f.ext==='tex', isPdf=f.ext==='pdf', isMd=f.ext==='md', isCode=codeExt(f.ext), isSvg=f.ext==='svg';
-  const img=document.getElementById('lbImg'), pdf=document.getElementById('lbPdf');
+  const isTex=f.ext==='tex', isPdf=f.ext==='pdf', isMd=f.ext==='md', isCode=codeExt(f.ext), isSvg=f.ext==='svg', isVid=videoExt(f.ext);
+  const img=document.getElementById('lbImg'), pdf=document.getElementById('lbPdf'), vid=document.getElementById('lbVid');
   const vw=isPdf||isMd||isCode||isSvg;
-  img.style.display=vw?'none':'';
+  img.style.display=(vw||isVid)?'none':'';
   pdf.style.display=vw?'':'none';
+  vid.style.display=isVid?'':'none';
+  if(!isVid && vid.getAttribute('src')){vid.pause();vid.removeAttribute('src');vid.load();}  // stop playback when leaving a video
   lb().classList.toggle('vw', vw);  // full-window editor/viewer
-  if(isTex){pdf.src='/.fig_thumbs/latex_studio.html?path='+encodeURIComponent('__ROOT__/'+f.rel)+'&v=__VER__';img.src='';}
+  if(isVid){vid.src=f.rel+'?v='+f.mtime;img.src='';pdf.src='';}
+  else if(isTex){pdf.src='/.fig_thumbs/latex_studio.html?path='+encodeURIComponent('__ROOT__/'+f.rel)+'&v=__VER__';img.src='';}
   else if(isPdf){pdf.src='/.fig_thumbs/pdf_viewer.html?file='+encodeURIComponent(f.rel)+'&v=__VER__';img.src='';}
   else if(isMd){pdf.src='/.fig_thumbs/md_viewer.html?path='+encodeURIComponent('__ROOT__/'+f.rel)+'&file='+encodeURIComponent(f.rel)+'&v=__VER__';img.src='';}
   else if(isCode){pdf.src='/.fig_thumbs/code_editor.html?path='+encodeURIComponent('__ROOT__/'+f.rel)+'&v=__VER__';img.src='';}
@@ -566,7 +578,7 @@ async function lbShow(i){
     (isSvg?` <span style="margin-left:8px;color:#5b9dff;font-size:12px">&#9672; click elements in the plot to select them</span>`:'');
   lb().classList.add('show');
 }
-async function lbClose(){if(!(await annotGuard()))return;lb().classList.remove('show');lb().classList.remove('annot');lb().classList.remove('fs');lbIdx=-1;}
+async function lbClose(){if(!(await annotGuard()))return;const v=document.getElementById('lbVid');if(v){v.pause();v.removeAttribute('src');v.load();}lb().classList.remove('show');lb().classList.remove('annot');lb().classList.remove('fs');lbIdx=-1;}
 function lbFsToggle(){
   const el=lb();
   if(document.fullscreenElement){document.exitFullscreen();el.classList.remove('fs');return;}
@@ -606,12 +618,13 @@ function toggleFav(rel, el){
   render();
 }
 const FOLDERS = __FOLDERS__;
-const DEFAULT_EXTS = {png:true,jpg:true,jpeg:true,svg:true,pdf:false,html:false,docx:false,xlsx:false,xls:false,csv:false,md:false,py:false,r:false,jl:false,tex:false,sh:false};
+const DEFAULT_EXTS = {png:true,jpg:true,jpeg:true,svg:true,mp4:true,m4v:true,mov:true,webm:true,pdf:false,html:false,docx:false,xlsx:false,xls:false,csv:false,md:false,py:false,r:false,jl:false,tex:false,sh:false};
 const exts = Object.assign({}, DEFAULT_EXTS, JSON.parse(localStorage.getItem('figExts')||'{}'));
 const saveExts = ()=>localStorage.setItem('figExts', JSON.stringify(exts));
 let showArch = true;
 const fmtSize = b => b>1048576?(b/1048576).toFixed(1)+' MB':b>1024?(b/1024).toFixed(0)+' KB':b+' B';
 const imgExt = e => e==='png'||e==='jpg'||e==='jpeg'||e==='svg';
+const videoExt = e => e==='mp4'||e==='m4v'||e==='mov'||e==='webm';
 const appExt = e => e==='docx'||e==='xlsx'||e==='xls'||e==='csv';
 const codeExt = e => e==='py'||e==='r'||e==='jl'||e==='tex'||e==='sh';
 const FMT_LIST = [['html','HTML'],['docx','DOCX'],['xlsx','XLSX'],['csv','CSV'],['md','Markdown'],['py','Python'],['r','R'],['jl','Julia'],['tex','LaTeX'],['sh','Shell']];
@@ -673,7 +686,7 @@ function render(){
     return b.mtime-a.mtime;
   });
   document.getElementById('count').textContent = list.length+' / '+FILES.length+' figures';
-  lbList = list.filter(f=>imgExt(f.ext)||f.ext==='pdf'||f.ext==='md'||codeExt(f.ext));
+  lbList = list.filter(f=>imgExt(f.ext)||videoExt(f.ext)||f.ext==='pdf'||f.ext==='md'||codeExt(f.ext));
   const grid=document.getElementById('grid');
   if(!list.length){grid.innerHTML='<div class="empty">No matching files.</div>';renderedRels=[];return;}
   const MAX=600;
@@ -698,7 +711,7 @@ function render(){
     const hidTag = isHid?`<span class="tag hid">hidden</span>`:'';
     return `<div class="card ${f.archive?'arch':''} ${isHid?'hid':''}">
       <span class="selbox ${selSet.has(f.rel)?'on':''}" data-act="sel" data-rel="${escA(f.rel)}" title="Select — Shift-click to select a range">${selSet.has(f.rel)?'■':'▢'}</span>
-      ${(imgExt(f.ext)||f.ext==='pdf'||f.ext==='md'||codeExt(f.ext))?`<div data-act="lb" data-rel="${escA(f.rel)}" style="cursor:zoom-in">${thumb}</div>`:appExt(f.ext)?`<div data-act="open" data-rel="${escA(f.rel)}" style="cursor:pointer" title="Open with default app">${thumb}</div>`:`<a href="${escA(f.rel)}" target="_blank" style="text-decoration:none">${thumb}</a>`}
+      ${(imgExt(f.ext)||videoExt(f.ext)||f.ext==='pdf'||f.ext==='md'||codeExt(f.ext))?`<div data-act="lb" data-rel="${escA(f.rel)}" style="cursor:zoom-in;position:relative">${videoExt(f.ext)?'<span class="playbtn">&#9654;</span>':''}${thumb}</div>`:appExt(f.ext)?`<div data-act="open" data-rel="${escA(f.rel)}" style="cursor:pointer" title="Open with default app">${thumb}</div>`:`<a href="${escA(f.rel)}" target="_blank" style="text-decoration:none">${thumb}</a>`}
       <div class="meta">
         <div class="nm">${esc(f.name)}</div>
         ${rateRow(f.rel)}
@@ -720,7 +733,7 @@ document.querySelectorAll('.chip[data-ext]').forEach(c=>{
   const e=c.dataset.ext;
   c.classList.toggle('off',!exts[e]);
   c.classList.toggle('on',!!exts[e]);
-  c.onclick=()=>{exts[e]=!exts[e];if(e==='jpg')exts['jpeg']=exts['jpg'];if(e==='xlsx')exts['xls']=exts['xlsx'];c.classList.toggle('off',!exts[e]);c.classList.toggle('on',!!exts[e]);saveExts();render();};
+  c.onclick=()=>{exts[e]=!exts[e];if(e==='jpg')exts['jpeg']=exts['jpg'];if(e==='xlsx')exts['xls']=exts['xlsx'];if(e==='mp4')exts['m4v']=exts['mov']=exts['webm']=exts['mp4'];c.classList.toggle('off',!exts[e]);c.classList.toggle('on',!!exts[e]);saveExts();render();};
 });
 document.getElementById('archChip').onclick=function(){showArch=!showArch;this.classList.toggle('off',!showArch);this.textContent=showArch?'Include archives':'Archives hidden';render();};
 const hideChip=document.getElementById('hideChip');

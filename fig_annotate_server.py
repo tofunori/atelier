@@ -116,6 +116,9 @@ def find_claude_surface():
     return alive[0]
 
 
+VIDEO_EXTS = (".mp4", ".m4v", ".mov", ".webm")  # served with HTTP Range so <video> can seek
+
+
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *a, **kw):
         super().__init__(*a, directory=PROJECT, **kw)
@@ -165,6 +168,58 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
         self.wfile.write(data)
+
+    def _serve_video(self):
+        """Serve a video file with HTTP Range support so <video> can stream and seek.
+        SimpleHTTPRequestHandler answers every GET with a full 200 body and no
+        Accept-Ranges, which most players refuse to scrub (or to play at all)."""
+        full = self.translate_path(self.path)  # pinned to PROJECT, symlink-safe
+        if not os.path.isfile(full):
+            return self._respond(404, {"error": "not found"})
+        ctype = mimetypes.guess_type(full)[0] or "video/mp4"
+        fsize = os.path.getsize(full)
+        start, end, partial = 0, fsize - 1, False
+        rng = self.headers.get("Range")
+        if rng and rng.startswith("bytes="):
+            try:
+                s, _, e = rng[6:].partition("-")
+                if s.strip():
+                    start = int(s)
+                    end = int(e) if e.strip() else fsize - 1
+                else:                                  # suffix range: bytes=-N
+                    start = max(0, fsize - int(e))
+                if start > end or start >= fsize:
+                    self.send_response(416)
+                    self.send_header("Content-Range", "bytes */%d" % fsize)
+                    self.end_headers()
+                    return
+                end = min(end, fsize - 1)
+                partial = True
+            except ValueError:
+                start, end, partial = 0, fsize - 1, False
+        length = end - start + 1
+        self.send_response(206 if partial else 200)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Accept-Ranges", "bytes")
+        self.send_header("Content-Length", str(length))
+        if partial:
+            self.send_header("Content-Range", "bytes %d-%d/%d" % (start, end, fsize))
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        if self.command == "HEAD":
+            return
+        with open(full, "rb") as f:
+            f.seek(start)
+            remaining = length
+            while remaining > 0:
+                chunk = f.read(min(262144, remaining))
+                if not chunk:
+                    break
+                try:
+                    self.wfile.write(chunk)
+                except (BrokenPipeError, ConnectionResetError):
+                    break                              # player aborted on seek — normal
+                remaining -= len(chunk)
 
     def do_GET(self):
         # On-demand downscaled thumbnail for grid cards (keeps full-res images out of
@@ -316,7 +371,16 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._respond(400, {"error": "bad request: " + str(e)})
             except Exception as e:
                 return self._respond(500, {"error": str(e)})
+        from urllib.parse import urlparse as _up
+        if os.path.splitext(_up(self.path).path)[1].lower() in VIDEO_EXTS:
+            return self._serve_video()
         super().do_GET()
+
+    def do_HEAD(self):
+        from urllib.parse import urlparse as _up
+        if os.path.splitext(_up(self.path).path)[1].lower() in VIDEO_EXTS:
+            return self._serve_video()
+        super().do_HEAD()
 
     def do_POST(self):
         if self.path == "/clear-quote":
