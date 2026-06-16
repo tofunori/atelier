@@ -194,6 +194,37 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._serve_file(out)
             except Exception as e:
                 return self._respond(500, {"error": str(e)})
+        if self.path.startswith("/snippet?"):
+            # first lines of a text/code file, fetched lazily by visible cards
+            # (keeps the snippets out of the embedded gallery data — ~3.8MB lighter).
+            try:
+                from urllib.parse import parse_qs, urlparse
+                q = parse_qs(urlparse(self.path).query)
+                src = self._safe_path(q.get("path", [""])[0])
+                if not src or not os.path.isfile(src):
+                    return self._respond(404, {"error": "not found"})
+                try:
+                    n = max(1, min(40, int(q.get("n", ["10"])[0])))
+                except ValueError:
+                    n = 10
+                lines = []
+                with open(src, encoding="utf-8", errors="replace") as f:
+                    for _ in range(n):
+                        ln = f.readline()
+                        if not ln:
+                            break
+                        lines.append(ln.rstrip("\n"))
+                body = ("\n".join(lines)[:600]).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "text/plain; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.send_header("Cache-Control", "max-age=300")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(body)
+                return
+            except Exception as e:
+                return self._respond(500, {"error": str(e)})
         if self.path.startswith("/ls?"):
             try:
                 from urllib.parse import parse_qs, urlparse

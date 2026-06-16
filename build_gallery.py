@@ -8,7 +8,7 @@ Scans the project for image files (png, pdf, svg, jpg, html), collects metadata,
 and writes a self-contained figures_index.html at the project root.
 Run it again any time to refresh the index after producing new figures.
 """
-import os, json, time, hashlib, subprocess
+import os, json, time, hashlib, subprocess, sys, concurrent.futures
 
 ROOT = os.path.abspath(os.environ.get("GALLERY_ROOT") or os.getcwd())
 EXTS = {".png", ".jpg", ".jpeg", ".svg", ".pdf", ".html", ".docx", ".xlsx", ".xls", ".csv", ".md", ".py", ".r", ".jl", ".tex", ".sh"}
@@ -118,7 +118,7 @@ def scan():
                     thumb = ".fig_thumbs/" + key + ".png"
             rows.append({
                 "thumb": thumb,
-                "snippet": read_snippet(full) if ext in SNIP_EXTS else None,
+                "code": ext in SNIP_EXTS,  # snippet text is fetched lazily via /snippet (keeps the data light)
                 "name": fn,
                 "rel": rel,
                 "folder": os.path.dirname(rel) or ".",
@@ -586,6 +586,15 @@ fmtChipLabel();
 const fsel = document.getElementById('folder');
 FOLDERS.forEach(f=>{const o=document.createElement('option');o.value=f;o.textContent=f;fsel.appendChild(o);});
 
+// lazily fetch code snippets only for cards that scroll into view (data stays light)
+const snipObserver = new IntersectionObserver((entries,obs)=>{
+  for(const e of entries){
+    if(!e.isIntersecting) continue;
+    const el=e.target; obs.unobserve(el);
+    fetch('/snippet?path='+encodeURIComponent('__ROOT__/'+el.dataset.snip)+'&n=10')
+      .then(r=>r.ok?r.text():'').then(t=>{el.textContent=t;}).catch(()=>{});
+  }
+},{rootMargin:'250px'});
 function render(){
   const q = document.getElementById('q').value.toLowerCase().trim();
   const terms = q.split(/\\s+/).filter(Boolean);
@@ -623,8 +632,8 @@ function render(){
     const imgTag = isImg
       ? `<img loading="lazy" decoding="async" src="${escA(tsrc)}" data-full="${escA(f.rel)}?v=${f.mtime}" onerror="this.onerror=null;this.src=this.dataset.full" alt="">`
       : `<img loading="lazy" decoding="async" src="${escA(tsrc)}" alt="">`;
-    const thumb = f.snippet
-      ? `<div class="snip">${esc(f.snippet)}</div>`
+    const thumb = f.code
+      ? `<div class="snip" data-snip="${escA(f.rel)}"></div>`
       : tsrc
       ? `<div class="thumb">${imgTag}</div>`
       : `<div class="ph"><span class="ext">${esc(f.ext.toUpperCase())}</span><span style="font-size:11px">no preview</span></div>`;
@@ -647,6 +656,7 @@ function render(){
       </div>
     </div>`;
   }).join('') + (list.length>MAX?`<div class="empty">… and ${list.length-MAX} more. Refine your search to see them.</div>`:'');
+  grid.querySelectorAll('.snip[data-snip]').forEach(el=>snipObserver.observe(el));
 }
 document.querySelectorAll('.chip[data-ext]').forEach(c=>{
   const e=c.dataset.ext;
@@ -871,8 +881,40 @@ render();
 </html>"""
 
 
+def prewarm_image_thumbs(rows, limit=400):
+    """Pre-generate the server /thumb cache for the NEWEST images, in parallel, so
+    the first paint after a (re)build is instant instead of generating them on
+    demand at view time. Same key scheme as fig_annotate_server's /thumb endpoint
+    (md5(realpath:int(mtime):480)). Incremental: only uncached images are built, so
+    a rescan after adding a few plots warms only those."""
+    if NO_THUMBS or sys.platform != "darwin":
+        return
+    imgs = sorted(((r["mtime"], os.path.join(ROOT, r["rel"])) for r in rows
+                   if r["ext"] in ("png", "jpg", "jpeg")), reverse=True)[:limit]
+    todo = []
+    for mt, full in imgs:
+        key = hashlib.md5((os.path.realpath(full) + ":" + str(int(mt)) + ":480").encode()).hexdigest()
+        out = os.path.join(THUMB_DIR, "imgthumb_" + key + ".png")
+        if not os.path.exists(out):
+            todo.append((full, out))
+    if not todo:
+        return
+    os.makedirs(THUMB_DIR, exist_ok=True)
+    def gen(job):
+        full, out = job
+        try:
+            subprocess.run(["sips", "-Z", "480", "-s", "format", "png", full, "--out", out],
+                           capture_output=True, timeout=20, check=True)
+        except Exception:
+            pass
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(8, (os.cpu_count() or 4))) as ex:
+        list(ex.map(gen, todo))
+    print(f"[gallery] pre-warmed {len(todo)} image thumbnail(s)")
+
+
 def main():
     rows = scan()
+    prewarm_image_thumbs(rows)
     folders = sorted({r["folder"] for r in rows})
     gen = time.strftime("%Y-%m-%d %H:%M")
     _esc = lambda s: s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")

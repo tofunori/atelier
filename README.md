@@ -100,10 +100,13 @@ serve` from a LaunchAgent.
   handlers use `data-*` delegation, so a crafted filename can't execute script.
 - **annotate → Claude** and the LaTeX/`open`/trash actions are macOS- and
   Claude-Code-in-cmux-specific; they degrade gracefully elsewhere.
-- **Low memory on big plots**: image cards load on-demand downscaled thumbnails
+- **Light by default**: image cards load on-demand downscaled thumbnails
   (`/thumb`, cached in `.fig_thumbs/`) instead of the full files — a 4320 px plot
-  decodes to ~38 MB but its 480 px card to ~0.5 MB. The lightbox still opens the
-  full-resolution original, so viewing quality is unchanged.
+  decodes to ~38 MB but its 480 px card to ~0.5 MB; the lightbox still opens the
+  full-resolution original (no quality loss). Code previews load lazily via
+  `/snippet` as cards scroll in (keeps the embedded data ~½ the size), and the
+  newest thumbnails are pre-warmed at build so the first paint after a rescan is
+  instant.
 - `figures_index.html`, `.fig_thumbs/`, `annotations/` are regenerated per build
   (gitignored).
 
