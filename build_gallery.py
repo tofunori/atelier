@@ -191,6 +191,8 @@ HTML = """<!DOCTYPE html>
   .chip{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:20px;
         border:1px solid var(--border);background:var(--card);cursor:pointer;user-select:none;font-size:12px}
   .chip.off{opacity:.4}
+  .svgbadge{position:absolute;top:8px;right:8px;z-index:3;background:rgba(91,157,255,.92);color:#fff;
+        font-size:10px;font-weight:600;padding:2px 7px;border-radius:11px;pointer-events:none;letter-spacing:.2px}
   #fmtMenu{position:absolute;z-index:50;display:none;flex-direction:column;gap:2px;margin-top:6px;
       background:#27272a;border:1px solid #3f3f46;border-radius:10px;padding:8px;min-width:140px;
       box-shadow:0 8px 28px rgba(0,0,0,.5)}
@@ -218,6 +220,9 @@ HTML = """<!DOCTYPE html>
   .row{display:flex;gap:8px;align-items:center;font-size:11px;color:var(--muted);margin-top:auto}
   .tag{padding:2px 7px;border-radius:5px;background:var(--card2);font-size:10px;text-transform:uppercase}
   .tag.archive{background:var(--arch);color:#d9a441}
+  .tag.hid{background:#3a3a44;color:#aab}
+  .card.hid{opacity:.5}
+  .card.hid:hover{opacity:1}
   .acts{display:flex;gap:5px;padding:0 12px 11px}
   .acts a,.acts button{flex:1;text-align:center;text-decoration:none;font-size:10.5px;padding:3px 4px;
         background:transparent;border:1px solid #3a3f4a;border-radius:6px;color:#c9cfda;cursor:pointer;transition:.12s}
@@ -322,14 +327,17 @@ HTML = """<!DOCTYPE html>
     <select id="folder"><option value="">All folders</option></select>
     <span class="chip" data-ext="png">PNG</span>
     <span class="chip" data-ext="pdf">PDF</span>
+    <span class="chip" data-ext="svg" title="Vector plots — open one to select its elements">&#9672; SVG</span>
     <span class="chip" id="fmtChip">Formats &#9662;</span>
     <div id="fmtMenu"></div>
     <span class="chip on" id="archChip">Include archives</span>
     <span class="chip off" id="favChip">&#9733; Favorites</span>
+    <span class="chip off" id="hideChip" title="Show the files you've masked (otherwise filtered out)">Hidden</span>
     <span id="rateFilter" style="display:none"></span>
     <button id="quoteClear" style="display:none" title="Clear the annotation pending in the Claude statusline">&#9998;&#10005; Annotation</button>
     <button id="rescan" title="Rebuild the gallery index and reload">&#8635; Rescan</button>
     <button id="cmpSel" style="display:none" title="Show the selected images stacked, to compare">&#9636; Compare (0)</button>
+    <button id="hideSel" style="display:none" title="Hide the selected files from the gallery (reversible)">Hide (0)</button>
     <button id="delSel" style="display:none;background:#5c1f1f;border-color:#7a2a2a">&#128465; Delete (0)</button>
     <button id="clrSel" style="display:none" title="Clear the selection">&#10005; Clear</button>
     <span class="count" id="count"></span>
@@ -378,6 +386,7 @@ document.addEventListener('click',e=>{
   const rel=el.dataset.rel, act=el.dataset.act;
   if(act==='fav') toggleFav(rel, el);
   else if(act==='sel') toggleSel(rel, el);
+  else if(act==='hide') toggleHide(rel);
   else if(act==='del') delOne(rel);
   else if(act==='lb') lbOpen(rel);
   else if(act==='open') openDefault(rel);
@@ -389,22 +398,30 @@ let favs = new Set(JSON.parse(localStorage.getItem('figFavs')||'[]'));
 SEED_FAVS.forEach(f=>favs.add(f));
 const saveFavs = ()=>localStorage.setItem('figFavs', JSON.stringify([...favs]));
 saveFavs();
+let hidden = new Set(JSON.parse(localStorage.getItem('figHidden')||'[]'));
+let showHidden = false;
+const saveHidden = ()=>{localStorage.setItem('figHidden', JSON.stringify([...hidden]));pushState();};
+function updateHideChip(){const c=document.getElementById('hideChip');if(c)c.textContent=hidden.size?('Hidden ('+hidden.size+')'):'Hidden';}
+function toggleHide(rel){if(hidden.has(rel))hidden.delete(rel);else hidden.add(rel);saveHidden();updateHideChip();render();}
 let ratings = JSON.parse(localStorage.getItem('figRatings')||'{}');
 let stateTimer=null;
 function pushState(){
   clearTimeout(stateTimer);
   stateTimer=setTimeout(()=>{
     fetch('/state',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({favs:[...favs],ratings})}).catch(()=>{});
+      body:JSON.stringify({favs:[...favs],ratings,hidden:[...hidden]})}).catch(()=>{});
   },400);
 }
 const saveRatings = ()=>{localStorage.setItem('figRatings', JSON.stringify(ratings));pushState();};
 fetch('/state').then(r=>r.json()).then(st=>{
   (st.favs||[]).forEach(f=>favs.add(f));
   Object.assign(ratings, st.ratings||{});
+  (st.hidden||[]).forEach(h=>hidden.add(h));
   localStorage.setItem('figFavs', JSON.stringify([...favs]));
   localStorage.setItem('figRatings', JSON.stringify(ratings));
+  localStorage.setItem('figHidden', JSON.stringify([...hidden]));
   document.getElementById('favChip').textContent='\u2605 Favorites ('+favs.size+')';
+  updateHideChip();
   render();
 }).catch(()=>{});
 function setRate(rel, n, ev){
@@ -511,7 +528,8 @@ async function lbShow(i){
   else{img.src=f.rel+'?v='+f.mtime;pdf.src='';}
   document.getElementById('lbCap').innerHTML=
     `<b>${esc(f.name)}</b><span>${esc(f.folder)}</span><span>${esc(f.mdate)}</span><a href="${escA(f.rel)}" target="_blank">open original</a>`+
-    (imgExt(f.ext)?` <button onclick="annotToggle()" style="margin-left:8px">&#9998; Annotate</button>`:'');
+    (imgExt(f.ext)&&!isSvg?` <button onclick="annotToggle()" style="margin-left:8px">&#9998; Annotate</button>`:'')+
+    (isSvg?` <span style="margin-left:8px;color:#5b9dff;font-size:12px">&#9672; click elements in the plot to select them</span>`:'');
   lb().classList.add('show');
 }
 async function lbClose(){if(!(await annotGuard()))return;lb().classList.remove('show');lb().classList.remove('annot');lb().classList.remove('fs');lbIdx=-1;}
@@ -604,6 +622,7 @@ function render(){
   let list = FILES.filter(f=>{
     if(!exts[f.ext]) return false;
     if(!showArch && f.archive) return false;
+    if(!showHidden && hidden.has(f.rel)) return false;
     if(onlyFavs && !favs.has(f.rel)) return false;
     if(onlyFavs && rateMin && (ratings[f.rel]||0)!==rateMin) return false;
     if(fld && f.folder!==fld) return false;
@@ -640,18 +659,21 @@ function render(){
       : `<div class="ph"><span class="ext">${esc(f.ext.toUpperCase())}</span><span style="font-size:11px">no preview</span></div>`;
     const arch = f.archive?`<span class="tag archive">archive</span>`:'';
     const isFav = favs.has(f.rel);
-    return `<div class="card ${f.archive?'arch':''}">
+    const isHid = hidden.has(f.rel);
+    const hidTag = isHid?`<span class="tag hid">hidden</span>`:'';
+    return `<div class="card ${f.archive?'arch':''} ${isHid?'hid':''}">
       <span class="selbox ${selSet.has(f.rel)?'on':''}" data-act="sel" data-rel="${escA(f.rel)}" title="Select for bulk delete">${selSet.has(f.rel)?'■':'▢'}</span>
-      ${(imgExt(f.ext)||f.ext==='pdf'||f.ext==='md'||codeExt(f.ext))?`<div data-act="lb" data-rel="${escA(f.rel)}" style="cursor:zoom-in">${thumb}</div>`:appExt(f.ext)?`<div data-act="open" data-rel="${escA(f.rel)}" style="cursor:pointer" title="Open with default app">${thumb}</div>`:`<a href="${escA(f.rel)}" target="_blank" style="text-decoration:none">${thumb}</a>`}
+      ${(imgExt(f.ext)||f.ext==='pdf'||f.ext==='md'||codeExt(f.ext))?`<div data-act="lb" data-rel="${escA(f.rel)}" style="cursor:zoom-in">${f.ext==='svg'?'<span class="svgbadge">◈ select</span>':''}${thumb}</div>`:appExt(f.ext)?`<div data-act="open" data-rel="${escA(f.rel)}" style="cursor:pointer" title="Open with default app">${thumb}</div>`:`<a href="${escA(f.rel)}" target="_blank" style="text-decoration:none">${thumb}</a>`}
       <div class="meta">
         <div class="nm">${esc(f.name)}</div>
         ${rateRow(f.rel)}
         <div class="fld">${esc(f.folder)}</div>
-        <div class="row"><span class="tag">${esc(f.ext)}</span>${arch}<span title="created ${escA(f.bdate)} \u00b7 modified ${escA(f.mdate)}">${sort.startsWith('btime')?esc(f.bdate):esc(f.mdate)}</span><span>${fmtSize(f.size)}</span></div>
+        <div class="row"><span class="tag">${esc(f.ext)}</span>${arch}${hidTag}<span title="created ${escA(f.bdate)} \u00b7 modified ${escA(f.mdate)}">${sort.startsWith('btime')?esc(f.bdate):esc(f.mdate)}</span><span>${fmtSize(f.size)}</span></div>
       </div>
       <div class="acts">
         <button data-act="open" data-rel="${escA(f.rel)}" title="Open with default app">Open</button>
         <button data-act="copy" data-rel="${escA(f.rel)}">Path</button>
+        <button data-act="hide" data-rel="${escA(f.rel)}" title="${isHid?'Show this file again':'Hide this file from the gallery (reversible)'}">${isHid?'Unhide':'Hide'}</button>
         <button class="ico${isFav?' on':''}" data-act="fav" data-rel="${escA(f.rel)}" title="${isFav?'Remove favorite':'Add favorite'}">${isFav?'★':'☆'}</button>
         <button class="ico del" data-act="del" data-rel="${escA(f.rel)}" title="Move to Trash">🗑</button>
       </div>
