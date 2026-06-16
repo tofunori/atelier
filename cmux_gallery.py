@@ -144,7 +144,7 @@ def cmd_run(a) -> None:
             print(f"[cmux-gallery] gallery → {url}")
             return
         print(f"[cmux-gallery] port {port} busy (not our gallery) → using a free port", file=sys.stderr)
-        port = free_port()
+        port = next((c for c in range(port + 1, port + 50) if not _port_busy(c)), 0) or free_port()
     env = dict(os.environ, FIG_PORT=str(port), GALLERY_ROOT=a.root)
     print(f"[cmux-gallery] starting server on :{port}  (cwd={a.root})")
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))  # SIGTERM -> SystemExit -> finally tears down the server (no orphan)

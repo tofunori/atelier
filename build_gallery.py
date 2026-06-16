@@ -462,12 +462,13 @@ document.getElementById('cmpOrient').onclick = function(){
 document.addEventListener('keydown', e => {
   if(e.key === 'Escape' && document.getElementById('cmp').classList.contains('show')) cmpClose();
 });
-function confirmDialog(msg){
+function confirmDialog(msg, okLabel){
   return new Promise(resolve => {
     const m = document.getElementById('confirmModal');
     document.getElementById('confirmMsg').textContent = msg;
-    m.classList.add('show');
     const ok = document.getElementById('confirmOk'), cancel = document.getElementById('confirmCancel');
+    ok.textContent = okLabel || 'Delete';
+    m.classList.add('show');
     function onKey(ev){ if(ev.key==='Escape'){ev.stopPropagation();done(false);} else if(ev.key==='Enter'){ev.stopPropagation();done(true);} }
     function done(v){ m.classList.remove('show'); ok.onclick = cancel.onclick = m.onclick = null; document.removeEventListener('keydown', onKey, true); resolve(v); }
     ok.onclick = () => done(true);
@@ -493,8 +494,8 @@ async function delOne(rel){
 }
 let lbList = [], lbIdx = -1;
 const lb=()=>document.getElementById('lb');
-function lbShow(i){
-  if(lbIdx>=0 && i!==lbIdx && !annotGuard()) return;
+async function lbShow(i){
+  if(lbIdx>=0 && i!==lbIdx && !(await annotGuard())) return;
   if(i<0||i>=lbList.length) return;
   lbIdx=i; const f=lbList[i]; lb().classList.remove('annot');
   const isTex=f.ext==='tex', isPdf=f.ext==='pdf', isMd=f.ext==='md', isCode=codeExt(f.ext);
@@ -512,7 +513,7 @@ function lbShow(i){
     (imgExt(f.ext)?` <button onclick="annotToggle()" style="margin-left:8px">&#9998; Annotate</button>`:'');
   lb().classList.add('show');
 }
-function lbClose(){if(!annotGuard())return;lb().classList.remove('show');lb().classList.remove('annot');lb().classList.remove('fs');lbIdx=-1;}
+async function lbClose(){if(!(await annotGuard()))return;lb().classList.remove('show');lb().classList.remove('annot');lb().classList.remove('fs');lbIdx=-1;}
 function lbFsToggle(){
   const el=lb();
   if(document.fullscreenElement){document.exitFullscreen();el.classList.remove('fs');return;}
@@ -700,14 +701,14 @@ document.getElementById('sort').onchange=render;
 fsel.onchange=render;
 // ---- Annotation ----
 let annotTool='rect', annotStrokes=[], annotCur=null, annotSent=true;
-function annotGuard(){
+async function annotGuard(){
   if(lb().classList.contains('annot') && annotStrokes.length && !annotSent)
-    return confirm('Unsaved annotations \u2014 discard them?');
+    return await confirmDialog('Discard unsaved annotations?', 'Discard');
   return true;
 }
 const cv=()=>document.getElementById('annotCv');
-function annotToggle(){
-  if(lb().classList.contains('annot') && !annotGuard()) return;
+async function annotToggle(){
+  if(lb().classList.contains('annot') && !(await annotGuard())) return;
   const on=lb().classList.toggle('annot');
   if(on){
     const img=document.getElementById('lbImg');
