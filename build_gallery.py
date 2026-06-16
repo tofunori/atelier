@@ -248,7 +248,7 @@ HTML = """<!DOCTYPE html>
   .acts .ico{flex:0 0 auto;min-width:25px;padding:3px 6px;font-size:11.5px;line-height:1}
   .acts .ico.on{color:#ffce3a;border-color:#ffce3a}
   .acts .del:hover{color:#ff9a9a;border-color:#7a2a2a;background:rgba(255,80,80,.08)}
-  .selbox{position:absolute;top:6px;left:6px;font-size:15px;cursor:pointer;line-height:1;
+  .selbox{position:absolute;top:6px;left:6px;z-index:4;font-size:15px;cursor:pointer;line-height:1;
         background:rgba(15,17,21,.85);border:1px solid #3a3f4a;border-radius:6px;padding:4px 7px;user-select:none;color:#e6e8ec;
         opacity:0;transition:opacity .12s}
   .card:hover .selbox,.selbox.on{opacity:1}
