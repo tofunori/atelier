@@ -346,7 +346,7 @@ HTML = """<!DOCTYPE html>
     <span class="chip" data-ext="png">PNG</span>
     <span class="chip" data-ext="pdf">PDF</span>
     <span class="chip" data-ext="svg" title="Vector plots — open one to select its elements">&#9672; SVG</span>
-    <span class="chip" data-ext="mp4" title="Videos (mp4 / mov / webm) — play in the lightbox">.mp4</span>
+    <span class="chip" data-ext="mp4" title="Show only videos (mp4 / mov / webm) — click again to restore">.mp4</span>
     <span class="chip" id="fmtChip">Formats &#9662;</span>
     <div id="fmtMenu"></div>
     <span class="chip on" id="archChip">Include archives</span>
@@ -729,12 +729,30 @@ function render(){
   }).join('') + (list.length>MAX?`<div class="empty">… and ${list.length-MAX} more. Refine your search to see them.</div>`:'');
   grid.querySelectorAll('.snip[data-snip]').forEach(el=>snipObserver.observe(el));
 }
+const VIDEXTS=['mp4','m4v','mov','webm'];
+let preSoloExts=null;
+// "video solo" = only video types are on (detected from state, so it survives reloads)
+const isVideoSolo=()=>VIDEXTS.some(v=>exts[v]) && Object.keys(exts).every(k=>VIDEXTS.includes(k)||!exts[k]);
+function syncFilterUI(){
+  document.querySelectorAll('.chip[data-ext]').forEach(c=>{const e=c.dataset.ext;c.classList.toggle('off',!exts[e]);c.classList.toggle('on',!!exts[e]);});
+  fmtMenu.querySelectorAll('input').forEach(cb=>{cb.checked=!!exts[cb.dataset.fmt];});
+  fmtChipLabel();
+}
 document.querySelectorAll('.chip[data-ext]').forEach(c=>{
   const e=c.dataset.ext;
-  c.classList.toggle('off',!exts[e]);
-  c.classList.toggle('on',!!exts[e]);
-  c.onclick=()=>{exts[e]=!exts[e];if(e==='jpg')exts['jpeg']=exts['jpg'];if(e==='xlsx')exts['xls']=exts['xlsx'];if(e==='mp4')exts['m4v']=exts['mov']=exts['webm']=exts['mp4'];c.classList.toggle('off',!exts[e]);c.classList.toggle('on',!!exts[e]);saveExts();render();};
+  c.onclick=()=>{
+    if(e==='mp4'){                                   // solo toggle: only videos, click again restores
+      if(isVideoSolo()){ Object.assign(exts, preSoloExts||DEFAULT_EXTS); preSoloExts=null; }
+      else { preSoloExts=Object.assign({},exts); Object.keys(exts).forEach(k=>exts[k]=false); VIDEXTS.forEach(v=>exts[v]=true); }
+    } else {                                         // additive on/off, like PNG / PDF
+      exts[e]=!exts[e];
+      if(e==='jpg')exts['jpeg']=exts['jpg'];
+      if(e==='xlsx')exts['xls']=exts['xlsx'];
+    }
+    syncFilterUI(); saveExts(); render();
+  };
 });
+syncFilterUI();
 document.getElementById('archChip').onclick=function(){showArch=!showArch;this.classList.toggle('off',!showArch);this.textContent=showArch?'Include archives':'Archives hidden';render();};
 const hideChip=document.getElementById('hideChip');
 updateHideChip();
