@@ -445,6 +445,9 @@ function updateDelBtn(){
   c.style.display = imgs.length >= 2 ? '' : 'none';
   c.textContent = '▤ Compare (' + imgs.length + ')';
   document.getElementById('clrSel').style.display = selSet.size ? '' : 'none';
+  const h = document.getElementById('hideSel');
+  h.style.display = selSet.size ? '' : 'none';
+  h.textContent = 'Hide (' + selSet.size + ')';
   b.textContent = '🗑 Delete (' + selSet.size + ')';
 }
 function toggleSel(rel, el){
@@ -495,6 +498,12 @@ function confirmDialog(msg, okLabel){
 }
 function clearSel(){ selSet.clear(); updateDelBtn(); render(); }
 document.getElementById('clrSel').onclick = clearSel;
+document.getElementById('hideSel').onclick = function(){
+  if(!selSet.size) return;
+  selSet.forEach(rel=>hidden.add(rel));
+  selSet.clear();
+  saveHidden(); updateHideChip(); updateDelBtn(); render();
+};
 function openDefault(rel){
   fetch('/open', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({rel})});
 }
@@ -688,6 +697,9 @@ document.querySelectorAll('.chip[data-ext]').forEach(c=>{
   c.onclick=()=>{exts[e]=!exts[e];if(e==='jpg')exts['jpeg']=exts['jpg'];if(e==='xlsx')exts['xls']=exts['xlsx'];c.classList.toggle('off',!exts[e]);c.classList.toggle('on',!!exts[e]);saveExts();render();};
 });
 document.getElementById('archChip').onclick=function(){showArch=!showArch;this.classList.toggle('off',!showArch);this.textContent=showArch?'Include archives':'Archives hidden';render();};
+const hideChip=document.getElementById('hideChip');
+updateHideChip();
+hideChip.onclick=()=>{showHidden=!showHidden;hideChip.classList.toggle('on',showHidden);hideChip.classList.toggle('off',!showHidden);render();};
 const favChip=document.getElementById('favChip');
 favChip.textContent='\u2605 Favorites ('+favs.size+')';
 const rateFilter=document.getElementById('rateFilter');

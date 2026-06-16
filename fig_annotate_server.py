@@ -311,7 +311,7 @@ class Handler(SimpleHTTPRequestHandler):
                 if os.path.isfile(sp):
                     with open(sp, encoding="utf-8") as f:
                         return self._respond(200, json.load(f))
-                return self._respond(200, {"favs": [], "ratings": {}})
+                return self._respond(200, {"favs": [], "ratings": {}, "hidden": []})
             except (KeyError, ValueError, json.JSONDecodeError) as e:
                 return self._respond(400, {"error": "bad request: " + str(e)})
             except Exception as e:
@@ -333,7 +333,8 @@ class Handler(SimpleHTTPRequestHandler):
                 req = json.loads(self.rfile.read(length))
                 state = {"favs": sorted(set(req.get("favs", []))),
                          "ratings": {k: v for k, v in req.get("ratings", {}).items()
-                                     if isinstance(v, int) and 1 <= v <= 5}}
+                                     if isinstance(v, int) and 1 <= v <= 5},
+                         "hidden": sorted(set(req.get("hidden", [])))}
                 sp = os.path.join(PROJECT, ".fig_state.json")
                 tmp = sp + ".tmp." + str(os.getpid()) + "." + str(threading.get_ident())
                 with open(tmp, "w", encoding="utf-8") as f:
@@ -341,7 +342,8 @@ class Handler(SimpleHTTPRequestHandler):
                 os.replace(tmp, sp)
                 return self._respond(200, {"ok": True,
                                            "favs": len(state["favs"]),
-                                           "ratings": len(state["ratings"])})
+                                           "ratings": len(state["ratings"]),
+                                           "hidden": len(state["hidden"])})
             except (KeyError, ValueError, json.JSONDecodeError) as e:
                 return self._respond(400, {"error": "bad request: " + str(e)})
             except Exception as e:
