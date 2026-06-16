@@ -32,11 +32,11 @@
   #marker{position:absolute;left:0;right:0;height:22px;background:rgba(91,157,255,.25);
           border-left:3px solid #5b9dff;pointer-events:none;display:none;z-index:5}
   .cm-syncline{background:rgba(91,157,255,.18)}
-  /* la selection colle au texte (mark-selection) au lieu de remplir la ligne */
+  /* selection hugs the text (mark-selection) instead of filling the whole line */
   .CodeMirror .CodeMirror-selected{background:transparent !important}
   .CodeMirror-focused .CodeMirror-selected{background:transparent !important}
   .CodeMirror-selectedtext{background:rgba(91,157,255,.45) !important;box-shadow:none !important;border-radius:2px}
-  /* derniere selection envoyee a Claude : marque persistante */
+  /* last selection sent to Claude: persistent marker */
   .cm-clsel{background:rgba(255,213,74,.16);box-shadow:0 1px 0 rgba(255,213,74,.4)}
   #picker{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;z-index:200;
           align-items:flex-start;justify-content:center;padding-top:8vh}
@@ -285,7 +285,7 @@ document.addEventListener("keydown", e => {
   if((e.metaKey || e.ctrlKey) && e.key === "j"){ e.preventDefault(); synctexView(); }
 });
 
-// rechargement si Claude modifie le .tex sur disque
+// reload if Claude edits the .tex on disk
 setInterval(async () => {
   if(dirty || !cm) return;
   try{
@@ -307,7 +307,7 @@ else {
 }
 
 
-// fichiers recents (partages entre studio et editeur via localStorage)
+// recent files (shared between studio and editor via localStorage)
 function recentsGet(){ try{return JSON.parse(localStorage.getItem("studioRecents")||"[]")}catch(e){return []} }
 function recentsAdd(p){
   let r = recentsGet().filter(x => x !== p);
@@ -318,7 +318,7 @@ function openTarget(target){
   const page = target.endsWith(".tex") ? "latex_studio.html" : "code_editor.html";
   location.href = "/.fig_thumbs/" + page + "?path=" + encodeURIComponent(target);
 }
-// --- mini explorateur de fichiers (bouton Ouvrir) ---
+// --- mini file explorer (Open button) ---
 const EDITABLE = /\.(tex|sty|bib|py|r|R|md|jl|sh|bash|txt|csv|json|yaml|yml|toml)$/;
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 async function pickerShow(dir){

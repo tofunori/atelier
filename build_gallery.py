@@ -2,7 +2,7 @@
 """Regenerate figures_index.html — an interactive gallery of every figure in the project.
 
 Usage:
-    python build_figures_index.py
+    GALLERY_ROOT=<project> python build_gallery.py   (or: cmux-gallery build)
 
 Scans the project for image files (png, pdf, svg, jpg, html), collects metadata,
 and writes a self-contained figures_index.html at the project root.
@@ -329,7 +329,7 @@ HTML = """<!DOCTYPE html>
     <span id="rateFilter" style="display:none"></span>
     <button id="favExport" title="Copy fav commands to sync with the cmux Dock">Sync favs &#8594; clipboard</button>
     <button id="quoteClear" style="display:none" title="Clear the annotation pending in the Claude statusline">&#9998;&#10005; Annotation</button>
-    <button id="rescan" title="Re-run build_figures_index.py and reload">&#8635; Rescan</button>
+    <button id="rescan" title="Rebuild the gallery index and reload">&#8635; Rescan</button>
     <button id="cmpSel" style="display:none" title="Show the selected images stacked, to compare">&#9636; Compare (0)</button>
     <button id="delSel" style="display:none;background:#5c1f1f;border-color:#7a2a2a">&#128465; Delete (0)</button>
     <button id="clrSel" style="display:none" title="Clear the selection">&#10005; Clear</button>
@@ -367,7 +367,7 @@ HTML = """<!DOCTYPE html>
   <div id="confirmMsg"></div>
   <div id="confirmBtns"><button id="confirmCancel">Cancel</button><button id="confirmOk">Delete</button></div>
 </div></div>
-<footer>Double-click a thumbnail or "Open" to view the file. This file must stay at the project root for the links to work. Re-run build_figures_index.py to refresh.</footer>
+<footer>Double-click a thumbnail or "Open" to view the file. This file must stay at the project root for the links to work. Click Rescan to refresh.</footer>
 <script>
 const FILES = __DATA__;
 // Filenames are untrusted: escape for text (esc) and attributes (escA), and route

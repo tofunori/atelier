@@ -29,11 +29,11 @@
   .CodeMirror-linenumber{padding:0 14px 0 22px !important;color:#5b6270}
   .CodeMirror-gutters{background:transparent;border-right:1px solid #2a2f3a}
   .CodeMirror-lines{padding-left:4px}
-  /* la selection colle au texte (mark-selection) au lieu de remplir la ligne */
+  /* selection hugs the text (mark-selection) instead of filling the whole line */
   .CodeMirror .CodeMirror-selected{background:transparent !important}
   .CodeMirror-focused .CodeMirror-selected{background:transparent !important}
   .CodeMirror-selectedtext{background:rgba(91,157,255,.45) !important;box-shadow:none !important;border-radius:2px}
-  /* derniere selection envoyee a Claude : marque persistante */
+  /* last selection sent to Claude: persistent marker */
   .cm-clsel{background:rgba(255,213,74,.16);box-shadow:0 1px 0 rgba(255,213,74,.4)}
   #picker{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;z-index:200;
           align-items:flex-start;justify-content:center;padding-top:8vh}
@@ -166,7 +166,7 @@ document.addEventListener("keydown", e => {
   if((e.metaKey || e.ctrlKey) && e.key === "s"){ e.preventDefault(); save(); }
 });
 
-// si Claude (ou autre) modifie le fichier sur disque et que le buffer est propre → recharge
+// if Claude (or anything) edits the file on disk while the buffer is clean -> reload
 setInterval(async () => {
   if(dirty || !cm) return;
   try{
@@ -187,7 +187,7 @@ setInterval(async () => {
 if(path) load();
 
 
-// fichiers recents (partages entre studio et editeur via localStorage)
+// recent files (shared between studio and editor via localStorage)
 function recentsGet(){ try{return JSON.parse(localStorage.getItem("studioRecents")||"[]")}catch(e){return []} }
 function recentsAdd(p){
   let r = recentsGet().filter(x => x !== p);
@@ -198,7 +198,7 @@ function openTarget(target){
   const page = target.endsWith(".tex") ? "latex_studio.html" : "code_editor.html";
   location.href = "/.fig_thumbs/" + page + "?path=" + encodeURIComponent(target);
 }
-// --- mini explorateur de fichiers (bouton Ouvrir) ---
+// --- mini file explorer (Open button) ---
 const EDITABLE = /\.(tex|sty|bib|py|r|R|md|jl|sh|bash|txt|csv|json|yaml|yml|toml)$/;
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 async function pickerShow(dir){

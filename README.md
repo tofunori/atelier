@@ -79,8 +79,12 @@ The gallery is then a normal web page at `http://127.0.0.1:8790/figures_index.ht
 
 ## Bundled third-party
 
-`assets/pdfjs/` is Mozilla [pdf.js](https://github.com/mozilla/pdf.js)
-(Apache-2.0) — see `assets/pdfjs/NOTICE`.
+Vendored under `assets/`, each under its own license (see [LICENSE](./LICENSE)):
+
+- [pdf.js](https://github.com/mozilla/pdf.js) (Apache-2.0) — see `assets/pdfjs/NOTICE`
+- [CodeMirror 5](https://codemirror.net) (MIT) — `assets/cm/`
+- [marked](https://marked.js.org) (MIT) — `assets/marked.min.js`
+- [DOMPurify](https://github.com/cure53/DOMPurify) (Apache-2.0 / MPL-2.0) — `assets/purify.min.js`
 
 ## License
 

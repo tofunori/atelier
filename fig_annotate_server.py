@@ -55,15 +55,15 @@ def find_tex_root(p):
 
 
 def find_claude_surface():
-    """Surface du panneau Claude Code cible.
+    """Target Claude Code panel surface.
 
-    Priorité : (1) surface Claude sélectionnée dans le workspace actif,
-    (2) n'importe quelle surface Claude du workspace actif,
-    (3) session Claude vivante la plus récente (registre cmux-sessions.json).
-    Les sessions Claude sont identifiées par le registre rempli par le hook
-    SessionStart cmux-register.sh (PID encore vivant = session active).
+    Priority: (1) selected Claude surface in the active workspace,
+    (2) any Claude surface in the active workspace,
+    (3) most-recent live Claude session (cmux-sessions.json registry).
+    Claude sessions are identified via the registry filled by the
+    SessionStart hook cmux-register.sh (PID still alive = active session).
     """
-    # 1. registre des sessions Claude vivantes, plus récentes d'abord
+    # 1. registry of live Claude sessions, most recent first
     try:
         entries = json.load(open(os.path.expanduser("~/.claude/cmux-sessions.json")))
     except Exception:
@@ -82,7 +82,7 @@ def find_claude_surface():
     if not alive:
         return None
 
-    # 2. surfaces du workspace actif, sélectionnées d'abord
+    # 2. surfaces in the active workspace, selected ones first
     def run(args):
         try:
             return subprocess.run(["cmux"] + args, capture_output=True,
@@ -110,7 +110,7 @@ def find_claude_surface():
             if u in alive:
                 return u
 
-    # 3. repli : session Claude vivante la plus récente, où qu'elle soit
+    # 3. fallback: most-recent live Claude session, wherever it is
     return alive[0]
 
 
@@ -166,6 +166,8 @@ class Handler(SimpleHTTPRequestHandler):
                 root = PROJECT
                 parent = os.path.dirname(d) if d != root else None
                 return self._respond(200, {"path": d, "parent": parent, "items": items})
+            except (KeyError, ValueError, json.JSONDecodeError) as e:
+                return self._respond(400, {"error": "bad request: " + str(e)})
             except Exception as e:
                 return self._respond(500, {"error": str(e)})
         if self.path.startswith("/texroot?"):
@@ -177,6 +179,8 @@ class Handler(SimpleHTTPRequestHandler):
                     return self._respond(403, {"error": "outside the project"})
                 root = find_tex_root(p)
                 return self._respond(200, {"root": root, "pdf": root.rsplit(".", 1)[0] + ".pdf"})
+            except (KeyError, ValueError, json.JSONDecodeError) as e:
+                return self._respond(400, {"error": "bad request: " + str(e)})
             except Exception as e:
                 return self._respond(500, {"error": str(e)})
         if self.path.startswith("/raw?"):
@@ -209,6 +213,8 @@ class Handler(SimpleHTTPRequestHandler):
                 with open(p, encoding="utf-8", errors="replace") as f:
                     text = f.read()
                 return self._respond(200, {"text": text, "mtime": os.path.getmtime(p), "path": p})
+            except (KeyError, ValueError, json.JSONDecodeError) as e:
+                return self._respond(400, {"error": "bad request: " + str(e)})
             except Exception as e:
                 return self._respond(500, {"error": str(e)})
         if self.path == "/ping":
@@ -220,6 +226,8 @@ class Handler(SimpleHTTPRequestHandler):
                 pending = os.path.isfile(qf) and "Annotations" in open(qf).read(500) \
                     and (time.time() - os.path.getmtime(qf)) < 900
                 return self._respond(200, {"pending": bool(pending)})
+            except (KeyError, ValueError, json.JSONDecodeError) as e:
+                return self._respond(400, {"error": "bad request: " + str(e)})
             except Exception as e:
                 return self._respond(500, {"error": str(e)})
         if self.path == "/state":
@@ -229,6 +237,8 @@ class Handler(SimpleHTTPRequestHandler):
                     with open(sp, encoding="utf-8") as f:
                         return self._respond(200, json.load(f))
                 return self._respond(200, {"favs": [], "ratings": {}})
+            except (KeyError, ValueError, json.JSONDecodeError) as e:
+                return self._respond(400, {"error": "bad request: " + str(e)})
             except Exception as e:
                 return self._respond(500, {"error": str(e)})
         super().do_GET()
@@ -238,6 +248,8 @@ class Handler(SimpleHTTPRequestHandler):
             try:
                 open(os.path.expanduser("~/.claude/fig-last-quote.txt"), "w").close()
                 return self._respond(200, {"ok": True})
+            except (KeyError, ValueError, json.JSONDecodeError) as e:
+                return self._respond(400, {"error": "bad request: " + str(e)})
             except Exception as e:
                 return self._respond(500, {"error": str(e)})
         if self.path == "/state":
@@ -255,6 +267,8 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._respond(200, {"ok": True,
                                            "favs": len(state["favs"]),
                                            "ratings": len(state["ratings"])})
+            except (KeyError, ValueError, json.JSONDecodeError) as e:
+                return self._respond(400, {"error": "bad request: " + str(e)})
             except Exception as e:
                 return self._respond(500, {"error": str(e)})
         if self.path == "/rescan":
@@ -265,6 +279,8 @@ class Handler(SimpleHTTPRequestHandler):
                                    capture_output=True, text=True, timeout=300)
                 return self._respond(200, {"ok": r.returncode == 0,
                                            "out": (r.stdout or "")[-200:]})
+            except (KeyError, ValueError, json.JSONDecodeError) as e:
+                return self._respond(400, {"error": "bad request: " + str(e)})
             except Exception as e:
                 return self._respond(500, {"error": str(e)})
         if self.path == "/delete":
@@ -286,6 +302,8 @@ class Handler(SimpleHTTPRequestHandler):
                     os.rename(p, dest)
                     deleted.append(rel)
                 return self._respond(200, {"deleted": deleted})
+            except (KeyError, ValueError, json.JSONDecodeError) as e:
+                return self._respond(400, {"error": "bad request: " + str(e)})
             except Exception as e:
                 return self._respond(500, {"error": str(e)})
         if self.path == "/open":
@@ -297,6 +315,8 @@ class Handler(SimpleHTTPRequestHandler):
                     subprocess.run(["open", p], timeout=10)
                     return self._respond(200, {"ok": True})
                 return self._respond(404, {"error": "not found"})
+            except (KeyError, ValueError, json.JSONDecodeError) as e:
+                return self._respond(400, {"error": "bad request: " + str(e)})
             except Exception as e:
                 return self._respond(500, {"error": str(e)})
         if self.path == "/compile":
@@ -326,6 +346,8 @@ class Handler(SimpleHTTPRequestHandler):
                                            "error": "latexmk not found at /Library/TeX/texbin/latexmk — install MacTeX or TeX Live"})
             except subprocess.TimeoutExpired:
                 return self._respond(200, {"ok": False, "error": "compilation > 120 s"})
+            except (KeyError, ValueError, json.JSONDecodeError) as e:
+                return self._respond(400, {"error": "bad request: " + str(e)})
             except Exception as e:
                 return self._respond(500, {"error": str(e)})
         if self.path == "/synctex":
@@ -359,6 +381,8 @@ class Handler(SimpleHTTPRequestHandler):
                         if ln.startswith("Input:"):
                             out["input"] = ln.split(":", 1)[1]
                     return self._respond(200, out or {"error": "no match"})
+            except (KeyError, ValueError, json.JSONDecodeError) as e:
+                return self._respond(400, {"error": "bad request: " + str(e)})
             except Exception as e:
                 return self._respond(500, {"error": str(e)})
         if self.path == "/codesave":
@@ -374,6 +398,8 @@ class Handler(SimpleHTTPRequestHandler):
                 with open(p, "w", encoding="utf-8") as f:
                     f.write(req["text"])
                 return self._respond(200, {"mtime": os.path.getmtime(p)})
+            except (KeyError, ValueError, json.JSONDecodeError) as e:
+                return self._respond(400, {"error": "bad request: " + str(e)})
             except Exception as e:
                 return self._respond(500, {"error": str(e)})
         if self.path == "/selinfo":
@@ -388,6 +414,8 @@ class Handler(SimpleHTTPRequestHandler):
                 elif os.path.exists(p):
                     os.remove(p)
                 return self._respond(200, {"ok": True})
+            except (KeyError, ValueError, json.JSONDecodeError) as e:
+                return self._respond(400, {"error": "bad request: " + str(e)})
             except Exception as e:
                 return self._respond(500, {"error": str(e)})
         if self.path == "/quote":
@@ -406,6 +434,8 @@ class Handler(SimpleHTTPRequestHandler):
                                        capture_output=True, timeout=5)
                     sent = r.returncode == 0
                 return self._respond(200, {"sentToClaude": sent, "clipboard": True})
+            except (KeyError, ValueError, json.JSONDecodeError) as e:
+                return self._respond(400, {"error": "bad request: " + str(e)})
             except Exception as e:
                 return self._respond(500, {"error": str(e)})
         if self.path != "/save":
@@ -431,7 +461,7 @@ class Handler(SimpleHTTPRequestHandler):
             with open(os.path.expanduser("~/.claude/fig-last-quote.txt"), "w") as f:
                 f.write(msg)
 
-            # cmux (identify + list + send) en arriere-plan : la reponse part tout de suite
+            # cmux (identify + list + send) in the background: the response returns immediately
             def push():
                 try:
                     ref = find_claude_surface()

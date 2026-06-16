@@ -186,7 +186,7 @@ document.addEventListener("keydown", e => {
   }
 });
 
-// auto-reload si le fichier change sur disque et que le buffer est propre (Claude qui edite)
+// auto-reload if the file changes on disk while the buffer is clean (Claude qui edite)
 setInterval(async () => {
   if(dirty || !path) return;
   try{
