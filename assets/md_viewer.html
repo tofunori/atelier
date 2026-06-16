@@ -167,7 +167,7 @@ function setMode(m){
   edPane.classList.toggle("show", m === "split" || m === "edit");
   prevPane.classList.toggle("show", m === "prev" || m === "split");
   if(m === "split" || m === "edit"){
-    if(!cm) initEditor(srcText);   // 1er passage : remplit l'editeur avec le texte charge
+    if(!cm) initEditor(srcText);   // first pass: fill the editor with the loaded text
     setTimeout(() => cm && cm.refresh(), 0);
   }
   document.getElementById("hint").style.display = (m === "prev") ? "none" : "";
