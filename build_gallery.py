@@ -497,15 +497,17 @@ async function lbShow(i){
   if(lbIdx>=0 && i!==lbIdx && !(await annotGuard())) return;
   if(i<0||i>=lbList.length) return;
   lbIdx=i; const f=lbList[i]; lb().classList.remove('annot');
-  const isTex=f.ext==='tex', isPdf=f.ext==='pdf', isMd=f.ext==='md', isCode=codeExt(f.ext);
+  const isTex=f.ext==='tex', isPdf=f.ext==='pdf', isMd=f.ext==='md', isCode=codeExt(f.ext), isSvg=f.ext==='svg';
   const img=document.getElementById('lbImg'), pdf=document.getElementById('lbPdf');
-  img.style.display=(isPdf||isMd||isCode)?'none':'';
-  pdf.style.display=(isPdf||isMd||isCode)?'':'none';
-  lb().classList.toggle('vw', isPdf||isMd||isCode);  // full-window editor/viewer
+  const vw=isPdf||isMd||isCode||isSvg;
+  img.style.display=vw?'none':'';
+  pdf.style.display=vw?'':'none';
+  lb().classList.toggle('vw', vw);  // full-window editor/viewer
   if(isTex){pdf.src='/.fig_thumbs/latex_studio.html?path='+encodeURIComponent('__ROOT__/'+f.rel)+'&v=__VER__';img.src='';}
   else if(isPdf){pdf.src='/.fig_thumbs/pdf_viewer.html?file='+encodeURIComponent(f.rel)+'&v=__VER__';img.src='';}
   else if(isMd){pdf.src='/.fig_thumbs/md_viewer.html?path='+encodeURIComponent('__ROOT__/'+f.rel)+'&file='+encodeURIComponent(f.rel)+'&v=__VER__';img.src='';}
   else if(isCode){pdf.src='/.fig_thumbs/code_editor.html?path='+encodeURIComponent('__ROOT__/'+f.rel)+'&v=__VER__';img.src='';}
+  else if(isSvg){pdf.src='/.fig_thumbs/svg_viewer.html?file='+encodeURIComponent(f.rel)+'&v=__VER__';img.src='';}
   else{img.src=f.rel+'?v='+f.mtime;pdf.src='';}
   document.getElementById('lbCap').innerHTML=
     `<b>${esc(f.name)}</b><span>${esc(f.folder)}</span><span>${esc(f.mdate)}</span><a href="${escA(f.rel)}" target="_blank">open original</a>`+
