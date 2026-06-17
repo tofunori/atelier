@@ -72,6 +72,13 @@ Each project gets a **stable port** derived from its path (8790–9789), so the 
 is the same every time — open it in any browser (cmux or system) and bookmark it,
 e.g. `http://127.0.0.1:8790/figures_index.html`. Pin one with `--port <n>`.
 
+> **Opening it (avoid "connection refused"):** prefer the **Project Gallery**
+> cmux action — or `cmux-gallery run` — over a raw bookmark. `run` starts the
+> server *then* opens the page, so it's never refused. The server only runs while
+> its host (the Dock control or a `run`/`serve` pane) is up; if you open the
+> bookmark in the first ~2 s after cmux launches — before the Dock host has bound
+> the port — just wait a second and reload.
+
 ### As a cmux command / Dock control
 
 - **Command Palette / + menu**: copy the `actions` + `commands` from
