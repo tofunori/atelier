@@ -203,6 +203,8 @@ HTML = """<!DOCTYPE html>
   .controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
   input[type=search]{flex:1;min-width:240px;padding:9px 12px;border-radius:8px;border:1px solid var(--border);
         background:var(--card);color:var(--txt);font-size:14px}
+  input[type=search].collapsed{display:none}
+  #searchChip.on{border-color:var(--accent);color:var(--accent)}
   select,button{padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:var(--card);
         color:var(--txt);font-size:13px;cursor:pointer}
   .chip{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:20px;
@@ -354,7 +356,8 @@ HTML = """<!DOCTYPE html>
     <span class="stat">__COUNT__ files · __GEN__</span>
   </div>
   <div class="controls">
-    <input type="search" id="q" placeholder="Search by name or folder… (e.g. trend, map, results)">
+    <span class="chip" id="searchChip" title="Search by name or folder (press /)">&#128269; Search</span>
+    <input type="search" id="q" class="collapsed" placeholder="Search by name or folder… (Esc to close)">
     <select id="sort">
       <option value="mtime">Sort: modified (newest)</option>
       <option value="mtime_asc">Sort: modified (oldest)</option>
@@ -969,6 +972,20 @@ document.getElementById('delSel').onclick=async function(){
 document.getElementById('q').oninput=render;
 document.getElementById('sort').onchange=render;
 fsel.onchange=render;
+// collapsible search: a 🔍 chip expands the field; Esc / blur-when-empty collapses it; "/" opens it
+const qEl=document.getElementById('q'), searchChip=document.getElementById('searchChip');
+function openSearch(){qEl.classList.remove('collapsed');searchChip.classList.add('on');qEl.focus();qEl.select();}
+function closeSearch(){const had=qEl.value;qEl.value='';qEl.classList.add('collapsed');searchChip.classList.remove('on');if(had)render();}
+searchChip.onclick=()=>{ if(qEl.classList.contains('collapsed')) openSearch(); else closeSearch(); };
+qEl.addEventListener('keydown',e=>{ if(e.key==='Escape'){e.preventDefault();closeSearch();searchChip.focus();} });
+qEl.addEventListener('blur',()=>{ if(!qEl.value.trim()){qEl.classList.add('collapsed');searchChip.classList.remove('on');} });
+document.addEventListener('keydown',e=>{
+  if(e.key!=='/'||e.metaKey||e.ctrlKey||e.altKey)return;
+  if(lb().classList.contains('show'))return;
+  const t=e.target, tag=t&&t.tagName;
+  if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT'||(t&&t.isContentEditable))return;
+  e.preventDefault(); openSearch();
+});
 // ---- Annotation ----
 let annotTool='rect', annotStrokes=[], annotCur=null, annotSent=true;
 async function annotGuard(){
