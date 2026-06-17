@@ -201,14 +201,14 @@ HTML = """<!DOCTYPE html>
   .brand .proj{font-size:12px;color:var(--muted);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
   .brand .stat{margin-left:auto;font-size:12px;color:var(--muted)}
   .controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
-  input[type=search]{flex:1;min-width:240px;padding:9px 12px;border-radius:8px;border:1px solid var(--border);
+  input[type=search]{flex:1;min-width:240px;padding:9px 12px;border-radius:6px;border:1px solid var(--border);
         background:var(--card);color:var(--txt);font-size:14px}
   input[type=search].collapsed{display:none}
   #searchChip.on{border-color:var(--accent);color:var(--accent)}
-  select,button{padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:var(--card);
+  select,button{padding:8px 10px;border-radius:6px;border:1px solid var(--border);background:var(--card);
         color:var(--txt);font-size:13px;cursor:pointer}
   #folder{max-width:200px}   /* keep it compact; long folder paths would otherwise stretch it to its own line */
-  .chip{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:20px;
+  .chip{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:6px;
         border:1px solid var(--border);background:var(--card);cursor:pointer;user-select:none;font-size:12px}
   .chip.off{opacity:.4}
   .menu{position:fixed;z-index:60;display:none;flex-direction:column;gap:2px;
