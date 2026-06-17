@@ -224,6 +224,9 @@ HTML = """<!DOCTYPE html>
   .menu .madd{display:flex;gap:5px;margin-top:5px;padding-top:6px;border-top:1px solid #3f3f46}
   .menu .madd input{flex:1;min-width:0;background:#18181b;border:1px solid #3f3f46;border-radius:6px;color:var(--txt);padding:5px 7px;font-size:12px}
   .menu .madd button{padding:5px 10px}
+  .menu input[type=checkbox]{accent-color:var(--accent);margin-right:6px;vertical-align:-1px}
+  .menu .mhd.sep{border-top:1px solid #3f3f46;margin-top:4px;padding-top:7px}
+  .menu label.lbl{display:flex;align-items:center}
   .tags{display:flex;flex-wrap:wrap;gap:4px;margin:3px 0 0}
   .tagc{display:inline-flex;align-items:center;gap:3px;background:#33415a;color:#cfe0ff;border-radius:10px;padding:1px 7px;font-size:10.5px;cursor:pointer}
   .tagc.on{background:var(--accent);color:#06121f}
@@ -371,13 +374,11 @@ HTML = """<!DOCTYPE html>
     <span class="chip" data-ext="mp4" title="Show only videos (mp4 / mov / webm) — click again to restore">.mp4</span>
     <span class="chip" id="fmtChip">Formats &#9662;</span>
     <div id="fmtMenu"></div>
-    <span class="chip on" id="archChip">Include archives</span>
     <span class="chip off" id="favChip">&#9733; Favorites</span>
-    <span class="chip off" id="hideChip" title="Show the files you've masked (otherwise filtered out)">Hidden</span>
     <span class="chip" id="tagChip" title="Filter by tag / collection">&#127991; Tags &#9662;</span>
     <div id="tagMenu" class="menu"></div>
-    <span class="chip" id="rulesChip" title="Auto-hide files matching glob rules (e.g. **/_qa/**)">&#9881; Rules &#9662;</span>
-    <div id="rulesMenu" class="menu"></div>
+    <span class="chip" id="viewChip" title="View options — archives, hidden, auto-hide rules">&#9881; View &#9662;</span>
+    <div id="viewMenu" class="menu"></div>
     <span id="rateFilter" style="display:none"></span>
     <button id="quoteClear" style="display:none" title="Clear the annotation pending in the Claude statusline">&#9998;&#10005; Annotation</button>
     <button id="rescan" title="Rebuild the gallery index and reload">&#8635; Rescan</button>
@@ -453,7 +454,7 @@ saveFavs();
 let hidden = new Set(JSON.parse(localStorage.getItem('figHidden')||'[]'));
 let showHidden = false;
 const saveHidden = ()=>{localStorage.setItem('figHidden', JSON.stringify([...hidden]));pushState();};
-function updateHideChip(){const c=document.getElementById('hideChip');if(c)c.textContent=hidden.size?('Hidden ('+hidden.size+')'):'Hidden';}
+function updateHideChip(){ updateViewChip(); }
 function toggleHide(rel){if(hidden.has(rel))hidden.delete(rel);else hidden.add(rel);saveHidden();updateHideChip();render();}
 let ratings = JSON.parse(localStorage.getItem('figRatings')||'{}');
 let stateTimer=null;
@@ -499,7 +500,7 @@ fetch('/state').then(r=>r.json()).then(st=>{
   localStorage.setItem('figTags', JSON.stringify(tags));
   localStorage.setItem('figHideRules', JSON.stringify(hideRules));
   document.getElementById('favChip').textContent='\u2605 Favorites ('+favs.size+')';
-  updateHideChip(); buildTagChip(); buildRulesChip();
+  updateHideChip(); buildTagChip(); buildViewMenu();
   render();
 }).catch(()=>{});
 function setRate(rel, n, ev){
@@ -645,18 +646,25 @@ function buildTagChip(){
   menu.querySelectorAll('[data-del]').forEach(el=>el.onclick=()=>deleteTagEverywhere(el.dataset.del));
   const c=menu.querySelector('[data-clear]'); if(c) c.onclick=()=>{ activeTag=''; buildTagChip(); render(); menu.style.display='none'; };
 }
-function buildRulesChip(){
-  const chip=document.getElementById('rulesChip'), menu=document.getElementById('rulesMenu');
-  if(!chip||!menu) return;
-  chip.classList.toggle('on', hideRules.length>0);
-  chip.innerHTML='⚙ Rules'+(hideRules.length?(' ('+hideRules.length+')'):'')+' ▾';
-  menu.innerHTML='<div class="mhd">Auto-hide files matching a glob</div>'+
+function updateViewChip(){
+  const c=document.getElementById('viewChip'); if(!c) return;
+  c.classList.toggle('on', !showArch || showHidden || hideRules.length>0);  // a non-default view is active
+}
+function buildViewMenu(){
+  const menu=document.getElementById('viewMenu'); if(!menu) return;
+  updateViewChip();
+  menu.innerHTML=
+    `<div class="mi"><label class="lbl"><input type="checkbox" id="vArch" ${showArch?'checked':''}> Include archives</label></div>`+
+    `<div class="mi"><label class="lbl"><input type="checkbox" id="vHidden" ${showHidden?'checked':''}> Show hidden${hidden.size?(' ('+hidden.size+')'):''}</label></div>`+
+    '<div class="mhd sep">Auto-hide rules (glob)</div>'+
     (hideRules.length?hideRules.map(g=>`<div class="mi"><span class="lbl mono">${esc(g)}</span><span class="x" data-rm="${escA(g)}" title="Remove rule">×</span></div>`).join(''):'<div class="mi muted">No rules.</div>')+
     '<div class="madd"><input type="text" id="ruleInput" placeholder="e.g. **/_qa/** or *_preview.png"><button id="ruleAdd">Add</button></div>';
   menu.onclick=e=>e.stopPropagation();
-  menu.querySelectorAll('[data-rm]').forEach(el=>el.onclick=()=>{ hideRules=hideRules.filter(x=>x!==el.dataset.rm); saveRules(); buildRulesChip(); render(); });
+  menu.querySelector('#vArch').onchange=function(){ showArch=this.checked; updateViewChip(); render(); };
+  menu.querySelector('#vHidden').onchange=function(){ showHidden=this.checked; updateViewChip(); render(); };
+  menu.querySelectorAll('[data-rm]').forEach(el=>el.onclick=()=>{ hideRules=hideRules.filter(x=>x!==el.dataset.rm); saveRules(); buildViewMenu(); render(); });
   const inp=menu.querySelector('#ruleInput'), add=menu.querySelector('#ruleAdd');
-  const doAdd=()=>{ const v=(inp.value||'').trim(); if(v && !hideRules.includes(v)){ hideRules.push(v); saveRules(); buildRulesChip(); render(); const ni=menu.querySelector('#ruleInput'); if(ni) ni.focus(); } };
+  const doAdd=()=>{ const v=(inp.value||'').trim(); if(v && !hideRules.includes(v)){ hideRules.push(v); saveRules(); buildViewMenu(); render(); const ni=menu.querySelector('#ruleInput'); if(ni) ni.focus(); } };
   add.onclick=doAdd; inp.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); doAdd(); } };
 }
 function buildExportMenu(){
@@ -715,7 +723,7 @@ function findScript(rel){
   }).catch(()=>alert('Script search failed (server off?).'));
 }
 document.getElementById('tagChip').onclick=e=>{ e.stopPropagation(); buildTagChip(); menuToggle(document.getElementById('tagMenu'), e.currentTarget); };
-document.getElementById('rulesChip').onclick=e=>{ e.stopPropagation(); buildRulesChip(); menuToggle(document.getElementById('rulesMenu'), e.currentTarget); };
+document.getElementById('viewChip').onclick=e=>{ e.stopPropagation(); buildViewMenu(); menuToggle(document.getElementById('viewMenu'), e.currentTarget); };
 document.getElementById('exportSel').onclick=e=>{ e.stopPropagation(); buildExportMenu(); menuToggle(document.getElementById('exportMenu'), e.currentTarget); };
 document.getElementById('tagSel').onclick=e=>{ e.stopPropagation(); tagSelMenu(e.currentTarget); };
 document.addEventListener('click',()=>{ document.querySelectorAll('.menu').forEach(x=>x.style.display='none'); closeFloat(); });
@@ -938,10 +946,7 @@ document.querySelectorAll('.chip[data-ext]').forEach(c=>{
   };
 });
 syncFilterUI();
-document.getElementById('archChip').onclick=function(){showArch=!showArch;this.classList.toggle('off',!showArch);this.textContent=showArch?'Include archives':'Archives hidden';render();};
-const hideChip=document.getElementById('hideChip');
-updateHideChip();
-hideChip.onclick=()=>{showHidden=!showHidden;hideChip.classList.toggle('on',showHidden);hideChip.classList.toggle('off',!showHidden);render();};
+updateViewChip();
 const favChip=document.getElementById('favChip');
 favChip.textContent='\u2605 Favorites ('+favs.size+')';
 const rateFilter=document.getElementById('rateFilter');
