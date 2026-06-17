@@ -7,10 +7,12 @@ active cmux workspace if there is one.
 """
 import base64
 import hashlib
+import html
 import json
 import mimetypes
 import os
 import re
+import shutil
 import subprocess
 import threading
 import sys
@@ -117,6 +119,46 @@ def find_claude_surface():
 
 
 VIDEO_EXTS = (".mp4", ".m4v", ".mov", ".webm")  # served with HTTP Range so <video> can seek
+
+
+def write_contact_sheet(out_path, files):
+    """Self-contained printable HTML grid of the selected files (sips -> base64 jpeg for
+    rasters/svg, a name placeholder otherwise). Open it and Print -> PDF to share."""
+    RASTER = (".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg")
+    cells = []
+    for rel, p in files[:80]:                       # cap: keep the data-URI page reasonable
+        ext = os.path.splitext(p)[1].lower()
+        name = html.escape(os.path.basename(p))
+        thumb = '<div class="ph">' + html.escape(ext.lstrip(".").upper() or "FILE") + '</div>'
+        if ext in RASTER:
+            tmp = p + ".contact.jpg"
+            try:
+                subprocess.run(["sips", "-Z", "460", "-s", "format", "jpeg", p, "--out", tmp],
+                               capture_output=True, timeout=20)
+                if os.path.isfile(tmp):
+                    with open(tmp, "rb") as fh:
+                        thumb = '<img src="data:image/jpeg;base64,' + base64.b64encode(fh.read()).decode() + '">'
+            except Exception:
+                pass
+            finally:
+                if os.path.exists(tmp):
+                    try:
+                        os.remove(tmp)
+                    except OSError:
+                        pass
+        cells.append('<figure>' + thumb + '<figcaption>' + name + '</figcaption></figure>')
+    doc = ('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Contact sheet</title><style>'
+           'body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;margin:24px;background:#fff;color:#111}'
+           'h1{font-size:15px;font-weight:600;margin:0 0 14px}'
+           '.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px}'
+           'figure{margin:0;border:1px solid #ddd;border-radius:8px;overflow:hidden;break-inside:avoid}'
+           'figure img{width:100%;height:165px;object-fit:contain;background:#f6f6f6;display:block}'
+           '.ph{height:165px;display:flex;align-items:center;justify-content:center;background:#f0f0f0;color:#999;font-size:13px}'
+           'figcaption{font-size:10.5px;padding:6px 8px;word-break:break-all;color:#333}'
+           '</style></head><body><h1>Contact sheet — ' + str(len(files)) + ' file(s)</h1>'
+           '<div class="grid">' + "".join(cells) + '</div></body></html>')
+    with open(out_path, "w", encoding="utf-8") as f:
+        f.write(doc)
 
 
 class Handler(SimpleHTTPRequestHandler):
@@ -371,6 +413,29 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._respond(400, {"error": "bad request: " + str(e)})
             except Exception as e:
                 return self._respond(500, {"error": str(e)})
+        if self.path.startswith("/findscript?"):
+            try:
+                from urllib.parse import parse_qs, urlparse
+                stem = (parse_qs(urlparse(self.path).query).get("stem", [""])[0] or "").strip()
+                if not stem:
+                    return self._respond(400, {"error": "no stem"})
+                hit = None
+                try:
+                    r = subprocess.run(["rg", "-l", "--no-messages", "-F",
+                                        "-g", "*.{py,r,R,jl,sh,ipynb}", stem, PROJECT],
+                                       capture_output=True, text=True, timeout=15)
+                    for line in (r.stdout or "").splitlines():
+                        ap = os.path.realpath(line.strip())
+                        if ap.startswith(PROJECT + os.sep):
+                            hit = os.path.relpath(ap, PROJECT)
+                            break
+                except FileNotFoundError:
+                    pass            # ripgrep not installed -> client already tried a stem match
+                return self._respond(200, {"script": hit})
+            except (KeyError, ValueError) as e:
+                return self._respond(400, {"error": "bad request: " + str(e)})
+            except Exception as e:
+                return self._respond(500, {"error": str(e)})
         from urllib.parse import urlparse as _up
         if os.path.splitext(_up(self.path).path)[1].lower() in VIDEO_EXTS:
             return self._serve_video()
@@ -395,10 +460,22 @@ class Handler(SimpleHTTPRequestHandler):
             try:
                 length = int(self.headers.get("Content-Length", 0))
                 req = json.loads(self.rfile.read(length))
+                tags_in = req.get("tags", {})
+                tags = {}
+                if isinstance(tags_in, dict):
+                    for k, v in tags_in.items():
+                        if isinstance(v, list) and v:
+                            clean = sorted({str(t).strip() for t in v if str(t).strip()})[:30]
+                            if clean:
+                                tags[k] = clean
+                rules = sorted({str(r).strip() for r in req.get("hideRules", [])
+                                if isinstance(r, str) and str(r).strip()})[:200]
                 state = {"favs": sorted(set(req.get("favs", []))),
                          "ratings": {k: v for k, v in req.get("ratings", {}).items()
                                      if isinstance(v, int) and 1 <= v <= 5},
-                         "hidden": sorted(set(req.get("hidden", [])))}
+                         "hidden": sorted(set(req.get("hidden", []))),
+                         "tags": tags,
+                         "hideRules": rules}
                 sp = os.path.join(PROJECT, ".fig_state.json")
                 tmp = sp + ".tmp." + str(os.getpid()) + "." + str(threading.get_ident())
                 with open(tmp, "w", encoding="utf-8") as f:
@@ -443,6 +520,58 @@ class Handler(SimpleHTTPRequestHandler):
                     os.rename(p, dest)
                     deleted.append(rel)
                 return self._respond(200, {"deleted": deleted})
+            except (KeyError, ValueError, json.JSONDecodeError) as e:
+                return self._respond(400, {"error": "bad request: " + str(e)})
+            except Exception as e:
+                return self._respond(500, {"error": str(e)})
+        if self.path == "/export":
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+                req = json.loads(self.rfile.read(length))
+                mode = req.get("mode", "folder")
+                files = []
+                for rel in req.get("rels", []):
+                    p = os.path.realpath(os.path.join(PROJECT, rel))
+                    if (p == PROJECT or p.startswith(PROJECT + os.sep)) and os.path.isfile(p):
+                        files.append((rel, p))
+                if not files:
+                    return self._respond(400, {"error": "no valid files selected"})
+                exp = os.path.join(PROJECT, "_gallery_exports")
+                os.makedirs(exp, exist_ok=True)
+                ts = time.strftime("%Y%m%d_%H%M%S")
+                if mode == "zip":
+                    import zipfile
+                    out = os.path.join(exp, "export_" + ts + ".zip")
+                    seen = {}
+                    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
+                        for rel, p in files:
+                            arc = os.path.basename(p)
+                            n = seen.get(arc, 0)
+                            seen[arc] = n + 1
+                            if n:
+                                b, e = os.path.splitext(arc)
+                                arc = b + "_" + str(n) + e
+                            z.write(p, arc)
+                elif mode == "contact":
+                    out = os.path.join(exp, "contact_" + ts + ".html")
+                    write_contact_sheet(out, files)
+                else:
+                    out = os.path.join(exp, "export_" + ts)
+                    os.makedirs(out, exist_ok=True)
+                    for rel, p in files:
+                        dest = os.path.join(out, os.path.basename(p))
+                        i = 1
+                        while os.path.exists(dest):
+                            b, e = os.path.splitext(os.path.basename(p))
+                            dest = os.path.join(out, b + "_" + str(i) + e)
+                            i += 1
+                        shutil.copy2(p, dest)
+                try:
+                    subprocess.run(["open", "-R", out] if os.path.isfile(out) else ["open", out],
+                                   capture_output=True, timeout=10)
+                except Exception:
+                    pass
+                return self._respond(200, {"ok": True, "path": os.path.relpath(out, PROJECT), "count": len(files)})
             except (KeyError, ValueError, json.JSONDecodeError) as e:
                 return self._respond(400, {"error": "bad request: " + str(e)})
             except Exception as e:

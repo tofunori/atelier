@@ -15,7 +15,8 @@ EXTS = {".png", ".jpg", ".jpeg", ".svg", ".pdf", ".html", ".docx", ".xlsx", ".xl
         ".mp4", ".m4v", ".mov", ".webm"}
 # Skip these directories entirely (virtualenvs, git, caches, worktrees, the index itself)
 EXCLUDE_PARTS = {".git", ".venv", ".venv-era5", ".venv-codex", "node_modules",
-                 "__pycache__", ".ipynb_checkpoints", "worktrees", ".claude", ".fig_thumbs"}
+                 "__pycache__", ".ipynb_checkpoints", "worktrees", ".claude", ".fig_thumbs",
+                 "_gallery_exports"}
 ARCHIVE_HINTS = ("_archive", "menage_", "/tmp/", "tmp_dir", "/tmp", "raqdps_tests")
 SELF = "figures_index.html"
 SNIP_EXTS = (".py", ".r", ".jl", ".sh", ".tex", ".md", ".csv")
@@ -207,6 +208,27 @@ HTML = """<!DOCTYPE html>
   .chip{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:20px;
         border:1px solid var(--border);background:var(--card);cursor:pointer;user-select:none;font-size:12px}
   .chip.off{opacity:.4}
+  .menu{position:absolute;z-index:60;display:none;flex-direction:column;gap:2px;
+        background:#27272a;border:1px solid #3f3f46;border-radius:10px;padding:7px;min-width:200px;max-width:360px;
+        max-height:62vh;overflow:auto;box-shadow:0 8px 28px rgba(0,0,0,.5)}
+  .menu .mhd{font-size:11px;color:#a1a1aa;padding:3px 6px 5px}
+  .menu .mi{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 7px;border-radius:6px;font-size:12.5px}
+  .menu .mi:hover{background:rgba(255,255,255,.05)}
+  .menu .mi.on{color:var(--accent)}
+  .menu .mi.muted,.menu .mi.muted:hover{color:#71717a;background:none}
+  .menu .mi.clr{color:#ff9b9b}
+  .menu .lbl{cursor:pointer;flex:1;word-break:break-all}
+  .menu .lbl.mono{font-family:ui-monospace,Menlo,monospace;font-size:11.5px}
+  .menu .ct{color:#71717a;font-size:11px}
+  .menu .x{cursor:pointer;color:#ff6b6b;padding:0 3px;flex-shrink:0}
+  .menu .madd{display:flex;gap:5px;margin-top:5px;padding-top:6px;border-top:1px solid #3f3f46}
+  .menu .madd input{flex:1;min-width:0;background:#18181b;border:1px solid #3f3f46;border-radius:6px;color:var(--txt);padding:5px 7px;font-size:12px}
+  .menu .madd button{padding:5px 10px}
+  .tags{display:flex;flex-wrap:wrap;gap:4px;margin:3px 0 0}
+  .tagc{display:inline-flex;align-items:center;gap:3px;background:#33415a;color:#cfe0ff;border-radius:10px;padding:1px 7px;font-size:10.5px;cursor:pointer}
+  .tagc.on{background:var(--accent);color:#06121f}
+  .tagc .x{color:inherit;opacity:.55;cursor:pointer}
+  .tagc .x:hover{opacity:1}
   .playbtn{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:3;
         width:48px;height:48px;border-radius:50%;background:rgba(0,0,0,.5);color:#fff;
         display:flex;align-items:center;justify-content:center;font-size:17px;padding-left:3px;
@@ -352,6 +374,10 @@ HTML = """<!DOCTYPE html>
     <span class="chip on" id="archChip">Include archives</span>
     <span class="chip off" id="favChip">&#9733; Favorites</span>
     <span class="chip off" id="hideChip" title="Show the files you've masked (otherwise filtered out)">Hidden</span>
+    <span class="chip" id="tagChip" title="Filter by tag / collection">&#127991; Tags &#9662;</span>
+    <div id="tagMenu" class="menu"></div>
+    <span class="chip" id="rulesChip" title="Auto-hide files matching glob rules (e.g. **/_qa/**)">&#9881; Rules &#9662;</span>
+    <div id="rulesMenu" class="menu"></div>
     <span id="rateFilter" style="display:none"></span>
     <button id="quoteClear" style="display:none" title="Clear the annotation pending in the Claude statusline">&#9998;&#10005; Annotation</button>
     <button id="rescan" title="Rebuild the gallery index and reload">&#8635; Rescan</button>
@@ -359,6 +385,9 @@ HTML = """<!DOCTYPE html>
     <button id="hideSel" style="display:none" title="Hide the selected files from the gallery (reversible)">Hide (0)</button>
     <button id="delSel" style="display:none;background:#5c1f1f;border-color:#7a2a2a">&#128465; Delete (0)</button>
     <button id="clrSel" style="display:none" title="Clear the selection">&#10005; Clear</button>
+    <button id="tagSel" style="display:none" title="Tag the selected files">&#127991; Tag (0)</button>
+    <button id="exportSel" style="display:none" title="Export selected: folder / zip / contact sheet">&#10515; Export (0) &#9662;</button>
+    <div id="exportMenu" class="menu"></div>
     <span class="count" id="count"></span>
   </div>
 </header>
@@ -410,6 +439,9 @@ document.addEventListener('click',e=>{
   else if(act==='del') delOne(rel);
   else if(act==='lb') lbOpen(rel);
   else if(act==='open') openDefault(rel);
+  else if(act==='src') findScript(rel);
+  else if(act==='tagf') setActiveTag(el.dataset.tag);
+  else if(act==='untag') removeTag(rel, el.dataset.tag);
   else if(act==='rate') setRate(rel, +el.dataset.n, e);
   else if(act==='copy'){ navigator.clipboard.writeText(rel); el.textContent='✓'; setTimeout(()=>el.textContent='Path',1200); }
 });
@@ -429,19 +461,45 @@ function pushState(){
   clearTimeout(stateTimer);
   stateTimer=setTimeout(()=>{
     fetch('/state',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({favs:[...favs],ratings,hidden:[...hidden]})}).catch(()=>{});
+      body:JSON.stringify({favs:[...favs],ratings,hidden:[...hidden],tags,hideRules})}).catch(()=>{});
   },400);
 }
 const saveRatings = ()=>{localStorage.setItem('figRatings', JSON.stringify(ratings));pushState();};
+// --- tags / collections + rule-based (smart) hiding ---------------------------
+let tags = JSON.parse(localStorage.getItem('figTags')||'{}');            // {rel:[tag,...]}
+let activeTag = '';
+let hideRules = JSON.parse(localStorage.getItem('figHideRules')||'[]');  // glob strings
+const _ruleRe = {};
+function ruleToRe(g){                                  // gitignore-ish glob -> RegExp
+  if(_ruleRe[g]) return _ruleRe[g];
+  const onBase = !g.includes('/');                     // no slash -> match basename at any depth
+  let s = g.replace(/[.+^${}()|[\\]\\\\]/g,'\\\\$&')   // escape regex specials, keep * ? for glob
+           .replace(/\\*\\*/g,'@@D@@').replace(/\\*/g,'[^/]*').replace(/\\?/g,'[^/]')
+           .replace(/@@D@@\\//g,'(?:.*/)?').replace(/@@D@@/g,'.*');
+  const o = {re:new RegExp('^'+s+'$'), onBase}; _ruleRe[g]=o; return o;
+}
+function matchesRule(rel){
+  if(!hideRules.length) return false;
+  const base = rel.slice(rel.lastIndexOf('/')+1);
+  return hideRules.some(g=>{ const o=ruleToRe(g); return o.re.test(o.onBase?base:rel); });
+}
+const allTags = ()=>[...new Set(Object.values(tags).flat())].sort((a,b)=>a.localeCompare(b));
+function saveTags(){ localStorage.setItem('figTags', JSON.stringify(tags)); pushState(); }
+function saveRules(){ localStorage.setItem('figHideRules', JSON.stringify(hideRules)); for(const k in _ruleRe) delete _ruleRe[k]; pushState(); }
 fetch('/state').then(r=>r.json()).then(st=>{
   (st.favs||[]).forEach(f=>favs.add(f));
   Object.assign(ratings, st.ratings||{});
   hidden = new Set(st.hidden||[]);   // server (.fig_state.json) is authoritative — else localStorage resurrects un-hidden files
+  if(st.tags) tags = st.tags;
+  if(st.hideRules) hideRules = st.hideRules;
+  for(const k in _ruleRe) delete _ruleRe[k];
   localStorage.setItem('figFavs', JSON.stringify([...favs]));
   localStorage.setItem('figRatings', JSON.stringify(ratings));
   localStorage.setItem('figHidden', JSON.stringify([...hidden]));
+  localStorage.setItem('figTags', JSON.stringify(tags));
+  localStorage.setItem('figHideRules', JSON.stringify(hideRules));
   document.getElementById('favChip').textContent='\u2605 Favorites ('+favs.size+')';
-  updateHideChip();
+  updateHideChip(); buildTagChip(); buildRulesChip();
   render();
 }).catch(()=>{});
 function setRate(rel, n, ev){
@@ -470,6 +528,12 @@ function updateDelBtn(){
   const h = document.getElementById('hideSel');
   h.style.display = selSet.size ? '' : 'none';
   h.textContent = 'Hide (' + selSet.size + ')';
+  const tg = document.getElementById('tagSel');
+  tg.style.display = selSet.size ? '' : 'none';
+  tg.textContent = '🏷 Tag (' + selSet.size + ')';
+  const ex = document.getElementById('exportSel');
+  ex.style.display = selSet.size ? '' : 'none';
+  ex.textContent = '⤓ Export (' + selSet.size + ') ▾';
   b.textContent = '🗑 Delete (' + selSet.size + ')';
 }
 function toggleSel(rel, el, e){
@@ -538,6 +602,122 @@ document.getElementById('hideSel').onclick = function(){
   selSet.clear();
   saveHidden(); updateHideChip(); updateDelBtn(); render();
 };
+// ============ tags / collections, smart-hide rules, export, figure -> script ============
+function tagsRow(rel){
+  const ts = tags[rel]||[];
+  if(!ts.length) return '';
+  return '<div class="tags">'+ts.map(t=>
+    `<span class="tagc${t===activeTag?' on':''}" data-act="tagf" data-tag="${escA(t)}" title="Filter by this tag">${esc(t)}<span class="x" data-act="untag" data-rel="${escA(rel)}" data-tag="${escA(t)}" title="Remove tag">×</span></span>`
+  ).join('')+'</div>';
+}
+function setActiveTag(t){ activeTag = (activeTag===t)?'':t; buildTagChip(); render(); }
+function removeTag(rel,t){
+  if(!tags[rel]) return;
+  tags[rel]=tags[rel].filter(x=>x!==t);
+  if(!tags[rel].length) delete tags[rel];
+  if(activeTag && !allTags().includes(activeTag)) activeTag='';
+  saveTags(); buildTagChip(); render();
+}
+function applyTagToSel(t){
+  t=(t||'').trim(); if(!t || !selSet.size) return;
+  selSet.forEach(rel=>{ const a=tags[rel]||(tags[rel]=[]); if(!a.includes(t)) a.push(t); });
+  saveTags(); buildTagChip(); render();
+}
+function deleteTagEverywhere(t){
+  for(const rel in tags){ tags[rel]=tags[rel].filter(x=>x!==t); if(!tags[rel].length) delete tags[rel]; }
+  if(activeTag===t) activeTag='';
+  saveTags(); buildTagChip(); render();
+}
+function buildTagChip(){
+  const chip=document.getElementById('tagChip'), menu=document.getElementById('tagMenu');
+  if(!chip||!menu) return;
+  const ts=allTags();
+  chip.classList.toggle('on', !!activeTag);
+  chip.innerHTML='🏷 '+(activeTag?('Tag: '+esc(activeTag)):'Tags')+' ▾';
+  let h = ts.length ? ts.map(t=>{
+    const n=Object.values(tags).filter(a=>a.includes(t)).length;
+    return `<div class="mi${t===activeTag?' on':''}"><span class="lbl" data-pick="${escA(t)}">${esc(t)} <span class="ct">${n}</span></span><span class="x" data-del="${escA(t)}" title="Delete this tag everywhere">×</span></div>`;
+  }).join('') : '<div class="mi muted">No tags yet — select files, then Tag.</div>';
+  if(activeTag) h='<div class="mi clr" data-clear="1">Clear filter</div>'+h;
+  menu.innerHTML=h;
+  menu.onclick=e=>e.stopPropagation();
+  menu.querySelectorAll('[data-pick]').forEach(el=>el.onclick=()=>{ setActiveTag(el.dataset.pick); menu.style.display='none'; });
+  menu.querySelectorAll('[data-del]').forEach(el=>el.onclick=()=>deleteTagEverywhere(el.dataset.del));
+  const c=menu.querySelector('[data-clear]'); if(c) c.onclick=()=>{ activeTag=''; buildTagChip(); render(); menu.style.display='none'; };
+}
+function buildRulesChip(){
+  const chip=document.getElementById('rulesChip'), menu=document.getElementById('rulesMenu');
+  if(!chip||!menu) return;
+  chip.classList.toggle('on', hideRules.length>0);
+  chip.innerHTML='⚙ Rules'+(hideRules.length?(' ('+hideRules.length+')'):'')+' ▾';
+  menu.innerHTML='<div class="mhd">Auto-hide files matching a glob</div>'+
+    (hideRules.length?hideRules.map(g=>`<div class="mi"><span class="lbl mono">${esc(g)}</span><span class="x" data-rm="${escA(g)}" title="Remove rule">×</span></div>`).join(''):'<div class="mi muted">No rules.</div>')+
+    '<div class="madd"><input type="text" id="ruleInput" placeholder="e.g. **/_qa/** or *_preview.png"><button id="ruleAdd">Add</button></div>';
+  menu.onclick=e=>e.stopPropagation();
+  menu.querySelectorAll('[data-rm]').forEach(el=>el.onclick=()=>{ hideRules=hideRules.filter(x=>x!==el.dataset.rm); saveRules(); buildRulesChip(); render(); });
+  const inp=menu.querySelector('#ruleInput'), add=menu.querySelector('#ruleAdd');
+  const doAdd=()=>{ const v=(inp.value||'').trim(); if(v && !hideRules.includes(v)){ hideRules.push(v); saveRules(); buildRulesChip(); render(); } };
+  add.onclick=doAdd; inp.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); doAdd(); } };
+}
+function buildExportMenu(){
+  const menu=document.getElementById('exportMenu');
+  menu.innerHTML=[['folder','📁 Folder (copy)'],['zip','📦 Zip'],['contact','📄 Contact sheet (print → PDF)']]
+    .map(([m,l])=>`<div class="mi"><span class="lbl" data-exp="${m}">${l}</span></div>`).join('');
+  menu.onclick=e=>e.stopPropagation();
+  menu.querySelectorAll('[data-exp]').forEach(el=>el.onclick=()=>{ menu.style.display='none'; doExport(el.dataset.exp); });
+}
+function doExport(mode){
+  if(!selSet.size) return;
+  const ex=document.getElementById('exportSel'); ex.textContent='Exporting…';
+  fetch('/export',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode,rels:[...selSet]})})
+    .then(r=>r.json()).then(j=>{ ex.textContent = j&&j.ok ? ('✓ '+j.count+' → '+j.path) : ('✗ '+((j&&j.error)||'error')); setTimeout(updateDelBtn,3000); })
+    .catch(()=>{ ex.textContent='✗ server off'; setTimeout(updateDelBtn,3000); });
+}
+function closeFloat(){ const f=document.getElementById('floatMenu'); if(f) f.remove(); }
+function tagSelMenu(anchor){
+  closeFloat();
+  const m=document.createElement('div'); m.className='menu'; m.id='floatMenu';
+  const ts=allTags();
+  m.innerHTML='<div class="mhd">Tag '+selSet.size+' file(s)</div>'+
+    ts.map(t=>`<div class="mi"><span class="lbl" data-apply="${escA(t)}">${esc(t)}</span></div>`).join('')+
+    '<div class="madd"><input type="text" id="tagInput" placeholder="new tag…"><button id="tagApply">Add</button></div>';
+  document.body.appendChild(m);
+  const r=anchor.getBoundingClientRect();
+  m.style.left=r.left+'px'; m.style.top=(r.bottom+window.scrollY+4)+'px'; m.style.display='flex';
+  m.onclick=e=>e.stopPropagation();
+  m.querySelectorAll('[data-apply]').forEach(el=>el.onclick=()=>{ applyTagToSel(el.dataset.apply); closeFloat(); });
+  const inp=m.querySelector('#tagInput'), btn=m.querySelector('#tagApply');
+  const go=()=>{ applyTagToSel(inp.value); closeFloat(); };
+  btn.onclick=go; inp.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); go(); } };
+  inp.focus();
+}
+function menuToggle(menu, anchor){
+  const open = menu.style.display==='flex';
+  document.querySelectorAll('.menu').forEach(x=>x.style.display='none'); closeFloat();
+  if(open) return;
+  const r=anchor.getBoundingClientRect();
+  menu.style.left=r.left+'px'; menu.style.top=(r.bottom+window.scrollY+4)+'px'; menu.style.display='flex';
+}
+function lbOpenAny(rel){
+  const f=FILES.find(x=>x.rel===rel); if(!f) return false;
+  const i=lbList.findIndex(x=>x.rel===rel);
+  if(i>=0) lbShow(i); else { lbList=[f]; lbShow(0); }
+  return true;
+}
+function findScript(rel){
+  const stem = rel.split('/').pop().replace(/\\.[^.]+$/,'');
+  const hit = FILES.find(f=>codeExt(f.ext) && f.rel.split('/').pop().replace(/\\.[^.]+$/,'')===stem);
+  if(hit){ lbOpenAny(hit.rel); return; }
+  fetch('/findscript?stem='+encodeURIComponent(stem)).then(r=>r.json()).then(j=>{
+    if(j && j.script){ if(!lbOpenAny(j.script)) window.open('/'+j.script.split('/').map(encodeURIComponent).join('/'),'_blank'); }
+    else alert('No generating script found for "'+stem+'".');
+  }).catch(()=>alert('Script search failed (server off?).'));
+}
+document.getElementById('tagChip').onclick=e=>{ e.stopPropagation(); buildTagChip(); menuToggle(document.getElementById('tagMenu'), e.currentTarget); };
+document.getElementById('rulesChip').onclick=e=>{ e.stopPropagation(); buildRulesChip(); menuToggle(document.getElementById('rulesMenu'), e.currentTarget); };
+document.getElementById('exportSel').onclick=e=>{ e.stopPropagation(); buildExportMenu(); menuToggle(document.getElementById('exportMenu'), e.currentTarget); };
+document.getElementById('tagSel').onclick=e=>{ e.stopPropagation(); tagSelMenu(e.currentTarget); };
+document.addEventListener('click',()=>{ document.querySelectorAll('.menu').forEach(x=>x.style.display='none'); closeFloat(); });
 function openDefault(rel){
   fetch('/open', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({rel})});
 }
@@ -669,7 +849,8 @@ function render(){
   let list = FILES.filter(f=>{
     if(!exts[f.ext]) return false;
     if(!showArch && f.archive) return false;
-    if(!showHidden && hidden.has(f.rel)) return false;
+    if(!showHidden && (hidden.has(f.rel) || matchesRule(f.rel))) return false;
+    if(activeTag && !(tags[f.rel]||[]).includes(activeTag)) return false;
     if(onlyFavs && !favs.has(f.rel)) return false;
     if(onlyFavs && rateMin && (ratings[f.rel]||0)!==rateMin) return false;
     if(fld && f.folder!==fld) return false;
@@ -716,11 +897,13 @@ function render(){
         <div class="nm">${esc(f.name)}</div>
         ${rateRow(f.rel)}
         <div class="fld">${esc(f.folder)}</div>
+        ${tagsRow(f.rel)}
         <div class="row"><span class="tag">${esc(f.ext)}</span>${arch}${hidTag}<span title="created ${escA(f.bdate)} \u00b7 modified ${escA(f.mdate)}">${sort.startsWith('btime')?esc(f.bdate):esc(f.mdate)}</span><span>${fmtSize(f.size)}</span></div>
       </div>
       <div class="acts">
         <button data-act="open" data-rel="${escA(f.rel)}" title="Open with default app">Open</button>
         <button data-act="copy" data-rel="${escA(f.rel)}">Path</button>
+        ${(imgExt(f.ext)||f.ext==='pdf')?`<button data-act="src" data-rel="${escA(f.rel)}" title="Open the script that generated this figure">&lt;/&gt; src</button>`:''}
         <button data-act="hide" data-rel="${escA(f.rel)}" title="${isHid?'Show this file again':'Hide this file from the gallery (reversible)'}">${isHid?'Unhide':'Hide'}</button>
         <button class="ico${isFav?' on':''}" data-act="fav" data-rel="${escA(f.rel)}" title="${isFav?'Remove favorite':'Add favorite'}">${isFav?'★':'☆'}</button>
         <button class="ico del" data-act="del" data-rel="${escA(f.rel)}" title="Move to Trash">🗑</button>
