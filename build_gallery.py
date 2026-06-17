@@ -656,7 +656,7 @@ function buildRulesChip(){
   menu.onclick=e=>e.stopPropagation();
   menu.querySelectorAll('[data-rm]').forEach(el=>el.onclick=()=>{ hideRules=hideRules.filter(x=>x!==el.dataset.rm); saveRules(); buildRulesChip(); render(); });
   const inp=menu.querySelector('#ruleInput'), add=menu.querySelector('#ruleAdd');
-  const doAdd=()=>{ const v=(inp.value||'').trim(); if(v && !hideRules.includes(v)){ hideRules.push(v); saveRules(); buildRulesChip(); render(); } };
+  const doAdd=()=>{ const v=(inp.value||'').trim(); if(v && !hideRules.includes(v)){ hideRules.push(v); saveRules(); buildRulesChip(); render(); const ni=menu.querySelector('#ruleInput'); if(ni) ni.focus(); } };
   add.onclick=doAdd; inp.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); doAdd(); } };
 }
 function buildExportMenu(){
@@ -694,6 +694,7 @@ function tagSelMenu(anchor){
 function menuToggle(menu, anchor){
   const open = menu.style.display==='flex';
   document.querySelectorAll('.menu').forEach(x=>x.style.display='none'); closeFloat();
+  const fm=document.getElementById('fmtMenu'); if(fm) fm.style.display='none';
   if(open) return;
   const r=anchor.getBoundingClientRect();
   menu.style.left=r.left+'px'; menu.style.top=(r.bottom+window.scrollY+4)+'px'; menu.style.display='flex';
@@ -821,6 +822,7 @@ fmtMenu.querySelectorAll('input').forEach(cb=>{
 });
 fmtChip.onclick=e=>{
   e.stopPropagation();
+  document.querySelectorAll('.menu').forEach(x=>x.style.display='none'); closeFloat();
   const r=fmtChip.getBoundingClientRect();
   fmtMenu.style.left=r.left+'px'; fmtMenu.style.top=(r.bottom+window.scrollY)+'px';
   fmtMenu.style.display=fmtMenu.style.display==='flex'?'none':'flex';

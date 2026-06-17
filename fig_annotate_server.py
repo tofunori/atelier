@@ -180,6 +180,20 @@ class Handler(SimpleHTTPRequestHandler):
     def do_OPTIONS(self):
         self._respond(200, {})
 
+    def _local_only(self):
+        """Reject browser cross-site requests (drive-by CSRF/RCE). The gallery's own
+        requests carry a loopback Origin or none; curl sends none. A page on evil.com
+        carries Origin: https://evil.com and is refused."""
+        origin = self.headers.get("Origin")
+        if not origin:
+            return True
+        try:
+            from urllib.parse import urlparse
+            host = urlparse(origin).hostname
+        except Exception:
+            return False
+        return host in ("127.0.0.1", "localhost", "::1")
+
     def _safe_path(self, p):
         p = os.path.realpath(os.path.expanduser(p))
         root = os.path.realpath(PROJECT)
@@ -415,14 +429,18 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._respond(500, {"error": str(e)})
         if self.path.startswith("/findscript?"):
             try:
+                if not self._local_only():
+                    return self._respond(403, {"error": "cross-origin blocked"})
                 from urllib.parse import parse_qs, urlparse
-                stem = (parse_qs(urlparse(self.path).query).get("stem", [""])[0] or "").strip()
+                stem = (parse_qs(urlparse(self.path).query).get("stem", [""])[0] or "").strip()[:200]
                 if not stem:
                     return self._respond(400, {"error": "no stem"})
                 hit = None
                 try:
-                    r = subprocess.run(["rg", "-l", "--no-messages", "-F",
-                                        "-g", "*.{py,r,R,jl,sh,ipynb}", stem, PROJECT],
+                    # "--" stops option parsing (stem can't become an rg flag like --pre=…);
+                    # --no-config ignores RIPGREP_CONFIG_PATH. -F keeps it a literal string.
+                    r = subprocess.run(["rg", "-l", "--no-messages", "--no-config", "-F",
+                                        "-g", "*.{py,r,R,jl,sh,ipynb}", "--", stem, PROJECT],
                                        capture_output=True, text=True, timeout=15)
                     for line in (r.stdout or "").splitlines():
                         ap = os.path.realpath(line.strip())
@@ -448,6 +466,8 @@ class Handler(SimpleHTTPRequestHandler):
         super().do_HEAD()
 
     def do_POST(self):
+        if not self._local_only():
+            return self._respond(403, {"error": "cross-origin blocked"})
         if self.path == "/clear-quote":
             try:
                 open(os.path.expanduser("~/.claude/fig-last-quote.txt"), "w").close()
@@ -470,10 +490,13 @@ class Handler(SimpleHTTPRequestHandler):
                                 tags[k] = clean
                 rules = sorted({str(r).strip() for r in req.get("hideRules", [])
                                 if isinstance(r, str) and str(r).strip()})[:200]
-                state = {"favs": sorted(set(req.get("favs", []))),
-                         "ratings": {k: v for k, v in req.get("ratings", {}).items()
+                rin = req.get("ratings", {})
+                rin = rin if isinstance(rin, dict) else {}
+                _strs = lambda v: sorted({str(x) for x in v}) if isinstance(v, list) else []
+                state = {"favs": _strs(req.get("favs", [])),
+                         "ratings": {k: v for k, v in rin.items()
                                      if isinstance(v, int) and 1 <= v <= 5},
-                         "hidden": sorted(set(req.get("hidden", []))),
+                         "hidden": _strs(req.get("hidden", [])),
                          "tags": tags,
                          "hideRules": rules}
                 sp = os.path.join(PROJECT, ".fig_state.json")
