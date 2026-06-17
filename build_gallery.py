@@ -933,7 +933,7 @@ updateViewChip();
 const favChip=document.getElementById('favChip');
 favChip.textContent='\u2605 Favorites ('+favs.size+')';
 const rateFilter=document.getElementById('rateFilter');
-rateFilter.innerHTML=[1,2,3,4,5].map(n=>`<span class="chip off rf" data-n="${n}" title="Show only ${n}-star items">${'\u2605'.repeat(n)}</span>`).join('');
+rateFilter.innerHTML=[1,2,3,4,5].map(n=>`<span class="chip off rf" data-n="${n}" title="Show only ${n}-star items">${n}\u2605</span>`).join('');
 rateFilter.querySelectorAll('.rf').forEach(c=>{
   c.onclick=()=>{
     const n=+c.dataset.n;
