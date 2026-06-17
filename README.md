@@ -1,4 +1,6 @@
-# cmux-gallery
+<p align="center">
+  <img src="docs/banner.png" alt="cmux-gallery" width="100%">
+</p>
 
 A portable artifact gallery + annotation tool for [cmux](https://github.com/manaflow-ai/cmux).
 Point it at any project and it builds a searchable HTML gallery of your figures,
@@ -7,8 +9,9 @@ PDF / Markdown / code viewers, figure annotation, and an SVG element selector.
 Organise with tags, favourites and smart-hide rules; export a selection or jump
 from a figure to the script that generated it. No manual setup per project.
 
-It generalises a figures-index builder + a small local server so they work in
-**any** project root.
+<p align="center">
+  <img src="docs/screenshot.png" alt="cmux-gallery — the searchable figure grid" width="100%">
+</p>
 
 ## Features
 
