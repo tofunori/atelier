@@ -208,8 +208,8 @@ HTML = """<!DOCTYPE html>
   .chip{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:20px;
         border:1px solid var(--border);background:var(--card);cursor:pointer;user-select:none;font-size:12px}
   .chip.off{opacity:.4}
-  .menu{position:absolute;z-index:60;display:none;flex-direction:column;gap:2px;
-        background:#27272a;border:1px solid #3f3f46;border-radius:10px;padding:7px;min-width:200px;max-width:360px;
+  .menu{position:fixed;z-index:60;display:none;flex-direction:column;gap:2px;
+        background:#27272a;border:1px solid #3f3f46;border-radius:10px;padding:7px;min-width:min(200px,calc(100vw - 16px));max-width:min(360px,calc(100vw - 16px));
         max-height:62vh;overflow:auto;box-shadow:0 8px 28px rgba(0,0,0,.5)}
   .menu .mhd{font-size:11px;color:#a1a1aa;padding:3px 6px 5px}
   .menu .mi{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 7px;border-radius:6px;font-size:12.5px}
@@ -689,23 +689,29 @@ function tagSelMenu(anchor){
   m.innerHTML='<div class="mhd">Tag '+selSet.size+' file(s)</div>'+
     ts.map(t=>`<div class="mi"><span class="lbl" data-apply="${escA(t)}">${esc(t)}</span></div>`).join('')+
     '<div class="madd"><input type="text" id="tagInput" placeholder="new tag…"><button id="tagApply">Add</button></div>';
-  document.body.appendChild(m);
-  const r=anchor.getBoundingClientRect();
-  m.style.left=r.left+'px'; m.style.top=(r.bottom+window.scrollY+4)+'px'; m.style.display='flex';
   m.onclick=e=>e.stopPropagation();
+  placeMenu(m, anchor);
   m.querySelectorAll('[data-apply]').forEach(el=>el.onclick=()=>{ applyTagToSel(el.dataset.apply); closeFloat(); });
   const inp=m.querySelector('#tagInput'), btn=m.querySelector('#tagApply');
   const go=()=>{ applyTagToSel(inp.value); closeFloat(); };
   btn.onclick=go; inp.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); go(); } };
   inp.focus();
 }
+function placeMenu(menu, anchor){
+  // append to <body> to escape the sticky header's backdrop-filter containing block,
+  // then position fixed and clamp inside the viewport so it never clips off-screen.
+  if(menu.parentNode!==document.body) document.body.appendChild(menu);
+  menu.style.display='flex';
+  const r=anchor.getBoundingClientRect(), vw=document.documentElement.clientWidth;
+  let left=Math.min(r.left, vw-menu.offsetWidth-8); left=Math.max(8,left);
+  menu.style.left=left+'px'; menu.style.top=(r.bottom+4)+'px';
+}
 function menuToggle(menu, anchor){
   const open = menu.style.display==='flex';
   document.querySelectorAll('.menu').forEach(x=>x.style.display='none'); closeFloat();
   const fm=document.getElementById('fmtMenu'); if(fm) fm.style.display='none';
   if(open) return;
-  const r=anchor.getBoundingClientRect();
-  menu.style.left=r.left+'px'; menu.style.top=(r.bottom+window.scrollY+4)+'px'; menu.style.display='flex';
+  placeMenu(menu, anchor);
 }
 function lbOpenAny(rel){
   const f=FILES.find(x=>x.rel===rel); if(!f) return false;
