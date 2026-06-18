@@ -109,6 +109,32 @@ To run it even when cmux is closed: move the project outside those protected
 folders, or grant Full Disk Access to your `python3` and launch `cmux-gallery
 serve` from a LaunchAgent.
 
+## Zotero library
+
+Browse and annotate your **Zotero** PDFs in the gallery. `zotero_to_gallery.py`
+reads your Zotero SQLite DB (read-only) and builds a **hardlink** mirror organised
+by collection — keeping Zotero's readable filenames (`Author et al. - Year -
+Title.pdf`) and exposing Zotero tags + collections as gallery tags:
+
+```bash
+python zotero_to_gallery.py            # builds ~/ZoteroGallery (hardlinks, no extra disk)
+cmux-gallery run --root ~/ZoteroGallery
+```
+
+It's a *separate* gallery (its own port + state) from any project gallery, with
+every feature intact — PDF viewer + highlight, tags/collections filter, search,
+favourites, export. Re-run any time your library changes (a manifest keeps the
+rebuild clean).
+
+- **Hardlinks, not copies** — the mirror shares Zotero's bytes (no duplication),
+  so it must sit on the **same volume** as Zotero (the default `~/ZoteroGallery`
+  does). For another volume, `--link copy`. (Symlinks can't be used: the server
+  only serves files whose real path is inside the gallery root, and a symlink
+  resolves outside it.) Removing a mirrored file never touches Zotero's own copy.
+- `--types` selects attachment content-types (default `application/pdf`;
+  `--all-files` for everything), `--dry-run` previews the layout, `--zotero-dir`
+  / `--out` override the paths. Nothing under `~/Zotero` is ever modified.
+
 ## Configuration
 
 | flag / env | meaning |
