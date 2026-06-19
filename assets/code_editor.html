@@ -14,12 +14,13 @@
 <script src="/.fig_thumbs/cm/julia.min.js"></script>
 <script src="/.fig_thumbs/cm/shell.min.js"></script>
 <style>
-  html,body{margin:0;height:100%;background:#18181b;color:#e4e4e7;
+:root{--bg:#18181b;--card:#27272a;--card2:#1f1f23;--txt:#e4e4e7;--muted:#a1a1aa;--accent:#5b9dff;--border:#3f3f46}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);
             font-family:-apple-system,sans-serif;display:flex;flex-direction:column}
-  header{background:#27272a;border-bottom:1px solid #3f3f46;padding:8px 14px;
+  header{background:var(--card);border-bottom:1px solid var(--border);padding:8px 14px;
          display:flex;gap:12px;align-items:center;font-size:12.5px;flex-shrink:0}
   #fname{font-weight:600}
-  #state{color:#a1a1aa}
+  #state{color:var(--muted)}
   #state.dirty{color:#ffd54a}
   #state.saved{color:#7ec97e}
   #state.conflict{color:#ff6b6b}
@@ -38,22 +39,23 @@
   #picker{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;z-index:200;
           align-items:flex-start;justify-content:center;padding-top:8vh}
   #picker.show{display:flex}
-  #pickerBox{background:#27272a;border:1px solid #3f3f46;border-radius:10px;width:520px;
+  #pickerBox{background:var(--card);border:1px solid var(--border);border-radius:10px;width:520px;
              max-height:70vh;display:flex;flex-direction:column;overflow:hidden;
              box-shadow:0 8px 40px rgba(0,0,0,.6)}
-  #pickerPath{padding:10px 14px;font-size:11.5px;color:#a1a1aa;border-bottom:1px solid #3f3f46;
+  #pickerPath{padding:10px 14px;font-size:11.5px;color:var(--muted);border-bottom:1px solid var(--border);
               white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   #pickerList{overflow-y:auto;flex:1}
   #pickerList div{padding:7px 14px;font-size:13px;cursor:pointer;display:flex;gap:8px}
-  #pickerList div:hover{background:#3f3f46}
-  #pickerList .d{color:#5b9dff}
+  #pickerList div:hover{background:var(--border)}
+  #pickerList .d{color:var(--accent)}
 </style>
+<script>(function(){var T={'Default':{bg:'#18181b',card:'#27272a',card2:'#1f1f23',txt:'#e4e4e7',muted:'#a1a1aa',accent:'#5b9dff',border:'#3f3f46'},'Codex One':{bg:'#282c34',card:'#2f343f',card2:'#21252b',txt:'#abb2bf',muted:'#7f848e',accent:'#4d78cc',border:'#3e4451'},'Dracula':{bg:'#282a36',card:'#343746',card2:'#21222c',txt:'#f8f8f2',muted:'#9aa0b3',accent:'#bd93f9',border:'#44475a'},'Nord':{bg:'#2e3440',card:'#3b4252',card2:'#272c36',txt:'#e5e9f0',muted:'#9aa3b2',accent:'#88c0d0',border:'#434c5e'}};var t;try{t=T[localStorage.getItem('figTheme')];}catch(e){}t=t||T['Default'];var r=document.documentElement.style;for(var k in t)r.setProperty('--'+k,t[k]);})();</script>
 </head>
 <body>
 <header>
   <b id="fname"></b>
-  <button id="openFile" style="background:transparent;color:#a1a1aa;border:1px solid #3f3f46;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer">Open…</button>
-  <select id="wrapSel" title="Word wrap" style="background:#27272a;color:#e4e4e7;border:1px solid #3f3f46;border-radius:6px;padding:3px 6px;font-size:12px;cursor:pointer">
+  <button id="openFile" style="background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer">Open…</button>
+  <select id="wrapSel" title="Word wrap" style="background:var(--card);color:var(--txt);border:1px solid var(--border);border-radius:6px;padding:3px 6px;font-size:12px;cursor:pointer">
     <option value="win">Wrap: window</option>
     <option value="off">Wrap: off</option>
     <option value="80">Wrap: 80</option>
@@ -61,7 +63,7 @@
     <option value="120">Wrap: 120</option>
   </select>
   <span id="state"></span>
-  <span style="margin-left:auto;color:#a1a1aa">Cmd+S: save · selection visible to Claude</span>
+  <span style="margin-left:auto;color:var(--muted)">Cmd+S: save · selection visible to Claude</span>
 </header>
 <div id="ed" style="flex:1;display:flex;flex-direction:column;min-height:0;background:#212121"></div>
 <div id="picker"><div id="pickerBox">
@@ -217,10 +219,10 @@ async function pickerShow(dir){
   const rec = recentsGet().filter(p => p !== path);
   if(rec.length){
     rec.forEach(p => mk("&#128337; " + esc(p.split("/").pop()) +
-      ' <span style="color:#71717a;font-size:11px">' + esc(p.replace(/^\/Users\/[^/]+\/Documents\//, "").replace(/\/[^/]*$/, "")) + "</span>",
+      ' <span style="color:var(--muted);font-size:11px">' + esc(p.replace(/^\/Users\/[^/]+\/Documents\//, "").replace(/\/[^/]*$/, "")) + "</span>",
       "", () => openTarget(p)));
     const sep = document.createElement("div");
-    sep.style.cssText = "border-bottom:1px solid #3f3f46;margin:4px 0;padding:0;height:1px;cursor:default";
+    sep.style.cssText = "border-bottom:1px solid var(--border);margin:4px 0;padding:0;height:1px;cursor:default";
     list.appendChild(sep);
   }
   if(j.parent) mk("&#8617; ..", "d", () => pickerShow(j.parent));

@@ -2,190 +2,267 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>SVG select</title>
+<title>SVG editor</title>
 <style>
-  html,body{margin:0;height:100%;background:#18181b;color:#e4e4e7;
+  :root{--bg:#18181b;--card:#27272a;--txt:#e4e4e7;--muted:#a1a1aa;--accent:#5b9dff;--border:#3f3f46}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);
             font-family:-apple-system,BlinkMacSystemFont,sans-serif;display:flex;flex-direction:column;overflow:hidden}
-  header{background:#27272a;border-bottom:1px solid #3f3f46;padding:7px 14px;
-         display:flex;gap:12px;align-items:center;font-size:12.5px;flex-shrink:0}
-  #fname{font-weight:600}
-  #hint{color:#a1a1aa}
-  #cur{margin-left:auto;color:#5b9dff;font-family:ui-monospace,Menlo,monospace;font-size:11.5px;
-       max-width:40%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  #body{flex:1;display:flex;min-height:0}
+  header{background:var(--card);border-bottom:1px solid var(--border);padding:8px 60px 8px 14px;
+         display:flex;gap:8px;align-items:center;font-size:12.5px;flex-shrink:0}
+  #fname{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:42%;margin-right:auto}
+  #msinfo{color:#22c55e;font-size:11.5px;white-space:nowrap}
+  /* uniform "pro" toolbar: every control the same height + style */
+  header button,header select{height:30px;box-sizing:border-box;display:inline-flex;align-items:center;gap:6px;
+        background:var(--border);color:var(--txt);border:1px solid var(--border);border-radius:7px;padding:0 13px;
+        font-size:12.5px;font-family:inherit;cursor:pointer;white-space:nowrap}
+  header button:hover{background:#52525b}
+  header select{padding:0 8px}
+  #lassotoggle.on{background:#ffce3a;color:#000;border-color:#ffce3a;font-weight:600}
+  #undobtn:disabled{opacity:.45;cursor:default;background:var(--border)}
+  #clearsel{padding:0 9px}
   #stagewrap{flex:1;overflow:auto;padding:16px;box-sizing:border-box}
   #stage{position:relative;width:100%}
   #plot{width:100%;line-height:0}
-  #plot svg{width:100%;height:auto;display:block;background:#fff;border-radius:6px;box-shadow:0 2px 14px rgba(0,0,0,.5)}
-  #plot svg *{cursor:pointer}
+  #plot svg{width:100%;height:auto;display:block;background:#fff;border-radius:6px;box-shadow:0 2px 14px rgba(0,0,0,.5);touch-action:none}
+  #plot svg *{cursor:move}
+  body.lasso #plot svg *{cursor:crosshair}
   #ov{position:absolute;inset:0;pointer-events:none}
-  .hbox{position:absolute;border:2px solid #5b9dff;border-radius:2px;background:rgba(91,157,255,.10)}
-  .sbox{position:absolute;border:2px solid #ffce3a;border-radius:2px;background:rgba(255,206,58,.12)}
-  .sbox .tg{position:absolute;top:-15px;left:-2px;font-size:10px;background:#ffce3a;color:#000;
-            padding:0 4px;border-radius:3px;white-space:nowrap;font-family:ui-monospace,monospace}
-  #side{width:290px;flex-shrink:0;border-left:1px solid #3f3f46;background:#1f1f23;display:flex;flex-direction:column}
-  #side h3{margin:0;padding:10px 12px;font-size:12px;border-bottom:1px solid #3f3f46;color:#a1a1aa;font-weight:600}
-  #sellist{flex:1;overflow:auto;padding:8px}
-  #empty{color:#71717a;font-size:12px;padding:18px 12px;text-align:center;line-height:1.5}
-  #empty code{background:#27272a;padding:1px 4px;border-radius:3px}
-  .selitem{background:#27272a;border:1px solid #3f3f46;border-radius:7px;padding:8px 9px;margin-bottom:8px}
-  .selitem .id{font-family:ui-monospace,Menlo,monospace;color:#ffce3a;font-size:11px;word-break:break-all}
-  .selitem .rm{float:right;cursor:pointer;color:#ff6b6b;font-size:13px;line-height:1;margin-left:6px}
-  .selitem input{width:100%;margin-top:6px;background:#18181b;border:1px solid #3f3f46;border-radius:5px;
-                 color:#e4e4e7;padding:4px 6px;font-size:12px;box-sizing:border-box}
-  #side footer{padding:10px 12px;border-top:1px solid #3f3f46;display:flex;gap:8px}
-  #side footer button{flex:1;padding:7px;background:#3f3f46;color:#e4e4e7;border:none;border-radius:7px;cursor:pointer;font-size:12.5px}
-  #side footer button:hover{background:#52525b}
-  #dragtoggle{background:#3f3f46;color:#e4e4e7;border:none;border-radius:6px;padding:4px 9px;cursor:pointer;font-size:11.5px}
-  #dragtoggle.on{background:#ffce3a;color:#000;font-weight:600}
-  body.dragmode #plot svg *{cursor:move}
-  body.dragmode #hint{display:none}
+  .hbox{position:absolute;border:2px solid #5b9dff;border-radius:2px;background:rgba(91,157,255,.10);pointer-events:none}
+  .movehi{position:absolute;outline:2px solid #22c55e;background:rgba(34,197,94,.10);pointer-events:none;border-radius:2px}
+  .lassosvg polyline{fill:rgba(91,157,255,.14);stroke:#5b9dff;stroke-width:1.5;stroke-dasharray:5 3;stroke-linejoin:round}
   #err{color:#ff6b6b;padding:40px;text-align:center}
 </style>
+<script>(function(){var T={'Default':{bg:'#18181b',card:'#27272a',txt:'#e4e4e7',muted:'#a1a1aa',accent:'#5b9dff',border:'#3f3f46'},'Codex One':{bg:'#282c34',card:'#2f343f',txt:'#abb2bf',muted:'#7f848e',accent:'#4d78cc',border:'#3e4451'},'Dracula':{bg:'#282a36',card:'#343746',txt:'#f8f8f2',muted:'#9aa0b3',accent:'#bd93f9',border:'#44475a'},'Nord':{bg:'#2e3440',card:'#3b4252',txt:'#e5e9f0',muted:'#9aa3b2',accent:'#88c0d0',border:'#434c5e'}};var t;try{t=T[localStorage.getItem('figTheme')];}catch(e){}t=t||T['Default'];var r=document.documentElement.style;for(var k in t)r.setProperty('--'+k,t[k]);})();</script>
 </head>
 <body>
 <header>
   <b id="fname"></b>
-  <span id="hint">hover = highlight · click = select an element · add notes →</span>
-  <button id="dragtoggle" title="Drag any text/label to reposition it, then Save SVG">✥ Move labels</button>
-  <span id="cur"></span>
+  <span id="msinfo"></span>
+  <button id="clearsel" title="Deselect (Esc)" style="display:none">✕</button>
+  <button id="lassotoggle" title="Lasso: draw a polygon to select several elements, then drag them together · Esc cancels">▱ Lasso</button>
+  <button id="undobtn" title="Undo the last move (⌘Z)" disabled>↶ Undo</button>
+  <button id="savesvg" title="Save the moved elements into the .svg on disk (keeps a .orig.bak)">💾 Save SVG</button>
+  <select id="dpi" title="Export resolution"><option value="300">300 dpi</option><option value="450">450 dpi</option><option value="600">600 dpi</option></select>
+  <button id="exportpng" title="Render the current view to a sibling .png (rsvg-convert)">🖼 Export PNG</button>
+  <button id="fsbtn" title="Fullscreen (F)">⛶</button>
 </header>
-<div id="body">
-  <div id="stagewrap"><div id="stage">
-    <div id="plot">Loading…</div>
-    <div id="ov"></div>
-  </div></div>
-  <div id="side">
-    <h3>Selection (<span id="n">0</span>)</h3>
-    <div id="sellist"><div id="empty">Click any curve, label, axis or legend in the plot to select it.<br><br>Works on <b>SVG</b> plots (matplotlib <code>fig.savefig('x.svg')</code>) — a PNG is flat pixels with no elements to select.</div></div>
-    <footer>
-      <button id="clear">Clear</button>
-      <button id="savesvg" title="Write the moved labels back into the .svg file on disk (keeps a .orig.bak)">💾 Save SVG</button>
-      <button id="send" title="Write the selection to ~/.claude/fig-selection.json — then tell Claude &quot;ma sélection&quot;">▻ Send to Claude</button>
-    </footer>
-  </div>
-</div>
+<div id="stagewrap"><div id="stage">
+  <div id="plot">Loading…</div>
+  <div id="ov"></div>
+</div></div>
 <script>
 const file = new URLSearchParams(location.search).get("file") || "";
 document.getElementById("fname").textContent = file.split("/").pop();
 document.title = file.split("/").pop() || "SVG";
 const stage = document.getElementById("stage"), ov = document.getElementById("ov"), plot = document.getElementById("plot");
-const cur = document.getElementById("cur"), sellist = document.getElementById("sellist");
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 
 let svg = null, hbox = null;
-const sel = new Map();                                   // id -> { el, note }
-const CONTAINER = /^(figure|axes|matplotlib\.axis|xtick|ytick)_/;   // frames you select INTO, not themselves
+const CONTAINER = /^(figure|axes|matplotlib\.axis|xtick|ytick)_/;   // frames you grab INTO, not themselves
 function meaningful(el){
   let g = el && el.closest ? el.closest("[id]") : null;
   while(g && CONTAINER.test(g.id)) g = g.parentElement ? g.parentElement.closest("[id]") : null;
   return g;
 }
-function rectIn(el){                                     // bbox relative to #stage (so #ov children line up)
+function rectIn(el){                                      // bbox relative to #stage (so #ov children line up)
   const r = el.getBoundingClientRect(), s = stage.getBoundingClientRect();
   return { x: r.left - s.left, y: r.top - s.top, w: r.width, h: r.height };
 }
-function showHover(el){
-  if(!el){ if(hbox){ hbox.remove(); hbox = null; } cur.textContent = ""; return; }
+function showHover(el){                                   // a silent highlight of what a drag would grab (no text)
+  if(!el){ if(hbox){ hbox.remove(); hbox = null; } return; }
   const b = rectIn(el);
   if(!hbox){ hbox = document.createElement("div"); hbox.className = "hbox"; ov.appendChild(hbox); }
   hbox.style.cssText = `left:${b.x}px;top:${b.y}px;width:${b.w}px;height:${b.h}px`;
-  cur.textContent = el.id;
 }
-function toggle(el){
-  if(sel.has(el.id)) sel.delete(el.id); else sel.set(el.id, { el, note: "" });
-  renderSel();
-}
-function renderSel(){
-  ov.querySelectorAll(".sbox").forEach(b => b.remove());
-  for(const [id, o] of sel){
-    const b = rectIn(o.el), box = document.createElement("div");
-    box.className = "sbox";
-    box.style.cssText = `left:${b.x}px;top:${b.y}px;width:${b.w}px;height:${b.h}px`;
-    box.innerHTML = `<span class="tg">${esc(id)}</span>`;
-    ov.appendChild(box);
-  }
-  document.getElementById("n").textContent = sel.size;
-  if(!sel.size){ sellist.innerHTML = '<div id="empty">Click any curve, label, axis or legend in the plot to select it.</div>'; return; }
-  sellist.innerHTML = "";
-  for(const [id, o] of sel){
-    const d = document.createElement("div");
-    d.className = "selitem";
-    d.innerHTML = `<span class="rm" title="Remove">✕</span><span class="id">${esc(id)}</span>`;
-    const inp = document.createElement("input");
-    inp.placeholder = "note about this element…"; inp.value = o.note;
-    inp.oninput = () => { o.note = inp.value; };
-    d.querySelector(".rm").onclick = () => { sel.delete(id); renderSel(); };
-    d.appendChild(inp);
-    sellist.appendChild(d);
-  }
-}
-document.getElementById("clear").onclick = () => { sel.clear(); renderSel(); };
-document.getElementById("send").onclick = () => {
-  if(!sel.size) return;
-  const lines = [...sel].map(([id, o]) => "• " + id + (o.note ? " — " + o.note : ""));
-  const text = "Selected elements of " + (file.split("/").pop() || "plot") + ":\n" + lines.join("\n");
-  fetch("/selinfo", { method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text, rel: file, name: file.split("/").pop(), page: "elements",
-                           lines: sel.size, words: text.split(/\s+/).length }) })
-    .then(() => { const b = document.getElementById("send"); b.textContent = "Sent ✓"; setTimeout(() => b.textContent = "▻ Send to Claude", 1500); })
-    .catch(() => {});
-};
 
-// ---- label drag mode: move any text/label, then Save SVG back to disk ----
-let dragMode = false, drag = null, dirty = false;
-const dragBtn = document.getElementById("dragtoggle");
-dragBtn.onclick = () => {
-  dragMode = !dragMode;
-  dragBtn.classList.toggle("on", dragMode);
-  document.body.classList.toggle("dragmode", dragMode);
-  dragBtn.textContent = dragMode ? "✥ Moving — click to stop" : "✥ Move labels";
+// ---- always-on element move + a polygon-lasso multi-select ----
+let drag = null, dirty = false, lassoMode = false;
+const lassoBtn = document.getElementById("lassotoggle");
+function setLasso(on){
+  lassoMode = on;
+  lassoBtn.classList.toggle("on", on);
+  document.body.classList.toggle("lasso", on);
+  lassoBtn.textContent = on ? "▱ Lasso — Esc cancels" : "▱ Lasso";
   showHover(null);
-};
-function svgPoint(evt, ref){                             // client px -> (ref or root) user units
+}
+lassoBtn.onclick = () => setLasso(!lassoMode);
+function svgPoint(evt, ref){
   const p = svg.createSVGPoint(); p.x = evt.clientX; p.y = evt.clientY;
   return p.matrixTransform((ref || svg).getScreenCTM().inverse());
 }
-function onDown(e){
-  if(!dragMode || !svg) return;
-  const g = meaningful(e.target); if(!g) return;
-  if(!g.querySelector("text, use")) return;             // only labels/legends/titles — not the bg patch/axes
-  e.preventDefault();
-  const ref = g.parentNode;                             // translate is applied in the parent's space
-  const p = svgPoint(e, ref);
-  if(!g.hasAttribute("data-orig")) g.setAttribute("data-orig", g.getAttribute("transform") || "");
-  drag = { el: g, ref: ref, sx: p.x, sy: p.y,
-           dx0: parseFloat(g.getAttribute("data-dx") || 0),
-           dy0: parseFloat(g.getAttribute("data-dy") || 0) };
+function grabTarget(target, whole){
+  // Default: grab the element directly under the cursor. Hold Shift to grab the whole
+  // enclosing legend/colorbar/axes block (move a composite legend as one unit).
+  if(!target || !target.closest) return null;
+  if(whole){
+    const block = target.closest('[id^="legend_"], [id^="axes_"]');
+    if(block) return block;
+  }
+  return meaningful(target);
 }
-function onMove(e){
-  if(drag){
-    const p = svgPoint(e, drag.ref);
-    const dx = drag.dx0 + (p.x - drag.sx), dy = drag.dy0 + (p.y - drag.sy);
-    drag.el.setAttribute("data-dx", dx); drag.el.setAttribute("data-dy", dy);
-    drag.el.setAttribute("transform", "translate(" + dx + "," + dy + ") " + drag.el.getAttribute("data-orig"));
-    dirty = true; renderSel();
-  } else if(!dragMode){
-    showHover(meaningful(e.target));
+function draggable(g){ return !!(g && g.id); }
+let moveSet = [];
+let lasso = null, lassoEl = null;
+function stagePt(e){ const s = stage.getBoundingClientRect(); return { x: e.clientX - s.left, y: e.clientY - s.top }; }
+function hiliteMoveSet(){
+  ov.querySelectorAll(".movehi").forEach(b => b.remove());
+  for(const el of moveSet){
+    let b; try{ b = rectIn(el); }catch(err){ continue; }
+    const d = document.createElement("div"); d.className = "movehi";
+    d.style.cssText = `left:${b.x}px;top:${b.y}px;width:${b.w}px;height:${b.h}px`;
+    ov.appendChild(d);
+  }
+  const n = document.getElementById("msinfo");
+  if(n) n.textContent = moveSet.length ? (moveSet.length + " sélectionnés") : "";
+  const cs = document.getElementById("clearsel");
+  if(cs) cs.style.display = moveSet.length ? "inline-flex" : "none";
+}
+function clearMoveSet(){ moveSet = []; hiliteMoveSet(); }
+// ---- undo history (one entry per completed drag) ----
+let history = [];
+function snapshot(els){ return els.map(el => ({ el,
+  dx: el.hasAttribute("data-dx") ? parseFloat(el.getAttribute("data-dx")) : null,
+  dy: el.hasAttribute("data-dy") ? parseFloat(el.getAttribute("data-dy")) : null })); }
+function applyXform(el, dx, dy){
+  if(dx === null || dy === null){                        // back to its pre-move transform
+    el.removeAttribute("data-dx"); el.removeAttribute("data-dy");
+    const orig = el.getAttribute("data-orig");
+    if(orig){ el.setAttribute("transform", orig); } else { el.removeAttribute("transform"); }
+  } else {
+    el.setAttribute("data-dx", dx); el.setAttribute("data-dy", dy);
+    el.setAttribute("transform", "translate(" + dx + "," + dy + ") " + (el.getAttribute("data-orig") || ""));
   }
 }
-function onUp(){ drag = null; }
+function updateUndo(){ const b = document.getElementById("undobtn"); if(b) b.disabled = history.length === 0; }
+function undo(){
+  const entry = history.pop();
+  if(!entry) return;
+  for(const it of entry) applyXform(it.el, it.dx, it.dy);
+  dirty = true; hiliteMoveSet(); updateUndo();
+}
+function inPoly(x, y, pts){                               // ray-casting point-in-polygon
+  let c = false;
+  for(let i = 0, j = pts.length - 1; i < pts.length; j = i++){
+    const xi = pts[i][0], yi = pts[i][1], xj = pts[j][0], yj = pts[j][1];
+    if(((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) c = !c;
+  }
+  return c;
+}
+function lassoStart(p){
+  lasso = { pts: [p] };
+  const NS = "http://www.w3.org/2000/svg";
+  lassoEl = document.createElementNS(NS, "svg");
+  lassoEl.setAttribute("class", "lassosvg");
+  lassoEl.style.cssText = "position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none";
+  lassoEl.appendChild(document.createElementNS(NS, "polyline"));
+  ov.appendChild(lassoEl);
+}
+function lassoUpdate(){ lassoEl.firstChild.setAttribute("points", lasso.pts.map(p => p[0] + "," + p[1]).join(" ")); }
+function lassoRemove(){ if(lassoEl){ lassoEl.remove(); lassoEl = null; } }
+function selectInPoly(pts){                               // elements whose centre falls inside the lasso
+  if(pts.length < 3){ clearMoveSet(); return; }
+  const skip = /^(figure|matplotlib\.axis|xtick|ytick)_/;
+  const cands = Array.from(svg.querySelectorAll("[id]")).filter(el => el.id && !skip.test(el.id) && draggable(el));
+  const inside = cands.filter(el => {
+    let b; try{ b = rectIn(el); }catch(err){ return false; }
+    return b.w && b.h && inPoly(b.x + b.w / 2, b.y + b.h / 2, pts);
+  });
+  moveSet = inside.filter(el => !inside.some(o => o !== el && o.contains(el)));  // keep outermost units only
+  hiliteMoveSet();
+}
+function startDrag(targets, e){
+  const set = targets.filter(el => !targets.some(o => o !== el && o.contains(el)));  // never move a node whose ancestor moves too
+  drag = { moved: false, before: snapshot(set), items: set.map(el => {
+    if(!el.hasAttribute("data-orig")) el.setAttribute("data-orig", el.getAttribute("transform") || "");
+    const ref = el.parentNode, p = svgPoint(e, ref);
+    return { el, ref, sx: p.x, sy: p.y,
+             dx0: parseFloat(el.getAttribute("data-dx") || 0), dy0: parseFloat(el.getAttribute("data-dy") || 0) };
+  }) };
+}
+function capture(e){ if(svg.setPointerCapture && e.pointerId != null){ try{ svg.setPointerCapture(e.pointerId); }catch(err){} } }
+function onDown(e){
+  if(!svg || (e.button !== undefined && e.button !== 0)) return;
+  if(lassoMode){                                          // draw a polygon, whatever is under the cursor
+    e.preventDefault();
+    const s = stagePt(e); lassoStart([s.x, s.y]); capture(e);
+    return;
+  }
+  const g = grabTarget(e.target, e.shiftKey);             // Shift = grab the whole legend/colorbar block
+  const onMember = g && moveSet.indexOf(g) >= 0;
+  if(!g || !draggable(g)){ if(!onMember && moveSet.length) clearMoveSet(); return; }
+  e.preventDefault();
+  startDrag(onMember ? moveSet.slice() : [g], e);         // grabbed a selected member → move the whole set
+  drag.g = g; capture(e);
+}
+function onMove(e){
+  if(lasso){ const s = stagePt(e); lasso.pts.push([s.x, s.y]); lassoUpdate(); return; }
+  if(drag){
+    for(const it of drag.items){
+      const p = svgPoint(e, it.ref);
+      const dx = it.dx0 + (p.x - it.sx), dy = it.dy0 + (p.y - it.sy);
+      it.el.setAttribute("data-dx", dx); it.el.setAttribute("data-dy", dy);
+      it.el.setAttribute("transform", "translate(" + dx + "," + dy + ") " + it.el.getAttribute("data-orig"));
+    }
+    drag.moved = true; dirty = true; hiliteMoveSet();
+    return;
+  }
+  if(lassoMode) return;                                   // no grab-preview while lassoing
+  const g = grabTarget(e.target, e.shiftKey);
+  showHover(draggable(g) ? g : null);
+}
+function onUp(){
+  if(lasso){
+    const pts = lasso.pts; lasso = null; lassoRemove();
+    selectInPoly(pts);
+    if(moveSet.length) setLasso(false);                  // auto-exit the lasso → next drag moves the group
+    return;
+  }
+  if(drag){
+    if(drag.moved && drag.before) { history.push(drag.before); updateUndo(); }   // record for Undo
+    drag = null;
+  }
+}
+function toggleFS(){ if(document.fullscreenElement) document.exitFullscreen(); else (document.documentElement.requestFullscreen || function(){}).call(document.documentElement); }
+document.addEventListener("keydown", e => {
+  if((e.metaKey || e.ctrlKey) && (e.key === "z" || e.key === "Z")){ e.preventDefault(); undo(); return; }
+  if(e.key === "f" || e.key === "F"){ toggleFS(); return; }
+  if(e.key !== "Escape") return;
+  if(lasso){ lasso = null; lassoRemove(); }
+  if(lassoMode) setLasso(false); else if(moveSet.length) clearMoveSet();
+});
+function currentSVGText(){                                // serialize current view, minus bookkeeping attrs
+  const clone = svg.cloneNode(true);
+  clone.querySelectorAll("[data-orig],[data-dx],[data-dy]").forEach(el => {
+    el.removeAttribute("data-orig"); el.removeAttribute("data-dx"); el.removeAttribute("data-dy");
+  });
+  return '<?xml version="1.0" encoding="utf-8" standalone="no"?>\n' + new XMLSerializer().serializeToString(clone);
+}
+function flash(btn, msg, base, ms){ btn.textContent = msg; setTimeout(() => btn.textContent = base, ms || 1700); }
 function saveSVG(){
   if(!svg) return;
   const b = document.getElementById("savesvg");
-  const clone = svg.cloneNode(true);                     // strip bookkeeping attrs from the saved file
-  clone.querySelectorAll("[data-orig]").forEach(el => {
-    el.removeAttribute("data-orig"); el.removeAttribute("data-dx"); el.removeAttribute("data-dy");
-  });
-  const out = '<?xml version="1.0" encoding="utf-8" standalone="no"?>\n' + new XMLSerializer().serializeToString(clone);
   fetch("/save-svg", { method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ rel: file, name: file.split("/").pop(), svg: out }) })
-    .then(r => r.json()).then(j => {
-      b.textContent = (j && j.ok) ? "Saved ✓" : "Error"; if(j && j.ok) dirty = false;
-      setTimeout(() => b.textContent = "💾 Save SVG", 1600);
-    }).catch(() => { b.textContent = "Error"; setTimeout(() => b.textContent = "💾 Save SVG", 1600); });
+    body: JSON.stringify({ rel: file, name: file.split("/").pop(), svg: currentSVGText() }) })
+    .then(r => r.json()).then(j => { if(j && j.ok) dirty = false; flash(b, (j && j.ok) ? "Saved ✓" : "Error", "💾 Save SVG"); })
+    .catch(() => flash(b, "Error", "💾 Save SVG"));
+}
+function exportPNG(){
+  if(!svg) return;
+  const b = document.getElementById("exportpng");
+  const dpi = parseInt(document.getElementById("dpi").value, 10) || 300;
+  b.textContent = "rendering…";
+  fetch("/export-png", { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ rel: file, name: file.split("/").pop(), svg: currentSVGText(), dpi: dpi }) })
+    .then(r => r.json()).then(j => flash(b, (j && j.ok) ? ("PNG ✓ " + j.dpi + "dpi") : ("Error: " + ((j && j.error) || "")).slice(0, 22), "🖼 Export PNG", 2200))
+    .catch(() => flash(b, "Error", "🖼 Export PNG"));
 }
 document.getElementById("savesvg").onclick = saveSVG;
+document.getElementById("exportpng").onclick = exportPNG;
+document.getElementById("undobtn").onclick = undo;
+document.getElementById("clearsel").onclick = () => clearMoveSet();
+const fsbtn = document.getElementById("fsbtn");
+fsbtn.onclick = toggleFS;
+document.addEventListener("fullscreenchange", () => { fsbtn.textContent = document.fullscreenElement ? "⛶ Exit" : "⛶"; setTimeout(hiliteMoveSet, 60); });
 
 async function load(){
   try{
@@ -200,15 +277,15 @@ async function load(){
     svg = document.importNode(root, true);
     plot.textContent = "";
     plot.appendChild(svg);
-    svg.addEventListener("mousedown", onDown);
-    svg.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-    svg.addEventListener("mouseleave", () => { if(!drag) showHover(null); });
-    svg.addEventListener("click", e => { if(dragMode || drag) return; const g = meaningful(e.target); if(g) toggle(g); });
-    try{ new ResizeObserver(() => renderSel()).observe(svg); }catch(e){}
+    svg.addEventListener("pointerdown", onDown);
+    svg.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    svg.addEventListener("pointercancel", onUp);
+    svg.addEventListener("mouseleave", () => { if(!drag && !lasso) showHover(null); });
+    try{ new ResizeObserver(() => hiliteMoveSet()).observe(svg); }catch(e){}
   }catch(e){ plot.innerHTML = '<div id="err">Unable to load ' + esc(file) + ' (' + esc(e.message) + ')</div>'; }
 }
-window.addEventListener("resize", renderSel);
+window.addEventListener("resize", () => hiliteMoveSet());
 load();
 </script>
 </body>

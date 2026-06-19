@@ -14,6 +14,7 @@ import os
 import re
 import shutil
 import subprocess
+import tempfile
 import threading
 import sys
 import time
@@ -195,7 +196,10 @@ class Handler(SimpleHTTPRequestHandler):
         return host in ("127.0.0.1", "localhost", "::1")
 
     def _safe_path(self, p):
-        p = os.path.realpath(os.path.expanduser(p))
+        p = os.path.expanduser(p)
+        if not os.path.isabs(p):
+            p = os.path.join(PROJECT, p)    # resolve a project-relative path against PROJECT, not the server's CWD
+        p = os.path.realpath(p)
         root = os.path.realpath(PROJECT)
         return p if p == root or p.startswith(root + os.sep) else None
 
@@ -486,19 +490,87 @@ class Handler(SimpleHTTPRequestHandler):
                 req = json.loads(self.rfile.read(length))
                 rel = req.get("rel") or req.get("name") or ""
                 svg = req.get("svg", "")
-                if "<svg" not in svg[:4000]:
+                if not isinstance(svg, str) or "<svg" not in svg[:4000]:
                     return self._respond(400, {"error": "not an svg payload"})
-                dst = self._safe_path(rel)                          # pin to PROJECT, symlink-safe
-                if not dst or not dst.lower().endswith(".svg") or not os.path.isfile(dst):
-                    return self._respond(400, {"error": "bad or non-svg path"})
-                bak = dst + ".orig.bak"
-                if not os.path.exists(bak):                          # keep the pristine original once
-                    shutil.copy2(dst, bak)
-                tmp = dst + ".tmp." + str(os.getpid()) + "." + str(threading.get_ident())
-                with open(tmp, "w", encoding="utf-8") as f:
+                try:                                                # reject malformed: must parse to an EXACT <svg> root
+                    from xml.etree import ElementTree as ET         # (ElementTree rejects external entities; 64MB cap bounds expansion)
+                    if ET.fromstring(svg).tag.split("}")[-1].lower() != "svg":
+                        raise ValueError("root element is not <svg>")
+                except Exception as e:
+                    return self._respond(400, {"error": "not well-formed svg: " + str(e)[:120]})
+                dst = self._safe_path(rel)                          # pin to PROJECT, symlink-safe (final component)
+                if not dst or not dst.lower().endswith(".svg") or not os.path.isfile(dst) or os.path.islink(dst):
+                    return self._respond(400, {"error": "bad/non-svg/symlink path"})
+                # NB: residual parent-directory TOCTOU is out of scope for this localhost, single-user,
+                # _local_only tool (an attacker who can swap a dir inside PROJECT mid-request already owns the files).
+                ddir = os.path.dirname(dst)
+                bak = dst + ".orig.bak"                              # keep the pristine original ONCE
+                if not os.path.islink(bak) and not os.path.exists(bak):
+                    fd, tb = tempfile.mkstemp(dir=ddir, prefix=".bak.", suffix=".tmp")   # O_EXCL secure temp
+                    try:
+                        with os.fdopen(fd, "wb") as bf, open(dst, "rb") as sf:
+                            shutil.copyfileobj(sf, bf)
+                        try:
+                            os.link(tb, bak)                        # atomic publish; FileExistsError if another save raced
+                        except FileExistsError:
+                            pass
+                    finally:
+                        try:
+                            os.unlink(tb)
+                        except OSError:
+                            pass
+                fd, tmp = tempfile.mkstemp(dir=ddir, prefix=".save.", suffix=".tmp")     # secure temp, same dir/fs
+                with os.fdopen(fd, "w", encoding="utf-8") as f:
                     f.write(svg)
                 os.replace(tmp, dst)                                 # atomic
                 return self._respond(200, {"ok": True, "path": os.path.relpath(dst, PROJECT)})
+            except (KeyError, ValueError, json.JSONDecodeError) as e:
+                return self._respond(400, {"error": "bad request: " + str(e)})
+            except Exception as e:
+                return self._respond(500, {"error": str(e)})
+        if self.path == "/export-png":
+            # Render the (edited) SVG from the viewer to a sibling .png via rsvg-convert.
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+                if length <= 0 or length > 64 * 1024 * 1024:        # 64 MB cap
+                    return self._respond(413, {"error": "empty or oversized svg"})
+                req = json.loads(self.rfile.read(length))
+                rel = req.get("rel") or req.get("name") or ""
+                svg = req.get("svg", "")
+                try:
+                    dpi = max(72, min(1200, int(req.get("dpi", 300))))
+                except (TypeError, ValueError):
+                    dpi = 300
+                if not isinstance(svg, str) or "<svg" not in svg[:4000]:
+                    return self._respond(400, {"error": "not an svg payload"})
+                dst = self._safe_path(rel)                           # pin to PROJECT, symlink-safe (final component)
+                if not dst or not dst.lower().endswith(".svg") or not os.path.isfile(dst) or os.path.islink(dst):
+                    return self._respond(400, {"error": "svg not found / non-svg / symlink"})
+                png = dst[:-4] + ".png"                              # re-validate the OUTPUT target too
+                if os.path.islink(png) or not self._safe_path(png):  # never follow a same-name .png symlink out of PROJECT
+                    return self._respond(400, {"error": "bad png output path"})
+                rsvg = shutil.which("rsvg-convert")
+                if not rsvg:
+                    return self._respond(501, {"error": "rsvg-convert not installed "
+                                               "(brew install librsvg / apt install librsvg2-bin)"})
+                fd_s, tmp_svg = tempfile.mkstemp(dir=os.path.dirname(dst), prefix=".exp.", suffix=".svg")  # O_EXCL secure temps
+                fd_p, tmp_png = tempfile.mkstemp(dir=os.path.dirname(png), prefix=".exp.", suffix=".png")
+                os.close(fd_p)
+                try:
+                    with os.fdopen(fd_s, "w", encoding="utf-8") as f:
+                        f.write(svg)
+                    r = subprocess.run([rsvg, "--dpi-x", str(dpi), "--dpi-y", str(dpi), "-o", tmp_png, tmp_svg],
+                                       capture_output=True, text=True, timeout=120)
+                    if r.returncode != 0 or os.path.getsize(tmp_png) == 0:
+                        return self._respond(500, {"error": "rsvg-convert failed: " + (r.stderr or "")[-300:]})
+                    os.replace(tmp_png, png)                         # atomic — never truncates an existing png on failure
+                finally:
+                    for t in (tmp_svg, tmp_png):
+                        try:
+                            os.remove(t)
+                        except OSError:
+                            pass
+                return self._respond(200, {"ok": True, "path": os.path.relpath(png, PROJECT), "dpi": dpi})
             except (KeyError, ValueError, json.JSONDecodeError) as e:
                 return self._respond(400, {"error": "bad request: " + str(e)})
             except Exception as e:
