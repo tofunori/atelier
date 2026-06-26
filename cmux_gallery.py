@@ -8,11 +8,13 @@ a cmux browser surface. Full functions are preserved: search · sort · folder +
 format filters · archive toggle · favourites + star ratings · thumbnails ·
 PDF/Markdown/code viewers · image lightbox with annotation → Claude.
 
-Keep the `run` terminal open — it hosts the local server. Ctrl-C stops it.
+Use `run` or `open` when you want a detached per-project server and your prompt
+back. Use `foreground` when you want the server attached to the terminal.
 
 Subcommands:
     build   GALLERY_ROOT=<root> build_gallery.py  +  drop viewer assets
-    run     build + start the server + open the gallery in cmux (foreground)
+    run     build + start/reuse a detached server + open the gallery
+    open    build + start/reuse a detached server + open the gallery
 """
 import argparse
 import hashlib
@@ -35,6 +37,11 @@ OUT = "figures_index.html"
 
 
 PORT_BASE = 8790  # each project gets a stable port derived from its path
+
+
+def state_path(root: str, port: int) -> str:
+    """Return the per-project background server metadata path."""
+    return os.path.join(root, ".fig_thumbs", f"cmux-gallery-{port}.json")
 
 
 def project_port(root: str) -> int:
@@ -175,12 +182,77 @@ def wait_up(port: int, timeout: float = 8.0) -> bool:
     return False
 
 
+def write_server_state(root: str, port: int, pid: int, log_path: str) -> None:
+    os.makedirs(os.path.join(root, ".fig_thumbs"), exist_ok=True)
+    data = {
+        "service": "cmux-gallery",
+        "project": os.path.realpath(root),
+        "port": port,
+        "pid": pid,
+        "log": log_path,
+        "started": int(time.time()),
+    }
+    with open(state_path(root, port), "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+
+
+def read_server_state(root: str, port: int) -> dict | None:
+    try:
+        with open(state_path(root, port), encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+
+def process_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+        return True
+    except OSError:
+        return False
+
+
+def start_detached_server(root: str, port: int) -> tuple[int, str]:
+    env = dict(os.environ, FIG_PORT=str(port), GALLERY_ROOT=root)
+    os.makedirs(os.path.join(root, ".fig_thumbs"), exist_ok=True)
+    log_path = os.path.join(root, ".fig_thumbs", f"cmux-gallery-{port}.log")
+    log = open(log_path, "a", encoding="utf-8")
+    try:
+        srv = subprocess.Popen(
+            [sys.executable, SERVER],
+            cwd=root,
+            env=env,
+            stdin=subprocess.DEVNULL,
+            stdout=log,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+            close_fds=True,
+        )
+    finally:
+        log.close()
+    write_server_state(root, port, srv.pid, log_path)
+    return srv.pid, log_path
+
+
+def resolve_port_for_host(root: str, requested_port: int) -> int:
+    port = requested_port or project_port(root)
+    if not _port_busy(port):
+        return port
+    served_project = server_project(port)
+    if served_project == os.path.realpath(root):
+        return port
+    if requested_port:
+        raise SystemExit(f"[cmux-gallery] port {port} is busy and is not serving {root}")
+    print(f"[cmux-gallery] port {port} busy (not our gallery) → using a free port", file=sys.stderr)
+    return next((c for c in range(port + 1, port + 50) if not _port_busy(c)), 0) or free_port()
+
+
 def cmd_build(a) -> None:
     out = build(a.root)
     print(f"[cmux-gallery] built {out}  (+ viewers provisioned)")
 
 
-def cmd_run(a) -> None:
+def cmd_foreground(a) -> None:
     out = build(a.root)
     print(f"[cmux-gallery] built {out}")
     port = a.port or project_port(a.root)
@@ -219,6 +291,48 @@ def cmd_run(a) -> None:
             srv.wait(timeout=5)
         except subprocess.TimeoutExpired:
             srv.kill()
+
+
+def cmd_open(a) -> None:
+    out = build(a.root)
+    print(f"[cmux-gallery] built {out}")
+    port = resolve_port_for_host(a.root, a.port)
+    url = gallery_url(port)
+    served_project = server_project(port) if _port_busy(port) else None
+    if served_project == os.path.realpath(a.root):
+        print(f"[cmux-gallery] gallery already running on :{port} → reusing it")
+    else:
+        pid, log_path = start_detached_server(a.root, port)
+        if wait_up(port):
+            print(f"[cmux-gallery] started detached server pid {pid} on :{port}")
+        else:
+            print(f"[cmux-gallery] warning: server /ping did not answer; log: {log_path}",
+                  file=sys.stderr)
+    if a.open:
+        open_cmux_browser(url)
+    print(f"[cmux-gallery] gallery → {url}")
+
+
+def cmd_run(a) -> None:
+    cmd_open(a)
+
+
+def cmd_stop(a) -> None:
+    port = a.port or project_port(a.root)
+    state = read_server_state(a.root, port)
+    if not state:
+        print(f"[cmux-gallery] no background server metadata for :{port}")
+        return
+    pid = int(state.get("pid") or 0)
+    if pid and process_alive(pid):
+        os.kill(pid, signal.SIGTERM)
+        print(f"[cmux-gallery] stopped background server pid {pid} on :{port}")
+    else:
+        print(f"[cmux-gallery] background server pid {pid or '?'} is not running")
+    try:
+        os.remove(state_path(a.root, port))
+    except OSError:
+        pass
 
 
 def cmd_serve(a) -> None:
@@ -263,14 +377,32 @@ def main(argv=None) -> int:
     b = sub.add_parser("build", help="build the gallery HTML + provision viewers")
     b.add_argument("--root", default=None, type=root_arg,
                    help="project to scan (default: git root for cwd, else cwd)")
-    r = sub.add_parser("run", help="build + start server + open in cmux (foreground)")
+    r = sub.add_parser("run", help="build + start/reuse a detached server + open in cmux")
     r.add_argument("--root", default=None, type=root_arg,
                    help="project to scan (default: git root for cwd, else cwd)")
     r.add_argument("--port", type=int, default=0,
                    help="server port (default: a stable port derived from the project path)")
     r.add_argument("--no-open", dest="open", action="store_false",
-                   help="start (or reuse) the server without opening a cmux browser tab — "
-                        "for a Dock control that just keeps the server alive at launch")
+                   help="start (or reuse) the detached server without opening a cmux browser tab")
+    o = sub.add_parser("open", help="build + start/reuse a detached server + open in cmux")
+    o.add_argument("--root", default=None, type=root_arg,
+                   help="project to scan (default: git root for cwd, else cwd)")
+    o.add_argument("--port", type=int, default=0,
+                   help="server port (default: a stable port derived from the project path)")
+    o.add_argument("--no-open", dest="open", action="store_false",
+                   help="start (or reuse) the detached server without opening a cmux browser tab")
+    st = sub.add_parser("stop", help="stop a detached server started by cmux-gallery run/open")
+    st.add_argument("--root", default=None, type=root_arg,
+                    help="project to stop (default: git root for cwd, else cwd)")
+    st.add_argument("--port", type=int, default=0,
+                    help="server port (default: the stable port derived from the project path)")
+    fg = sub.add_parser("foreground", help="build + host the server in this terminal")
+    fg.add_argument("--root", default=None, type=root_arg,
+                    help="project to scan (default: git root for cwd, else cwd)")
+    fg.add_argument("--port", type=int, default=0,
+                    help="server port (default: a stable port derived from the project path)")
+    fg.add_argument("--no-open", dest="open", action="store_false",
+                    help="start (or reuse) the server without opening a cmux browser tab")
     s = sub.add_parser("serve", help="build + HOST the server, self-healing, no browser (for a Dock control)")
     s.add_argument("--root", default=None, type=root_arg,
                    help="project to scan (default: git root for cwd, else cwd)")
@@ -279,7 +411,14 @@ def main(argv=None) -> int:
     a = p.parse_args(argv)
     if a.root is None:
         a.root = default_project_root()
-    {"build": cmd_build, "run": cmd_run, "serve": cmd_serve}[a.cmd](a)
+    {
+        "build": cmd_build,
+        "run": cmd_run,
+        "open": cmd_open,
+        "stop": cmd_stop,
+        "foreground": cmd_foreground,
+        "serve": cmd_serve,
+    }[a.cmd](a)
     return 0
 
 

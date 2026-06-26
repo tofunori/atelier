@@ -42,6 +42,23 @@ class ProjectRootTests(unittest.TestCase):
     def test_root_arg_expands_user_path(self):
         self.assertEqual(cmux_gallery.root_arg("~/example"), os.path.expanduser("~/example"))
 
+    def test_resolve_port_for_host_uses_requested_free_port(self):
+        with patch.object(cmux_gallery, "_port_busy", return_value=False):
+            self.assertEqual(cmux_gallery.resolve_port_for_host("/tmp/project", 9999), 9999)
+
+    def test_resolve_port_for_host_rejects_requested_busy_port_for_other_server(self):
+        with patch.object(cmux_gallery, "_port_busy", return_value=True), \
+                patch.object(cmux_gallery, "server_project", return_value="/tmp/other"):
+            with self.assertRaises(SystemExit):
+                cmux_gallery.resolve_port_for_host("/tmp/project", 9999)
+
+    def test_server_state_round_trip(self):
+        with tempfile.TemporaryDirectory() as td:
+            log = os.path.join(td, ".fig_thumbs", "cmux-gallery-9999.log")
+            cmux_gallery.write_server_state(td, 9999, 12345, log)
+            self.assertEqual(cmux_gallery.read_server_state(td, 9999)["pid"], 12345)
+            self.assertEqual(cmux_gallery.read_server_state(td, 9999)["port"], 9999)
+
 
 if __name__ == "__main__":
     unittest.main()

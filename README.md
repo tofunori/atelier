@@ -34,15 +34,16 @@ script** (`</> src` → stem-match, else ripgrep).
 
 ## How it works
 
-`run` builds the gallery, provisions the viewer assets into the project, starts a
-local server (on a stable port, with the project as its root) and opens it as a
-cmux browser surface. Keep the launching terminal/pane open — it hosts the
-server; Ctrl-C stops it.
+`run` builds the gallery, provisions the viewer assets into the project, starts
+or reuses a detached local server (on a stable port, with the project as its
+root), opens it as a cmux browser surface, then returns your terminal.
 
 ```
 build  → GALLERY_ROOT=<root> build_gallery.py  +  copy viewer assets
-serve  → fig_annotate_server.py on a free port, project as root
-open   → cmux browser open http://127.0.0.1:<port>/figures_index.html
+host   → detached fig_annotate_server.py, project as root
+foreground → same server attached to the terminal for debugging
+serve  → foreground self-healing host for cmux Dock controls
+view   → cmux browser open http://127.0.0.1:<port>/figures_index.html
 ```
 
 ## Install
@@ -62,7 +63,10 @@ CLI. Thumbnails use macOS `qlmanage` (skipped gracefully elsewhere).
 ## Use
 
 ```bash
-cmux-gallery run                 # build + serve + open in cmux (keep the pane open)
+cmux-gallery run                 # build + background server + open in cmux
+cmux-gallery open                # alias for run
+cmux-gallery stop                # stop the background server for this project
+cmux-gallery foreground          # foreground mode; keep the pane open
 cmux-gallery serve               # build + HOST the server, self-healing, no browser tab
 cmux-gallery run --root /path    # a specific project (default: current dir)
 cmux-gallery build               # just write the HTML + viewers (no server)
@@ -77,12 +81,9 @@ Each project gets a **stable port** derived from its path (8790–9789), so the 
 is the same every time — open it in any browser (cmux or system) and bookmark it,
 e.g. `http://127.0.0.1:8790/figures_index.html`. Pin one with `--port <n>`.
 
-> **Opening it (avoid "connection refused"):** prefer the **Project Gallery**
-> cmux action — or `cmux-gallery run` — over a raw bookmark. `run` starts the
-> server *then* opens the page, so it's never refused. The server only runs while
-> its host (the Dock control or a `run`/`serve` pane) is up; if you open the
-> bookmark in the first ~2 s after cmux launches — before the Dock host has bound
-> the port — just wait a second and reload.
+> **Opening it (avoid "connection refused"):** prefer `cmux-gallery run` over a
+> raw bookmark. It starts or reuses the server before opening the page. Use
+> `cmux-gallery stop` when you want to shut down the detached server.
 
 ### As a cmux command / Dock control
 
@@ -95,9 +96,13 @@ e.g. `http://127.0.0.1:8790/figures_index.html`. Pin one with `--port <n>`.
 
 ## Keeping it running
 
-The server lives only as long as its host process. Pick one:
+Pick one:
 
-- **A cmux Dock control or pane (recommended).** `cmux-gallery serve` hosts the
+- **Detached project server (recommended for ad hoc work).** `cmux-gallery run`
+  starts the server in the background and returns your terminal. Stop it with
+  `cmux-gallery stop`.
+
+- **A cmux Dock control or pane.** `cmux-gallery serve` hosts the
   server and self-heals; in the Dock it also auto-starts with cmux. Because it
   runs *inside cmux* it inherits cmux's file access — which matters on macOS:
 
