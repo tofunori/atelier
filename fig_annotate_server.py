@@ -296,16 +296,58 @@ class Handler(SimpleHTTPRequestHandler):
                     w = max(64, min(2000, int(q.get("w", ["480"])[0])))
                 except ValueError:
                     w = 480
-                key = hashlib.md5((os.path.realpath(src) + ":" + str(int(os.path.getmtime(src))) + ":" + str(w)).encode()).hexdigest()
+                key = hashlib.md5((os.path.realpath(src) + ":" + str(int(os.path.getmtime(src))) + ":" + str(w) + (":svg-rsvg" if src.lower().endswith(".svg") else "")).encode()).hexdigest()
                 td = os.path.join(PROJECT, ".fig_thumbs")
                 os.makedirs(td, exist_ok=True)
                 out = os.path.join(td, "imgthumb_" + key + ".png")
                 if not os.path.exists(out):
-                    try:
-                        subprocess.run(["sips", "-Z", str(w), "-s", "format", "png", src, "--out", out],
-                                       capture_output=True, timeout=20, check=True)
-                    except Exception:
-                        out = src  # sips missing/failed -> serve the original (correct, just not downscaled)
+                    if src.lower().endswith(".svg"):
+                        # sips/Quick Look explode matplotlib's <use>-glyph text; rsvg renders it faithfully
+                        rsvg = shutil.which("rsvg-convert")
+                        try:
+                            if rsvg:
+                                subprocess.run([rsvg, "-w", str(w), "-o", out, src],
+                                               capture_output=True, timeout=20, check=True)
+                            else:
+                                out = src  # no rsvg -> serve the raw svg (browsers render it correctly)
+                        except Exception:
+                            out = src
+                    elif src.lower().endswith((".html", ".htm")):
+                        # render the page with headless Chrome (a real preview), then downscale
+                        chrome = next((c for c in (
+                            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+                            "/Applications/Chromium.app/Contents/MacOS/Chromium") if os.path.isfile(c)),
+                            shutil.which("google-chrome") or shutil.which("chromium-browser")
+                            or shutil.which("chromium") or shutil.which("chrome"))
+                        if not chrome:
+                            return self._respond(404, {"error": "no html preview (chrome not found)"})
+                        tmp = out + ".tmp.png"
+                        try:
+                            subprocess.run([chrome, "--headless=new", "--hide-scrollbars",
+                                            "--screenshot=" + tmp, "--window-size=1000,750",
+                                            "--virtual-time-budget=4000", "file://" + src],
+                                           capture_output=True, timeout=25)
+                        except Exception:
+                            pass
+                        if os.path.exists(tmp):
+                            try:
+                                subprocess.run(["sips", "-Z", str(w), "-s", "format", "png", tmp, "--out", out],
+                                               capture_output=True, timeout=15, check=True)
+                            except Exception:
+                                os.replace(tmp, out)
+                            if os.path.exists(tmp):
+                                try:
+                                    os.remove(tmp)
+                                except OSError:
+                                    pass
+                        if not os.path.exists(out):
+                            return self._respond(404, {"error": "html preview failed"})
+                    else:
+                        try:
+                            subprocess.run(["sips", "-Z", str(w), "-s", "format", "png", src, "--out", out],
+                                           capture_output=True, timeout=20, check=True)
+                        except Exception:
+                            out = src  # sips missing/failed -> serve the original (correct, just not downscaled)
                 return self._serve_file(out)
             except Exception as e:
                 return self._respond(500, {"error": str(e)})
@@ -410,6 +452,15 @@ class Handler(SimpleHTTPRequestHandler):
         if self.path == "/ping":
             return self._respond(200, {"ok": True, "service": "fig-annotate",
                                        "project": os.path.realpath(PROJECT)})
+        if self.path == "/rev":
+            # build revision = mtime of the generated index; bumps on every rescan/rebuild,
+            # so the open gallery can auto-reload after Claude edits + rescans
+            try:
+                idx = os.path.join(PROJECT, "figures_index.html")
+                rev = int(os.path.getmtime(idx)) if os.path.exists(idx) else 0
+            except Exception:
+                rev = 0
+            return self._respond(200, {"rev": rev})
         if self.path == "/quote":
             try:
                 qf = os.path.expanduser("~/.claude/fig-last-quote.txt")
@@ -523,6 +574,16 @@ class Handler(SimpleHTTPRequestHandler):
                 with os.fdopen(fd, "w", encoding="utf-8") as f:
                     f.write(svg)
                 os.replace(tmp, dst)                                 # atomic
+                edits = req.get("edits")                             # durable layer: re-applied onto the regenerated SVG
+                if isinstance(edits, list):
+                    ep = os.path.splitext(dst)[0] + ".edits.json"
+                    if edits:
+                        fd2, t2 = tempfile.mkstemp(dir=ddir, prefix=".edits.", suffix=".tmp")
+                        with os.fdopen(fd2, "w", encoding="utf-8") as f:
+                            json.dump({"svg": os.path.basename(dst), "edits": edits}, f, ensure_ascii=False, indent=1)
+                        os.replace(t2, ep)
+                    elif os.path.exists(ep) and not os.path.islink(ep):
+                        os.remove(ep)                                # all edits undone → drop the stale sidecar
                 return self._respond(200, {"ok": True, "path": os.path.relpath(dst, PROJECT)})
             except (KeyError, ValueError, json.JSONDecodeError) as e:
                 return self._respond(400, {"error": "bad request: " + str(e)})

@@ -293,8 +293,14 @@ HTML = """<!DOCTYPE html>
       flex-direction:column;align-items:center;justify-content:center;cursor:zoom-out}
   #lb.show{display:flex}
   #lb img{max-width:94vw;max-height:86vh;object-fit:contain;background:#fff;border-radius:6px;cursor:zoom-in}
-  #lb.fs img{max-width:100vw;max-height:100vh;border-radius:0}
-  #lb.fs #lbCap,#lb.fs .lbBtn,#lb.fs #lbClose{display:none}
+  #lb.fs{background:#000;cursor:none;padding:0}
+  #lb.fs #lbWrap{flex:1;display:flex;align-items:center;justify-content:center;width:100%;height:100%;min-height:0}
+  #lb.fs img{max-width:100vw;max-height:100vh;width:100vw;height:100vh;object-fit:contain;border-radius:0;background:#000;box-shadow:none;cursor:none}
+  #lb.fs #lbCap,#lb.fs .lbBtn,#lb.fs #lbClose,#lb.fs #annotBar,#lb.fs #annotNote{display:none!important}
+  #lb.fs #lbFs{opacity:0;pointer-events:none;transition:opacity .22s;color:rgba(255,255,255,.75);
+      background:rgba(0,0,0,.5);border-radius:8px;width:40px;height:40px;top:8px;right:8px}
+  #lb.fs.fs-ui,#lb.fs.fs-ui img{cursor:default}
+  #lb.fs.fs-ui #lbFs{opacity:1;pointer-events:auto}
   #lb.vw{justify-content:flex-start}
   #lb.vw #lbPdf{width:100vw !important;height:100vh !important;border-radius:0}
   #lb.vw #lbCap,#lb.vw .lbBtn,#lb.vw #lbFs{display:none}
@@ -348,6 +354,8 @@ HTML = """<!DOCTYPE html>
   #confirmOk{background:#5c1f1f;border-color:#7a2a2a;color:#fff}
   #confirmOk:hover{background:#6e2626}
   footer{padding:20px;text-align:center;color:var(--muted);font-size:11px}
+  body.fs-mode{overflow:hidden;background:#000}
+  body.fs-mode header,body.fs-mode main,body.fs-mode footer{display:none!important}
 </style>
 </head>
 <body>
@@ -393,7 +401,7 @@ HTML = """<!DOCTYPE html>
 <main id="grid"></main>
 <div id="lb">
   <span id="lbClose">&#10005;</span>
-  <span id="lbFs" title="Fullscreen (f or double-click)">&#9974;</span>
+  <span id="lbFs" title="Plein écran (f ou double-clic)">&#9974;</span>
   <span class="lbBtn" id="lbPrev">&#8249;</span>
   <span class="lbBtn" id="lbNext">&#8250;</span>
   <div id="annotBar">
@@ -469,8 +477,9 @@ const saveHidden = ()=>{localStorage.setItem('figHidden', JSON.stringify([...hid
 function updateHideChip(){ updateViewChip(); }
 function toggleHide(rel){if(hidden.has(rel))hidden.delete(rel);else hidden.add(rel);saveHidden();updateHideChip();render();}
 let ratings = JSON.parse(localStorage.getItem('figRatings')||'{}');
-let stateTimer=null;
+let stateTimer=null, stateLoaded=false, pendingPush=false;
 function pushState(){
+  if(!stateLoaded){ pendingPush=true; return; }   // never POST before the initial /state merge lands (a partial save would clobber disk)
   clearTimeout(stateTimer);
   stateTimer=setTimeout(()=>{
     fetch('/state',{method:'POST',headers:{'Content-Type':'application/json'},
@@ -514,7 +523,10 @@ fetch('/state').then(r=>r.json()).then(st=>{
   document.getElementById('favChip').textContent='\u2605 Favorites ('+favs.size+')';
   updateHideChip(); buildTagChip(); buildViewMenu();
   render();
-}).catch(()=>{});
+}).catch(()=>{}).finally(()=>{
+  stateLoaded=true;                                 // disk state is merged in now; saves are safe
+  if(pendingPush){ pendingPush=false; pushState(); }
+});
 function setRate(rel, n, ev){
   ev.stopPropagation();
   if(ratings[rel]===n) delete ratings[rel]; else ratings[rel]=n;
@@ -789,16 +801,102 @@ async function lbShow(i){
     (isSvg?` <span style="margin-left:8px;color:#5b9dff;font-size:12px">&#9672; click elements in the plot to select them</span>`:'');
   lb().classList.add('show');
 }
-async function lbClose(){if(!(await annotGuard()))return;const v=document.getElementById('lbVid');if(v){v.pause();v.removeAttribute('src');v.load();}lb().classList.remove('show');lb().classList.remove('annot');lb().classList.remove('fs');lbIdx=-1;}
-function lbFsToggle(){
-  const el=lb();
-  if(document.fullscreenElement){document.exitFullscreen();el.classList.remove('fs');return;}
-  if(el.requestFullscreen){el.requestFullscreen().then(()=>el.classList.add('fs')).catch(()=>el.classList.toggle('fs'));}
-  else if(el.webkitRequestFullscreen){el.webkitRequestFullscreen();el.classList.add('fs');}
-  else el.classList.toggle('fs');
+async function lbClose(){
+  if(!(await annotGuard()))return;
+  if(lb().classList.contains('fs')||fsActiveEl()) await lbFsLeave();
+  const v=document.getElementById('lbVid');if(v){v.pause();v.removeAttribute('src');v.load();}
+  lb().classList.remove('show');lb().classList.remove('annot');lbIdx=-1;
 }
-document.addEventListener('fullscreenchange',()=>{if(!document.fullscreenElement)lb().classList.remove('fs');});
+let lbFsUiTimer=0, fsLeaving=false, nativeFsOk=null, lbFsEnterGen=0;
+function fsActiveEl(){
+  return document.fullscreenElement||document.webkitFullscreenElement||null;
+}
+function lbNativeFsAllowed(){
+  let p=null; try{p=new URLSearchParams(location.search);}catch(_){}
+  if(p&&p.get('cssFs')==='1') return false;   // explicit opt-out: pane-only
+  if(p&&p.get('nativeFs')==='1') return true;
+  // Default: real whole-screen fullscreen everywhere, including Orca's embedded
+  // WKWebView. Exiting native FS used to leave the split pane stuck; lbFsReflow()
+  // now nudges layout across several frames after exit to prevent that.
+  return true;
+}
+function lbFsUiPulse(){
+  const el=lb(); if(!el.classList.contains('fs')) return;
+  el.classList.add('fs-ui');
+  clearTimeout(lbFsUiTimer);
+  lbFsUiTimer=setTimeout(()=>el.classList.remove('fs-ui'),2200);
+}
+function lbFsEnter(){
+  const el=lb(), btn=document.getElementById('lbFs');
+  el.classList.add('fs');
+  btn.textContent='\u2715';
+  btn.title='Quitter le plein écran (Esc, f, ou double-clic)';
+  lbFsUiPulse();
+}
+function lbFsExit(){
+  const el=lb(), btn=document.getElementById('lbFs');
+  el.classList.remove('fs','fs-ui');
+  clearTimeout(lbFsUiTimer);
+  document.body.classList.remove('fs-mode');
+  document.body.style.overflow='';
+  document.documentElement.style.overflow='';
+  btn.textContent='\u26f6';
+  btn.title='Plein écran (f ou double-clic)';
+}
+function lbFsReflow(){
+  // Exiting (native) fullscreen resizes the embedded webview back to its pane a
+  // frame or two later; a single synchronous resize fires too early and leaves
+  // Orca's split pane stuck. Nudge layout repeatedly as it settles.
+  const kick=()=>{void document.body.offsetHeight;window.dispatchEvent(new Event('resize'));};
+  kick();
+  requestAnimationFrame(()=>{kick();requestAnimationFrame(kick);});
+  [60,160,320,600].forEach(ms=>setTimeout(kick,ms));
+}
+async function lbFsLeave(){
+  if(fsLeaving) return;
+  fsLeaving=true;
+  lbFsEnterGen++;
+  const hadNative=!!fsActiveEl();
+  try{
+    lbFsExit();
+    if(hadNative){
+      try{await document.exitFullscreen();}catch(_){
+        try{document.webkitExitFullscreen?.();}catch(_){}
+      }
+    }
+  } finally { fsLeaving=false; lbFsReflow(); }
+}
+async function lbFsToggle(){
+  if(fsActiveEl()||lb().classList.contains('fs')){
+    await lbFsLeave(); return;
+  }
+  const gen=++lbFsEnterGen;
+  lbFsEnter();
+  document.body.classList.add('fs-mode');
+  if(!lbNativeFsAllowed()){nativeFsOk=false;return;}
+  if(nativeFsOk===false) return;
+  const root=document.documentElement;
+  const req=root.requestFullscreen||root.webkitRequestFullscreen;
+  if(!req){nativeFsOk=false;return;}
+  try{
+    await req.call(root);
+    if(gen!==lbFsEnterGen){
+      if(fsActiveEl()) await lbFsLeave();
+      return;
+    }
+    nativeFsOk=!!fsActiveEl();
+  }catch(_){nativeFsOk=false;}
+}
+function onFsChange(){
+  if(fsLeaving) return;
+  if(!fsActiveEl()&&(lb().classList.contains('fs')||document.body.classList.contains('fs-mode'))){
+    void lbFsLeave();
+  }
+}
+document.addEventListener('fullscreenchange',onFsChange);
+document.addEventListener('webkitfullscreenchange',onFsChange);
 document.getElementById('lbFs').onclick=e=>{e.stopPropagation();lbFsToggle();};
+lb().addEventListener('mousemove',lbFsUiPulse);
 document.getElementById('lbImg').addEventListener('dblclick',e=>{e.stopPropagation();lbFsToggle();});
 document.addEventListener('keydown',e=>{
   if(!lb().classList.contains('show'))return;
@@ -816,7 +914,10 @@ document.addEventListener('keydown',e=>{
     }
   }
   if(e.key==='f'){lbFsToggle();return;}
-  if(e.key==='Escape'){if(lb().classList.contains('fs')){lb().classList.remove('fs');return;}lbClose();}
+  if(e.key==='Escape'){
+    if(lb().classList.contains('fs')||fsActiveEl()){void lbFsLeave();return;}
+    lbClose();
+  }
   if(e.key==='ArrowLeft')lbShow(lbIdx-1);
   if(e.key==='ArrowRight')lbShow(lbIdx+1);
 });
@@ -909,11 +1010,14 @@ function render(){
   renderedRels = slice.map(f=>f.rel);   // display order for Shift-click range selection
   grid.innerHTML = slice.map(f=>{
     const isImg = imgExt(f.ext);
+    const isHtml = f.ext === 'html' || f.ext === 'htm';
     // images: light downscaled thumbnail from the server (full-res stays in the lightbox);
-    // pdf/office: build-time qlmanage thumb. onerror falls back to the original if /thumb is unavailable.
-    const tsrc = isImg ? '/thumb?path='+encodeURIComponent('__ROOT__/'+f.rel)+'&w=480&v='+f.mtime : (f.thumb||null);
+    // html: headless-Chrome render of the page; pdf/office: build-time qlmanage thumb.
+    const tsrc = (isImg || isHtml) ? '/thumb?path='+encodeURIComponent('__ROOT__/'+f.rel)+'&w=480&v='+f.mtime : (f.thumb||null);
     const imgTag = isImg
       ? `<img loading="lazy" decoding="async" src="${escA(tsrc)}" data-full="${escA(f.rel)}?v=${f.mtime}" onerror="this.onerror=null;this.src=this.dataset.full" alt="">`
+      : isHtml
+      ? `<img loading="lazy" decoding="async" src="${escA(tsrc)}" alt="" onerror="this.onerror=null;this.remove()">`
       : `<img loading="lazy" decoding="async" src="${escA(tsrc)}" alt="">`;
     const thumb = f.code
       ? `<div class="snip" data-snip="${escA(f.rel)}"></div>`
@@ -1166,6 +1270,23 @@ lb().onclick=e=>{if(e.target.id==='lb')lbClose();};
 document.getElementById('lbWrap').onclick=e=>e.stopPropagation();
 document.getElementById('lbPdf').onclick=e=>e.stopPropagation();
 render();
+
+// --- live reload: auto-refresh when the gallery is rebuilt (Claude edits + rescans),
+//     never interrupting an open viewer/lightbox or an active text selection ---
+(function(){
+  let boot = null;
+  const getRev = () => fetch('/rev').then(r => r.json()).then(j => j.rev).catch(() => null);
+  getRev().then(r => { boot = r; });
+  setInterval(async () => {
+    if(boot == null){ boot = await getRev(); return; }
+    const lb = document.getElementById('lb');
+    if(lb && lb.classList.contains('show')) return;        // a viewer/lightbox is open
+    const sel = window.getSelection && window.getSelection();
+    if(sel && String(sel).trim()) return;                  // user is selecting text
+    const r = await getRev();
+    if(r != null && r !== boot) location.reload();
+  }, 2500);
+})();
 </script>
 </body>
 </html>"""

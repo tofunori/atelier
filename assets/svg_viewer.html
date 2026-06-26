@@ -7,9 +7,9 @@
   :root{--bg:#202024;--card:#27272a;--txt:#e4e4e7;--muted:#a1a1aa;--accent:#5b9dff;--border:#3f3f46}
   html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);
             font-family:-apple-system,BlinkMacSystemFont,sans-serif;display:flex;flex-direction:column;overflow:hidden}
-  header{background:var(--card);border-bottom:1px solid var(--border);padding:8px 60px 8px 14px;
-         display:flex;gap:8px;align-items:center;font-size:12.5px;flex-shrink:0}
-  #fname{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:42%;margin-right:auto}
+  header{background:var(--card);border-bottom:1px solid var(--border);padding:8px 84px 8px 14px;
+         display:flex;gap:8px;align-items:center;font-size:12.5px;flex-shrink:0;flex-wrap:wrap}
+  #fname{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:42%;min-width:0;flex:1 1 0}
   #msinfo{color:#22c55e;font-size:11.5px;white-space:nowrap}
   /* uniform "pro" toolbar: every control the same height + style */
   header button,header select{height:30px;box-sizing:border-box;display:inline-flex;align-items:center;gap:6px;
@@ -20,16 +20,27 @@
   #lassotoggle.on{background:#ffce3a;color:#000;border-color:#ffce3a;font-weight:600}
   #undobtn:disabled{opacity:.45;cursor:default;background:var(--border)}
   #clearsel{padding:0 9px}
+  #delsel{padding:0 11px}
+  #delsel:hover{background:#b91c1c;border-color:#b91c1c;color:#fff}
+  #addtext.on{background:#22c55e;color:#000;border-color:#22c55e;font-weight:600}
+  body.addmode #plot svg, body.addmode #plot svg *{cursor:text}
+  .txtedit{position:absolute;z-index:50;pointer-events:auto;font:13px -apple-system,BlinkMacSystemFont,sans-serif;padding:2px 6px;border:2px solid var(--accent);border-radius:5px;background:#fff;color:#111;box-shadow:0 4px 18px rgba(0,0,0,.45)}
   #stagewrap{flex:1;overflow:auto;padding:16px;box-sizing:border-box}
   #stage{position:relative;width:100%}
   #plot{width:100%;line-height:0}
   #plot svg{width:100%;height:auto;display:block;background:#fff;border-radius:6px;box-shadow:0 2px 14px rgba(0,0,0,.5);touch-action:none}
   #plot svg *{cursor:move}
   body.lasso #plot svg *{cursor:crosshair}
+  body.fs-mode header{display:none}
+  body.fs-mode #stagewrap{padding:0;background:#000}
+  body.fs-mode #plot svg{border-radius:0;box-shadow:none}
   #ov{position:absolute;inset:0;pointer-events:none}
   .hbox{position:absolute;border:2px solid #5b9dff;border-radius:2px;background:rgba(91,157,255,.10);pointer-events:none}
   .movehi{position:absolute;outline:2px solid #22c55e;background:rgba(34,197,94,.10);pointer-events:none;border-radius:2px}
+  .selbox{position:absolute;border:1px solid var(--accent);pointer-events:none;border-radius:1px}
+  .selhandle{position:absolute;width:11px;height:11px;margin:-6px 0 0 -6px;background:#fff;border:1.5px solid var(--accent);border-radius:2px;pointer-events:auto;box-sizing:border-box;z-index:2}
   .lassosvg polyline{fill:rgba(91,157,255,.14);stroke:#5b9dff;stroke-width:1.5;stroke-dasharray:5 3;stroke-linejoin:round}
+  .lassosvg circle{fill:#5b9dff;stroke:#fff;stroke-width:1.5}
   #err{color:#ff6b6b;padding:40px;text-align:center}
 </style>
 <script>(function(){var T={'Default':{bg:'#202024',card:'#27272a',txt:'#e4e4e7',muted:'#a1a1aa',accent:'#5b9dff',border:'#3f3f46'},'Codex One':{bg:'#202024',card:'#2f343f',txt:'#abb2bf',muted:'#7f848e',accent:'#4d78cc',border:'#3e4451'},'Dracula':{bg:'#282a36',card:'#343746',txt:'#f8f8f2',muted:'#9aa0b3',accent:'#bd93f9',border:'#44475a'},'Nord':{bg:'#2e3440',card:'#3b4252',txt:'#e5e9f0',muted:'#9aa3b2',accent:'#88c0d0',border:'#434c5e'}};var t;try{t=T[localStorage.getItem('figTheme')];}catch(e){}t=t||T['Default'];var r=document.documentElement.style;for(var k in t)r.setProperty('--'+k,t[k]);})();</script>
@@ -39,11 +50,13 @@
   <b id="fname"></b>
   <span id="msinfo"></span>
   <button id="clearsel" title="Deselect (Esc)" style="display:none">✕</button>
-  <button id="lassotoggle" title="Lasso: draw a polygon to select several elements, then drag them together · Esc cancels">▱ Lasso</button>
-  <button id="undobtn" title="Undo the last move (⌘Z)" disabled>↶ Undo</button>
-  <button id="savesvg" title="Save the moved elements into the .svg on disk (keeps a .orig.bak)">💾 Save SVG</button>
+  <button id="delsel" title="Supprimer la sélection (Suppr · ⌫) — ⌘Z pour annuler ; le .svg garde un .orig.bak jusqu'au Save" style="display:none">🗑</button>
+  <button id="addtext" title="Ajouter un texte — clique ici puis clique sur la figure (double-clic sur un texte pour l'éditer)">T+</button>
+  <button id="lassotoggle" title="Polygone — clique des sommets autour des éléments ; double-clic / Entrée pour fermer · Échap annule">▱</button>
+  <button id="undobtn" title="Annuler la dernière action — déplacement / suppression / édition / ajout (⌘Z)" disabled>↶</button>
+  <button id="savesvg" title="Save the moved elements into the .svg on disk (keeps a .orig.bak)">💾</button>
   <select id="dpi" title="Export resolution"><option value="300">300 dpi</option><option value="450">450 dpi</option><option value="600">600 dpi</option></select>
-  <button id="exportpng" title="Render the current view to a sibling .png (rsvg-convert)">🖼 Export PNG</button>
+  <button id="exportpng" title="Render the current view to a sibling .png (rsvg-convert)">🖼</button>
   <button id="fsbtn" title="Fullscreen (F)">⛶</button>
 </header>
 <div id="stagewrap"><div id="stage">
@@ -77,15 +90,26 @@ function showHover(el){                                   // a silent highlight 
 
 // ---- always-on element move + a polygon-lasso multi-select ----
 let drag = null, dirty = false, lassoMode = false;
+let addMode = false, editing = false, addCounter = 0;
 const lassoBtn = document.getElementById("lassotoggle");
 function setLasso(on){
   lassoMode = on;
   lassoBtn.classList.toggle("on", on);
   document.body.classList.toggle("lasso", on);
-  lassoBtn.textContent = on ? "▱ Lasso — Esc cancels" : "▱ Lasso";
-  showHover(null);
+  lassoBtn.textContent = "▱";
+  showHover(null); hiliteMoveSet();
+  const n = document.getElementById("msinfo");
+  if(n && on) n.textContent = "clique des sommets · double-clic / Entrée = fermer";
 }
 lassoBtn.onclick = () => setLasso(!lassoMode);
+function setAdd(on){
+  addMode = on;
+  const b = document.getElementById("addtext");
+  if(b) b.classList.toggle("on", on);
+  document.body.classList.toggle("addmode", on);
+  if(on){ if(lassoMode) setLasso(false); clearMoveSet(); }
+  showHover(null);
+}
 function svgPoint(evt, ref){
   const p = svg.createSVGPoint(); p.x = evt.clientX; p.y = evt.clientY;
   return p.matrixTransform((ref || svg).getScreenCTM().inverse());
@@ -108,6 +132,7 @@ function draggable(g){
   return true;
 }
 let moveSet = [];
+let selBoxEl = null, selHandleEls = [];
 let lasso = null, lassoEl = null;
 function stagePt(e){ const s = stage.getBoundingClientRect(); return { x: e.clientX - s.left, y: e.clientY - s.top }; }
 function hiliteMoveSet(){
@@ -122,29 +147,92 @@ function hiliteMoveSet(){
   if(n) n.textContent = moveSet.length ? (moveSet.length + " sélectionnés") : "";
   const cs = document.getElementById("clearsel");
   if(cs) cs.style.display = moveSet.length ? "inline-flex" : "none";
+  const ds = document.getElementById("delsel");
+  if(ds) ds.style.display = moveSet.length ? "inline-flex" : "none";
+  if(moveSet.length && !lassoMode && !addMode){ if(!selBoxEl) buildHandles(); positionHandles(); }
+  else clearHandles();
 }
 function clearMoveSet(){ moveSet = []; hiliteMoveSet(); }
 // ---- undo history (one entry per completed drag) ----
 let history = [];
-function snapshot(els){ return els.map(el => ({ el,
-  dx: el.hasAttribute("data-dx") ? parseFloat(el.getAttribute("data-dx")) : null,
-  dy: el.hasAttribute("data-dy") ? parseFloat(el.getAttribute("data-dy")) : null })); }
-function applyXform(el, dx, dy){
-  if(dx === null || dy === null){                        // back to its pre-move transform
-    el.removeAttribute("data-dx"); el.removeAttribute("data-dy");
-    const orig = el.getAttribute("data-orig");
-    if(orig){ el.setAttribute("transform", orig); } else { el.removeAttribute("transform"); }
-  } else {
-    el.setAttribute("data-dx", dx); el.setAttribute("data-dy", dy);
-    el.setAttribute("transform", "translate(" + dx + "," + dy + ") " + (el.getAttribute("data-orig") || ""));
+function snapshot(els){ return els.map(el => ({ el,                       // full pre-op state, restored verbatim on Undo
+  orig: el.hasAttribute("data-orig") ? el.getAttribute("data-orig") : null,
+  dx: el.hasAttribute("data-dx") ? el.getAttribute("data-dx") : null,
+  dy: el.hasAttribute("data-dy") ? el.getAttribute("data-dy") : null,
+  xf: el.hasAttribute("transform") ? el.getAttribute("transform") : null })); }
+function restoreXf(it){
+  for(const [a, v] of [["data-orig", it.orig], ["data-dx", it.dx], ["data-dy", it.dy], ["transform", it.xf]]){
+    if(v === null) it.el.removeAttribute(a); else it.el.setAttribute(a, v);
   }
 }
 function updateUndo(){ const b = document.getElementById("undobtn"); if(b) b.disabled = history.length === 0; }
 function undo(){
   const entry = history.pop();
   if(!entry) return;
-  for(const it of entry) applyXform(it.el, it.dx, it.dy);
+  if(entry.type === "delete"){
+    for(const it of entry.items){                          // re-insert each deleted node at its original DOM position
+      if(it.next && it.next.parentNode === it.parent) it.parent.insertBefore(it.el, it.next);
+      else it.parent.appendChild(it.el);
+    }
+  } else if(entry.type === "edit"){
+    entry.el.textContent = entry.before;                   // restore the previous text
+  } else if(entry.type === "add"){
+    if(entry.el.parentNode) entry.el.remove();             // remove the text we added
+  } else {
+    for(const it of entry.items) restoreXf(it);
+  }
   dirty = true; hiliteMoveSet(); updateUndo();
+}
+function deleteSel(){                                       // remove the selected element(s) from the figure; ⌘Z restores them
+  if(!moveSet.length) return;
+  const items = moveSet.map(el => ({ el, parent: el.parentNode, next: el.nextSibling }));
+  for(const it of items) it.el.remove();
+  history.push({ type: "delete", items });
+  dirty = true; clearMoveSet(); updateUndo();
+}
+function editText(el, o){                                   // inline-edit a <text> (an existing label/title, or a freshly added one)
+  o = o || {}; editing = true; showHover(null);
+  const inp = document.createElement("input");
+  inp.id = "txtedit-input"; inp.type = "text"; inp.className = "txtedit";
+  inp.value = el.textContent || "";
+  let b = null; try{ b = rectIn(el); }catch(e){}
+  if(!b || !b.w) b = { x: o.x || 20, y: o.y || 20, w: 140 };
+  inp.style.left = Math.max(2, b.x - 4) + "px";
+  inp.style.top  = Math.max(2, b.y - 18) + "px";
+  inp.style.minWidth = Math.max(90, b.w + 24) + "px";
+  stage.appendChild(inp); inp.focus(); inp.select();
+  const before = el.textContent || "";
+  let done = false;
+  function finish(keep){
+    if(done) return; done = true; editing = false;
+    const after = inp.value; inp.remove();
+    if(keep){
+      if(o.isNew){
+        if(after === ""){ el.remove(); }                                                  // empty new label → discard it
+        else { el.textContent = after; history.push({ type: "add", el, parent: el.parentNode }); dirty = true; updateUndo(); }
+      } else if(after !== before){
+        el.textContent = after; history.push({ type: "edit", el, before }); dirty = true; updateUndo();
+      }
+    } else if(o.isNew){ el.remove(); }                                                     // Esc on a new label → discard
+    hiliteMoveSet();
+  }
+  inp.addEventListener("keydown", ev => { ev.stopPropagation();                            // keep Del/F/⌘Z/Esc out of the canvas handlers
+    if(ev.key === "Enter"){ ev.preventDefault(); finish(true); }
+    else if(ev.key === "Escape"){ ev.preventDefault(); finish(false); } });
+  inp.addEventListener("blur", () => finish(true));
+}
+function placeTextAt(e){                                    // create a new <text> at the click, then open it for typing
+  const NS = "http://www.w3.org/2000/svg";
+  const p = svgPoint(e, svg);
+  const t = document.createElementNS(NS, "text");
+  const proto = svg.querySelector("text");                 // inherit the figure's font family/weight when there is one
+  if(proto && proto.getAttribute("style")) t.setAttribute("style", proto.getAttribute("style"));
+  t.style.fill = "#000"; t.style.textAnchor = "start"; t.style.fontSize = "12px";
+  t.setAttribute("x", p.x); t.setAttribute("y", p.y);
+  t.setAttribute("id", "added_text_" + (++addCounter));
+  svg.appendChild(t);
+  const s = stagePt(e);
+  editText(t, { isNew: true, x: s.x, y: s.y });
 }
 function inPoly(x, y, pts){                               // ray-casting point-in-polygon
   let c = false;
@@ -161,9 +249,15 @@ function lassoStart(p){
   lassoEl.setAttribute("class", "lassosvg");
   lassoEl.style.cssText = "position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none";
   lassoEl.appendChild(document.createElementNS(NS, "polyline"));
+  const dot = document.createElementNS(NS, "circle");          // first-vertex handle: click it (or dbl-click / Enter) to close
+  dot.setAttribute("r", "5"); dot.setAttribute("cx", p[0]); dot.setAttribute("cy", p[1]);
+  lassoEl.appendChild(dot);
   ov.appendChild(lassoEl);
 }
-function lassoUpdate(){ lassoEl.firstChild.setAttribute("points", lasso.pts.map(p => p[0] + "," + p[1]).join(" ")); }
+function lassoUpdate(cursor){                                   // polygon so far + a rubber-band edge to the cursor
+  const pts = cursor ? lasso.pts.concat([cursor]) : lasso.pts;
+  lassoEl.firstChild.setAttribute("points", pts.map(p => p[0] + "," + p[1]).join(" "));
+}
 function lassoRemove(){ if(lassoEl){ lassoEl.remove(); lassoEl = null; } }
 function selectInPoly(pts){                               // elements whose centre falls inside the lasso
   if(pts.length < 3){ clearMoveSet(); return; }
@@ -176,10 +270,110 @@ function selectInPoly(pts){                               // elements whose cent
   moveSet = inside.filter(el => !inside.some(o => o !== el && o.contains(el)));  // keep outermost units only
   hiliteMoveSet();
 }
+function finishPoly(){                                          // close the polygon → select what's inside it
+  if(!lasso) return;
+  const pts = lasso.pts; lasso = null; lassoRemove();
+  selectInPoly(pts);
+  setLasso(false);                                             // leave polygon mode once the selection is made
+}
+// ---- resize the selection with corner/edge handles (scale, baked into the transform) ----
+function clientToUser(cx, cy, ref){
+  const p = svg.createSVGPoint(); p.x = cx; p.y = cy;
+  return p.matrixTransform((ref || svg).getScreenCTM().inverse());
+}
+function selBBox(){                                       // union bbox of the selection, in #stage coords
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for(const el of moveSet){
+    let b; try{ b = rectIn(el); }catch(e){ continue; }
+    if(!b.w || !b.h) continue;
+    x0 = Math.min(x0, b.x); y0 = Math.min(y0, b.y); x1 = Math.max(x1, b.x + b.w); y1 = Math.max(y1, b.y + b.h);
+  }
+  return x0 === Infinity ? null : { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+}
+const HANDLES = [   // px/py = handle position (0/.5/1); ax/ay = the FIXED opposite anchor; sx/sy = which axes scale
+  { k:"nw", px:0,   py:0,   ax:1,   ay:1,   sx:1, sy:1, cur:"nwse-resize" },
+  { k:"n",  px:0.5, py:0,   ax:0.5, ay:1,   sx:0, sy:1, cur:"ns-resize"   },
+  { k:"ne", px:1,   py:0,   ax:0,   ay:1,   sx:1, sy:1, cur:"nesw-resize" },
+  { k:"e",  px:1,   py:0.5, ax:0,   ay:0.5, sx:1, sy:0, cur:"ew-resize"   },
+  { k:"se", px:1,   py:1,   ax:0,   ay:0,   sx:1, sy:1, cur:"nwse-resize" },
+  { k:"s",  px:0.5, py:1,   ax:0.5, ay:0,   sx:0, sy:1, cur:"ns-resize"   },
+  { k:"sw", px:0,   py:1,   ax:1,   ay:0,   sx:1, sy:1, cur:"nesw-resize" },
+  { k:"w",  px:0,   py:0.5, ax:1,   ay:0.5, sx:1, sy:0, cur:"ew-resize"   },
+];
+function buildHandles(){
+  selBoxEl = document.createElement("div"); selBoxEl.className = "selbox"; ov.appendChild(selBoxEl);
+  selHandleEls = HANDLES.map(h => {
+    const d = document.createElement("div"); d.className = "selhandle"; d.style.cursor = h.cur; d._spec = h;
+    d.addEventListener("pointerdown", ev => startResize(ev, h));
+    d.addEventListener("pointermove", onResizeMove);
+    d.addEventListener("pointerup", endResize);
+    d.addEventListener("pointercancel", endResize);
+    ov.appendChild(d); return d;
+  });
+}
+function clearHandles(){ if(selBoxEl){ selBoxEl.remove(); selBoxEl = null; } selHandleEls.forEach(d => d.remove()); selHandleEls = []; }
+function positionHandles(){
+  const b = selBBox();
+  if(!b){ if(selBoxEl) selBoxEl.style.display = "none"; selHandleEls.forEach(d => d.style.display = "none"); return; }
+  if(selBoxEl){ selBoxEl.style.display = ""; selBoxEl.style.left = b.x + "px"; selBoxEl.style.top = b.y + "px"; selBoxEl.style.width = b.w + "px"; selBoxEl.style.height = b.h + "px"; }
+  selHandleEls.forEach(d => { const h = d._spec; d.style.display = ""; d.style.left = (b.x + h.px * b.w) + "px"; d.style.top = (b.y + h.py * b.h) + "px"; });
+}
+let resizing = null;
+function startResize(e, h){
+  if(!moveSet.length || (e.button !== undefined && e.button !== 0)) return;
+  e.preventDefault(); e.stopPropagation();
+  const b = selBBox(); if(!b) return;
+  const sr = stage.getBoundingClientRect();
+  const ax = b.x + h.ax * b.w, ay = b.y + h.ay * b.h;          // fixed anchor (opposite side), stage coords
+  const hx = b.x + h.px * b.w, hy = b.y + h.py * b.h;          // grabbed handle, stage coords
+  resizing = { h: h, shift: e.shiftKey, ax: ax, ay: ay, hx: hx, hy: hy,
+    anchorClientX: sr.left + ax, anchorClientY: sr.top + ay,
+    before: snapshot(moveSet),
+    members: moveSet.map(el => {
+      if(!el.hasAttribute("data-orig0")) el.setAttribute("data-orig0", el.getAttribute("transform") || "");  // pristine, for the edits sidecar
+      return { el: el, parent: el.parentNode, startXf: el.getAttribute("transform") || "" };
+    }) };
+  try{ e.target.setPointerCapture(e.pointerId); }catch(err){}
+}
+function onResizeMove(e){
+  if(!resizing) return;
+  e.preventDefault();
+  const R = resizing, h = R.h, p = stagePt(e);
+  let fx = 1, fy = 1;
+  if(h.sx && h.sy && !R.shift){                               // proportional (aspect-locked) corner = always exact
+    const d0 = Math.hypot(R.hx - R.ax, R.hy - R.ay) || 1;
+    fx = fy = Math.hypot(p.x - R.ax, p.y - R.ay) / d0;
+  } else {                                                    // free corner (Shift) or single-axis edge
+    if(h.sx) fx = (p.x - R.ax) / ((R.hx - R.ax) || 1e-6);
+    if(h.sy) fy = (p.y - R.ay) / ((R.hy - R.ay) || 1e-6);
+  }
+  fx = Math.min(40, Math.max(0.04, Math.abs(fx)));            // no mirror, no collapse/explosion
+  fy = Math.min(40, Math.max(0.04, Math.abs(fy)));
+  for(const m of R.members){
+    const a = clientToUser(R.anchorClientX, R.anchorClientY, m.parent);   // anchor in THIS element's parent space
+    m.el.setAttribute("transform",
+      "translate(" + a.x + "," + a.y + ") scale(" + fx + "," + fy + ") translate(" + (-a.x) + "," + (-a.y) + ") " + m.startXf);
+  }
+  dirty = true; hiliteMoveSet();
+}
+function endResize(e){
+  if(!resizing) return;
+  const R = resizing; resizing = null;
+  try{ e.target.releasePointerCapture(e.pointerId); }catch(err){}
+  let changed = false;
+  for(const m of R.members){
+    const now = m.el.getAttribute("transform") || "";
+    if(now !== m.startXf){ changed = true;                    // fold the scale into the base so later moves keep it
+      m.el.setAttribute("data-orig", now); m.el.removeAttribute("data-dx"); m.el.removeAttribute("data-dy"); }
+  }
+  if(changed){ history.push({ type: "move", items: R.before }); updateUndo(); dirty = true; }
+  hiliteMoveSet();
+}
 function startDrag(targets, e){
   const set = targets.filter(el => !targets.some(o => o !== el && o.contains(el)));  // never move a node whose ancestor moves too
   drag = { moved: false, before: snapshot(set), items: set.map(el => {
     if(!el.hasAttribute("data-orig")) el.setAttribute("data-orig", el.getAttribute("transform") || "");
+    if(!el.hasAttribute("data-orig0")) el.setAttribute("data-orig0", el.getAttribute("transform") || "");  // pristine, for the edits sidecar
     const ref = el.parentNode, p = svgPoint(e, ref);
     return { el, ref, sx: p.x, sy: p.y,
              dx0: parseFloat(el.getAttribute("data-dx") || 0), dy0: parseFloat(el.getAttribute("data-dy") || 0) };
@@ -187,10 +381,18 @@ function startDrag(targets, e){
 }
 function capture(e){ if(svg.setPointerCapture && e.pointerId != null){ try{ svg.setPointerCapture(e.pointerId); }catch(err){} } }
 function onDown(e){
+  if(editing) return;
   if(!svg || (e.button !== undefined && e.button !== 0)) return;
-  if(lassoMode){                                          // draw a polygon, whatever is under the cursor
+  if(addMode){ e.preventDefault(); placeTextAt(e); setAdd(false); return; }   // place a new text label at the click
+  if(lassoMode){                                          // click vertices to build a polygon (dbl-click / Enter / click 1st pt = close)
     e.preventDefault();
-    const s = stagePt(e); lassoStart([s.x, s.y]); capture(e);
+    const s = stagePt(e);
+    if(!lasso){ lassoStart([s.x, s.y]); }                 // first vertex
+    else {
+      const f = lasso.pts[0];
+      if(lasso.pts.length >= 3 && Math.hypot(s.x - f[0], s.y - f[1]) < 12){ finishPoly(); return; }   // click near start = close
+      lasso.pts.push([s.x, s.y]); lassoUpdate();
+    }
     return;
   }
   // clicking on/inside a selected element drags the WHOLE selection — members are blocks
@@ -201,13 +403,20 @@ function onDown(e){
     return;
   }
   const g = grabTarget(e.target, e.shiftKey);             // Shift = grab the whole legend/colorbar block
-  if(!g || !draggable(g)){ if(moveSet.length) clearMoveSet(); return; }   // empty / non-draggable click → deselect
+  if(moveSet.length){
+    // selection is LOCKED: other elements aren't grabbable, so you can move the set without
+    // snatching the map / another label. Click empty (or ✕ / Esc) to deselect first.
+    if(!g || !draggable(g)) clearMoveSet();
+    return;
+  }
+  if(!g || !draggable(g)) return;
   e.preventDefault();
   startDrag([g], e);
   drag.g = g; capture(e);
 }
 function onMove(e){
-  if(lasso){ const s = stagePt(e); lasso.pts.push([s.x, s.y]); lassoUpdate(); return; }
+  if(editing) return;
+  if(lasso){ const s = stagePt(e); lassoUpdate([s.x, s.y]); return; }   // rubber-band the next edge to the cursor
   if(drag){
     for(const it of drag.items){
       const p = svgPoint(e, it.ref);
@@ -219,44 +428,102 @@ function onMove(e){
     return;
   }
   if(lassoMode) return;                                   // no grab-preview while lassoing
+  if(moveSet.length){ showHover(null); return; }          // selection locked → no grab-hover on other elements
   const g = grabTarget(e.target, e.shiftKey);
   showHover(draggable(g) ? g : null);
 }
 function onUp(){
-  if(lasso){
-    const pts = lasso.pts; lasso = null; lassoRemove();
-    selectInPoly(pts);
-    if(moveSet.length) setLasso(false);                  // auto-exit the lasso → next drag moves the group
-    return;
-  }
+  if(editing) return;
+  if(lasso) return;                                      // building a polygon by clicks — pointerup does nothing
   if(drag){
-    if(drag.moved && drag.before) { history.push(drag.before); updateUndo(); }   // record for Undo
+    if(drag.moved && drag.before){ history.push({ type: "move", items: drag.before }); updateUndo(); }   // record for Undo
+    else if(!drag.moved && drag.g){ moveSet = [drag.g]; hiliteMoveSet(); }                                // a click without a move = select it (so Del / 🗑 can remove a single element)
     drag = null;
   }
 }
-function toggleFS(){ if(document.fullscreenElement) document.exitFullscreen(); else (document.documentElement.requestFullscreen || function(){}).call(document.documentElement); }
+function fsActiveEl(){ return document.fullscreenElement || document.webkitFullscreenElement || null; }
+function nativeFsAllowed(){
+  let p=null; try{p=new URLSearchParams(location.search);}catch(e){}
+  if(p&&p.get("cssFs")==="1") return false;   // explicit opt-out: pane-only
+  if(p&&p.get("nativeFs")==="1") return true;
+  // Default: real whole-screen fullscreen, including Orca's embedded webview.
+  // fsReflow() nudges layout after exit so the split pane doesn't stay stuck.
+  return true;
+}
+function setFsUi(on){
+  document.body.classList.toggle("fs-mode", on);
+  fsbtn.textContent = on ? "⛶ Exit" : "⛶";
+  setTimeout(hiliteMoveSet, 60);
+}
+function fsReflow(){
+  // Exiting (native) fullscreen resizes the embedded webview back to its pane a
+  // frame or two later; nudge layout repeatedly so Orca's split pane re-settles.
+  const kick=()=>{void document.body.offsetHeight;window.dispatchEvent(new Event("resize"));};
+  kick();
+  requestAnimationFrame(()=>{kick();requestAnimationFrame(kick);});
+  [60,160,320,600].forEach(ms=>setTimeout(kick,ms));
+}
+async function leaveFS(){
+  if(fsActiveEl()){
+    try{ await document.exitFullscreen(); }
+    catch(e){ try{ document.webkitExitFullscreen && document.webkitExitFullscreen(); }catch(_){} }
+  }
+  setFsUi(false);
+  fsReflow();
+}
+async function toggleFS(){
+  if(fsActiveEl() || document.body.classList.contains("fs-mode")){ await leaveFS(); return; }
+  setFsUi(true);
+  if(!nativeFsAllowed()) return;
+  const req=document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen;
+  if(!req) return;
+  try{ await req.call(document.documentElement); }catch(e){}
+}
 document.addEventListener("keydown", e => {
+  if(editing) return;
   if((e.metaKey || e.ctrlKey) && (e.key === "z" || e.key === "Z")){ e.preventDefault(); undo(); return; }
   if(e.key === "f" || e.key === "F"){ toggleFS(); return; }
+  if(e.key === "Delete" || e.key === "Backspace"){ e.preventDefault(); if(moveSet.length) deleteSel(); return; }
+  if(e.key === "Enter" && lassoMode){ e.preventDefault(); finishPoly(); return; }
   if(e.key !== "Escape") return;
-  if(lasso){ lasso = null; lassoRemove(); }
-  if(lassoMode) setLasso(false); else if(moveSet.length) clearMoveSet();
+  if(lasso){ lasso = null; lassoRemove(); return; }       // Esc cancels the in-progress polygon, stays in polygon mode
+  if(addMode) setAdd(false);
+  else if(lassoMode) setLasso(false);
+  else if(moveSet.length) clearMoveSet();
 });
 function currentSVGText(){                                // serialize current view, minus bookkeeping attrs
   const clone = svg.cloneNode(true);
-  clone.querySelectorAll("[data-orig],[data-dx],[data-dy]").forEach(el => {
-    el.removeAttribute("data-orig"); el.removeAttribute("data-dx"); el.removeAttribute("data-dy");
+  clone.querySelectorAll("[data-orig],[data-dx],[data-dy],[data-orig0]").forEach(el => {
+    el.removeAttribute("data-orig"); el.removeAttribute("data-dx"); el.removeAttribute("data-dy"); el.removeAttribute("data-orig0");
   });
   return '<?xml version="1.0" encoding="utf-8" standalone="no"?>\n' + new XMLSerializer().serializeToString(clone);
 }
 function flash(btn, msg, base, ms){ btn.textContent = msg; setTimeout(() => btn.textContent = base, ms || 1700); }
+function elemText(el){                                    // the label string: literal <text>, else matplotlib's preceding <!-- comment -->
+  let t = (el.textContent || "").trim();
+  if(t) return t;
+  let p = el.previousSibling;
+  while(p && p.nodeType === 3 && !(p.textContent || "").trim()) p = p.previousSibling;   // skip whitespace
+  return (p && p.nodeType === 8) ? (p.textContent || "").trim() : "";
+}
+function collectEdits(){                                  // per moved/resized element: id + label + the editor DELTA (its own original stripped)
+  const out = [];
+  svg.querySelectorAll("[data-orig0]").forEach(el => {
+    const xf = el.getAttribute("transform") || "", o0 = el.getAttribute("data-orig0") || "";
+    let delta = xf;
+    if(o0 && xf.endsWith(o0)) delta = xf.slice(0, xf.length - o0.length).trim();   // original is always the inner suffix
+    if(!delta) return;                                    // back to pristine (e.g. undone) → no edit to persist
+    out.push({ id: el.id || null, text: elemText(el) || null, delta: delta });
+  });
+  return out;
+}
 function saveSVG(){
   if(!svg) return;
   const b = document.getElementById("savesvg");
   fetch("/save-svg", { method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ rel: file, name: file.split("/").pop(), svg: currentSVGText() }) })
-    .then(r => r.json()).then(j => { if(j && j.ok) dirty = false; flash(b, (j && j.ok) ? "Saved ✓" : "Error", "💾 Save SVG"); })
-    .catch(() => flash(b, "Error", "💾 Save SVG"));
+    body: JSON.stringify({ rel: file, name: file.split("/").pop(), svg: currentSVGText(), edits: collectEdits() }) })
+    .then(r => r.json()).then(j => { if(j && j.ok) dirty = false; flash(b, (j && j.ok) ? "Saved ✓" : "Error", "💾"); })
+    .catch(() => flash(b, "Error", "💾"));
 }
 function exportPNG(){
   if(!svg) return;
@@ -265,16 +532,20 @@ function exportPNG(){
   b.textContent = "rendering…";
   fetch("/export-png", { method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ rel: file, name: file.split("/").pop(), svg: currentSVGText(), dpi: dpi }) })
-    .then(r => r.json()).then(j => flash(b, (j && j.ok) ? ("PNG ✓ " + j.dpi + "dpi") : ("Error: " + ((j && j.error) || "")).slice(0, 22), "🖼 Export PNG", 2200))
-    .catch(() => flash(b, "Error", "🖼 Export PNG"));
+    .then(r => r.json()).then(j => flash(b, (j && j.ok) ? ("PNG ✓ " + j.dpi + "dpi") : ("Error: " + ((j && j.error) || "")).slice(0, 22), "🖼", 2200))
+    .catch(() => flash(b, "Error", "🖼"));
 }
 document.getElementById("savesvg").onclick = saveSVG;
 document.getElementById("exportpng").onclick = exportPNG;
 document.getElementById("undobtn").onclick = undo;
 document.getElementById("clearsel").onclick = () => clearMoveSet();
+document.getElementById("delsel").onclick = deleteSel;
+document.getElementById("addtext").onclick = () => setAdd(!addMode);
 const fsbtn = document.getElementById("fsbtn");
 fsbtn.onclick = toggleFS;
-document.addEventListener("fullscreenchange", () => { fsbtn.textContent = document.fullscreenElement ? "⛶ Exit" : "⛶"; setTimeout(hiliteMoveSet, 60); });
+function onFullscreenChange(){ if(!fsActiveEl() && document.body.classList.contains("fs-mode")){ setFsUi(false); fsReflow(); } }
+document.addEventListener("fullscreenchange", onFullscreenChange);
+document.addEventListener("webkitfullscreenchange", onFullscreenChange);
 
 async function load(){
   try{
@@ -289,8 +560,19 @@ async function load(){
     svg = document.importNode(root, true);
     plot.textContent = "";
     plot.appendChild(svg);
+    if(!svg.getAttribute("viewBox")){                      // some exports drop the root viewBox → the SVG collapses to ~150px and clips; rebuild it from the content
+      try{ const bb = svg.getBBox();
+        if(bb.width && bb.height){ svg.setAttribute("viewBox", bb.x + " " + bb.y + " " + bb.width + " " + bb.height); svg.removeAttribute("width"); svg.removeAttribute("height"); }
+      }catch(e){}
+    }
     try{ const f = (svg.querySelector('[id^="figure"]') || svg).getBBox(); figArea = f.width * f.height; }catch(e){}
     svg.addEventListener("pointerdown", onDown);
+    svg.addEventListener("dblclick", e => {                 // dbl-click: close the polygon, else edit a text label
+      if(addMode) return;
+      if(lassoMode){ e.preventDefault(); finishPoly(); return; }
+      const t = e.target && e.target.closest ? e.target.closest("text") : null;
+      if(t){ e.preventDefault(); clearMoveSet(); editText(t, {}); }
+    });
     svg.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
     svg.addEventListener("pointercancel", onUp);

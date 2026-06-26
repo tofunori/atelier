@@ -30,6 +30,10 @@
   #state.saved{color:#7ec97e}
   #state.conflict{color:#ff6b6b}
   #hint{margin-left:auto;color:var(--muted);font-size:11.5px}
+  #clearSel{display:none;background:transparent;border:1px solid var(--border);color:var(--muted);
+            border-radius:5px;height:22px;padding:0 9px;font-size:11px;cursor:pointer;flex-shrink:0}
+  #clearSel.show{display:inline-block}
+  #clearSel:hover{color:var(--txt);border-color:var(--accent)}
   #body{flex:1;display:flex;min-height:0}
   #edPane{flex:1;min-width:0;display:none;flex-direction:column;border-right:1px solid var(--border)}
   #edPane.show{display:flex}
@@ -66,6 +70,7 @@
   </div>
   <span id="state"></span>
   <span id="hint">Cmd+S: save · selection visible to Claude</span>
+  <button id="clearSel" title="Clear the selection (Esc)">✕ clear</button>
 </header>
 <div id="body">
   <div id="edPane"></div>
@@ -140,6 +145,7 @@ function initEditor(text){
             lines: t.line - f.line + 1, words: sel.trim().split(/\s+/).length,
             text: sel, rel: file || path, name: fname, page: "L" + (f.line+1) + "-" + (t.line+1)
           })}).catch(()=>{});
+        selActive(sel.trim().split(/\s+/).length);
       }
     }, 200);
   });
@@ -172,7 +178,7 @@ function setMode(m){
     if(!cm) initEditor(srcText);   // first pass: fill the editor with the loaded text
     setTimeout(() => cm && cm.refresh(), 0);
   }
-  document.getElementById("hint").style.display = (m === "prev") ? "none" : "";
+  document.getElementById("hint").style.display = "";   // keep it visible in Preview too (selection works there)
 }
 btns.prev.onclick = () => setMode("prev");
 btns.split.onclick = () => setMode("split");
@@ -181,11 +187,7 @@ btns.edit.onclick = () => setMode("edit");
 document.addEventListener("keydown", e => {
   if((e.metaKey || e.ctrlKey) && e.key === "s"){ e.preventDefault(); save(); }
   if((e.metaKey || e.ctrlKey) && e.key === "e"){ e.preventDefault(); setMode(edPane.classList.contains("show") ? "prev" : "split"); }
-  if(e.key === "Escape"){
-    if(window._clMark){ window._clMark.clear(); window._clMark = null; }
-    fetch("/selinfo", {method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({lines:0, words:0})}).catch(()=>{});
-  }
+  if(e.key === "Escape"){ clearSelection(); }
 });
 
 // auto-reload if the file changes on disk while the buffer is clean (Claude qui edite)
@@ -201,6 +203,44 @@ setInterval(async () => {
     }
   }catch(e){}
 }, 2000);
+
+// --- text selected in the rendered Preview is visible to Claude (like the PDF / code viewers) ---
+let _prevSelT = null;
+const hintEl = document.getElementById("hint");
+const clearBtn = document.getElementById("clearSel");
+const HINT0 = hintEl.textContent;
+function selActive(words){                // show the confirmation + the clear button (selection is live)
+  hintEl.textContent = "✓ " + words + (words > 1 ? " words" : " word") + " selected → Claude";
+  hintEl.style.color = "var(--accent)";
+  clearBtn.classList.add("show");
+}
+function clearSelection(){                // cancel: drop the highlight + tell Claude there's no selection
+  const s = window.getSelection && window.getSelection();
+  if(s) s.removeAllRanges();
+  if(window._clMark){ window._clMark.clear(); window._clMark = null; }
+  fetch("/selinfo", {method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({lines:0, words:0})}).catch(()=>{});   // server removes fig-selection.json
+  hintEl.textContent = HINT0; hintEl.style.color = "";
+  clearBtn.classList.remove("show");
+}
+clearBtn.onclick = clearSelection;
+function pushPreviewSel(){
+  clearTimeout(_prevSelT);
+  _prevSelT = setTimeout(() => {
+    const s = window.getSelection();
+    if(!s || !s.anchorNode || !wrap.contains(s.anchorNode)) return;   // only the rendered preview
+    const txt = s.toString();
+    if(!txt.trim()) return;
+    const words = txt.trim().split(/\s+/).length;
+    fetch("/selinfo", {method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({ lines: txt.split("\n").length, words: words,
+        text: txt, rel: file || path, name: fname, page: "preview" })}).catch(()=>{});
+    selActive(words);
+  }, 200);
+}
+prevPane.addEventListener("mouseup", pushPreviewSel);
+prevPane.addEventListener("keyup", pushPreviewSel);
+document.addEventListener("selectionchange", pushPreviewSel);
 
 load();
 </script>

@@ -80,17 +80,14 @@ def root_arg(value: str) -> str:
 
 
 def gallery_url(port: int) -> str:
-    """Return the browser URL, forcing CSS fullscreen inside Orca panes.
+    """Return the browser URL, requesting real (native) whole-screen fullscreen.
 
-    Orca's embedded browser can accept requestFullscreen() but leave the split
-    pane broken on exit. System browsers keep native fullscreen unless the URL
-    explicitly asks for the CSS-only path.
+    Native requestFullscreen() escapes Orca's split pane to fill the whole Mac
+    screen; CSS fullscreen could only ever fill the pane. Exiting native FS used
+    to leave the pane stuck, so the gallery now hardens the exit reflow
+    (lbFsReflow). Append ?cssFs=1 manually to force the old pane-only path.
     """
-    if os.environ.get("ORCA_APP_VERSION") or os.environ.get("TERM_PROGRAM") == "Orca":
-        qs = "?cssFs=1"
-    else:
-        qs = "?nativeFs=1"
-    return f"http://127.0.0.1:{port}/{OUT}{qs}"
+    return f"http://127.0.0.1:{port}/{OUT}?nativeFs=1"
 
 
 def open_cmux_browser(url: str) -> bool:
