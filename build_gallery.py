@@ -295,7 +295,7 @@ HTML = """<!DOCTYPE html>
   #lb img{max-width:94vw;max-height:86vh;object-fit:contain;background:#fff;border-radius:6px;cursor:zoom-in}
   #lb.fs{background:#000;cursor:none;padding:0}
   #lb.fs #lbWrap{flex:1;display:flex;align-items:center;justify-content:center;width:100%;height:100%;min-height:0}
-  #lb.fs img{max-width:100vw;max-height:100vh;width:100vw;height:100vh;object-fit:contain;border-radius:0;background:#000;box-shadow:none;cursor:none}
+  #lb.fs img{max-width:100vw;max-height:100vh;object-fit:contain;border-radius:0;background:#000;box-shadow:none;cursor:none;image-rendering:auto}
   #lb.fs #lbCap,#lb.fs .lbBtn,#lb.fs #lbClose,#lb.fs #annotBar,#lb.fs #annotNote{display:none!important}
   #lb.fs #lbFs{opacity:0;pointer-events:none;transition:opacity .22s;color:rgba(255,255,255,.75);
       background:rgba(0,0,0,.5);border-radius:8px;width:40px;height:40px;top:8px;right:8px}
@@ -807,7 +807,7 @@ async function lbClose(){
   const v=document.getElementById('lbVid');if(v){v.pause();v.removeAttribute('src');v.load();}
   lb().classList.remove('show');lb().classList.remove('annot');lbIdx=-1;
 }
-let lbFsUiTimer=0, fsLeaving=false, nativeFsOk=null, lbFsEnterGen=0;
+let lbFsUiTimer=0, fsLeaving=false, nativeFsOk=null, lbFsEnterGen=0, lbNativeReq=false;
 function fsActiveEl(){
   return document.fullscreenElement||document.webkitFullscreenElement||null;
 }
@@ -856,13 +856,15 @@ async function lbFsLeave(){
   if(fsLeaving) return;
   fsLeaving=true;
   lbFsEnterGen++;
-  const hadNative=!!fsActiveEl();
+  const wasNative=!!fsActiveEl()||lbNativeReq;
+  lbNativeReq=false;
   try{
     lbFsExit();
-    if(hadNative){
-      try{await document.exitFullscreen();}catch(_){
-        try{document.webkitExitFullscreen?.();}catch(_){}
-      }
+    if(wasNative){
+      // Orca's embedded WebKit can honor only the prefixed exit (or ignore
+      // exitFullscreen entirely) — call both, don't wait for one to throw.
+      try{await document.exitFullscreen?.();}catch(_){}
+      try{await document.webkitExitFullscreen?.();}catch(_){}
     }
   } finally { fsLeaving=false; lbFsReflow(); }
 }
@@ -879,9 +881,10 @@ async function lbFsToggle(){
   const req=root.requestFullscreen||root.webkitRequestFullscreen;
   if(!req){nativeFsOk=false;return;}
   try{
+    lbNativeReq=true;
     await req.call(root);
     if(gen!==lbFsEnterGen){
-      if(fsActiveEl()) await lbFsLeave();
+      if(fsActiveEl()||lbNativeReq) await lbFsLeave();
       return;
     }
     nativeFsOk=!!fsActiveEl();

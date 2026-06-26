@@ -464,10 +464,10 @@ function fsReflow(){
   [60,160,320,600].forEach(ms=>setTimeout(kick,ms));
 }
 async function leaveFS(){
-  if(fsActiveEl()){
-    try{ await document.exitFullscreen(); }
-    catch(e){ try{ document.webkitExitFullscreen && document.webkitExitFullscreen(); }catch(_){} }
-  }
+  // Orca's embedded WebKit can ignore one exit path — try both, don't wait for
+  // the standard call to throw before reaching the prefixed one.
+  try{ await document.exitFullscreen?.(); }catch(e){}
+  try{ document.webkitExitFullscreen && document.webkitExitFullscreen(); }catch(_){}
   setFsUi(false);
   fsReflow();
 }
