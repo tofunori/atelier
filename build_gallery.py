@@ -295,7 +295,11 @@ HTML = """<!DOCTYPE html>
   #lb img{max-width:94vw;max-height:86vh;object-fit:contain;background:#fff;border-radius:6px;cursor:zoom-in}
   #lb.fs{background:#000;cursor:none;padding:0}
   #lb.fs #lbWrap{flex:1;display:flex;align-items:center;justify-content:center;width:100%;height:100%;min-height:0}
-  #lb.fs img{max-width:100vw;max-height:100vh;object-fit:contain;border-radius:0;background:#000;box-shadow:none;cursor:none;image-rendering:auto}
+  #lb.fs img{max-width:100vw;max-height:100vh;object-fit:contain;border-radius:0;background:#000;box-shadow:none;cursor:none}
+  /* In TRUE native fullscreen (cmux / real browsers) fill the whole screen.
+     In CSS-only pane-fill (Orca) :fullscreen never matches, so the image is
+     not upscaled and stays sharp. */
+  :fullscreen #lbImg,:-webkit-full-screen #lbImg{width:100vw;height:100vh}
   #lb.fs #lbCap,#lb.fs .lbBtn,#lb.fs #lbClose,#lb.fs #annotBar,#lb.fs #annotNote{display:none!important}
   #lb.fs #lbFs{opacity:0;pointer-events:none;transition:opacity .22s;color:rgba(255,255,255,.75);
       background:rgba(0,0,0,.5);border-radius:8px;width:40px;height:40px;top:8px;right:8px}

@@ -82,14 +82,18 @@ class FullscreenRegressionTests(unittest.TestCase):
         gallery = (ROOT / "build_gallery.py").read_text()
         self.assertIn("return false;", gallery.split("function lbNativeFsAllowed()")[1])
 
-    def test_fullscreen_image_is_not_upscaled(self):
-        # The fullscreen image must NOT be force-stretched to the viewport
-        # (width:100vw;height:100vh) — that upscaled small figures into a blur.
+    def test_fullscreen_image_fills_only_in_true_fullscreen(self):
+        # CSS pane-fill (Orca): the image must NOT be force-stretched to the
+        # viewport — that upscaled small figures into a blur.
         gallery = (ROOT / "build_gallery.py").read_text()
         fs_img = gallery.split("#lb.fs img{")[1].split("}")[0]
         self.assertIn("max-width:100vw", fs_img)
-        self.assertIn("max-height:100vh", fs_img)
         self.assertNotIn("width:100vw;height:100vh", fs_img)
+        # True native fullscreen (cmux / real browsers): the image fills the
+        # whole screen via the :fullscreen rule.
+        self.assertIn(":fullscreen #lbImg", gallery)
+        fill = gallery.split(":fullscreen #lbImg")[1].split("}")[0]
+        self.assertIn("width:100vw;height:100vh", fill)
 
 
 if __name__ == "__main__":
