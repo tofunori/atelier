@@ -97,6 +97,54 @@ def _orca_window_state(restore=True):
                    or "no Orca window found"}
 
 
+def _orca_ax_fullscreen():
+    script = '''
+tell application id "com.stablyai.orca" to activate
+delay 0.1
+tell application "System Events"
+  tell process "Orca"
+    if (count of windows) is 0 then return "missing"
+    return value of attribute "AXFullScreen" of window 1
+  end tell
+end tell
+'''
+    try:
+        r = subprocess.run(["osascript"], input=script, capture_output=True,
+                           text=True, timeout=5)
+    except Exception:
+        return None
+    out = (r.stdout or "").strip().lower()
+    if out == "true":
+        return True
+    if out == "false":
+        return False
+    return None
+
+
+def _orca_press_escape(win_id=None):
+    args = ["computer", "press-key", "--app", "Orca", "--restore-window",
+            "--no-screenshot", "--key", "Escape"]
+    if win_id:
+        args[4:4] = ["--window-id", str(win_id)]
+    return _run_orca_json(args, timeout=8)
+
+
+def _osascript_escape_key():
+    script = '''
+tell application id "com.stablyai.orca" to activate
+delay 0.1
+tell application "System Events"
+  key code 53
+end tell
+'''
+    try:
+        r = subprocess.run(["osascript"], input=script, capture_output=True,
+                           text=True, timeout=5)
+        return r.returncode == 0, {"stderr": (r.stderr or "")[-800:]}
+    except Exception as e:
+        return False, {"error": str(e)}
+
+
 def _osascript_fullscreen_hotkey():
     script = '''
 tell application id "com.stablyai.orca" to activate
@@ -122,25 +170,40 @@ def orca_fullscreen_exit():
                 "activated": activated}
 
     win_id = (before.get("window") or {}).get("id")
-    hotkey_args = ["computer", "hotkey", "--app", "Orca", "--restore-window",
-                   "--no-screenshot", "--key", "Control+Command+F"]
-    if win_id:
-        hotkey_args[4:4] = ["--window-id", str(win_id)]
-    ok, data = _run_orca_json(hotkey_args, timeout=10)
-    method = "orca computer hotkey"
+    ax_before = _orca_ax_fullscreen()
+    ok, data = _orca_press_escape(win_id)
+    method = "orca computer press-key Escape"
     if not ok:
         activated_retry, _ = _activate_orca()
         time.sleep(0.25)
-        ok, data = _run_orca_json(hotkey_args, timeout=10)
+        ok, data = _orca_press_escape(win_id)
         activated = activated or activated_retry
     if not ok:
-        ok, data = _osascript_fullscreen_hotkey()
-        method = "osascript System Events hotkey"
+        ok, data = _osascript_escape_key()
+        method = "osascript System Events Escape"
+
+    time.sleep(0.35)
+    ax_after_escape = _orca_ax_fullscreen()
+    mac_toggled = False
+    if ax_after_escape is True:
+        hotkey_args = ["computer", "hotkey", "--app", "Orca", "--restore-window",
+                       "--no-screenshot", "--key", "Control+Command+F"]
+        if win_id:
+            hotkey_args[4:4] = ["--window-id", str(win_id)]
+        mac_ok, mac_data = _run_orca_json(hotkey_args, timeout=10)
+        if not mac_ok:
+            mac_ok, mac_data = _osascript_fullscreen_hotkey()
+        mac_toggled = bool(mac_ok)
+        ok = ok and mac_ok
+        if not mac_ok:
+            data = mac_data
 
     time.sleep(0.45)
     after_ok, after = _orca_window_state(restore=True)
     return {"ok": bool(ok and after_ok), "method": method, "activated": activated,
             "before": before.get("window"), "after": after.get("window"),
+            "macFullscreenBefore": ax_before, "macFullscreenAfterEscape": ax_after_escape,
+            "macFullscreenToggled": mac_toggled,
             "error": None if ok else data.get("error", "fullscreen hotkey failed")}
 
 

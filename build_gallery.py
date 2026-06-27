@@ -815,25 +815,25 @@ let lbFsUiTimer=0, fsLeaving=false, nativeFsOk=null, lbFsEnterGen=0, lbNativeReq
 function fsActiveEl(){
   return document.fullscreenElement||document.webkitFullscreenElement||null;
 }
+function lbOrcaFsExitAllowed(){
+  let p=null; try{p=new URLSearchParams(location.search);}catch(_){}
+  return !!(p&&(p.get('orcaFs')==='1'||p.get('cssFs')==='1'));
+}
 function lbNativeFsAllowed(){
   let p=null; try{p=new URLSearchParams(location.search);}catch(_){}
   if(p&&p.get('nativeFs')==='1') return true;   // real browsers: true whole-screen
-  if(p&&p.get('orcaFs')==='1') return true;     // Orca webview: native enter, server-assisted exit
-  if(p&&p.get('cssFs')==='1') return false;
+  if(lbOrcaFsExitAllowed()) return true;        // Orca webview: native enter, server-assisted exit
   // Orca's embedded WebKit ACCEPTS requestFullscreen() (the pane fills the whole
   // screen) but IGNORES exitFullscreen() — the pane stays stuck full-screen on
   // exit. No JS trick fixes it (tried both exit APIs + multi-frame reflow).
-  // Orca is allowed into native FS only when the launcher passes ?orcaFs=1,
-  // which also enables a local-server exit route.
+  // Orca is allowed into native FS only when the launcher passes ?orcaFs=1.
+  // Older Orca tabs used ?cssFs=1; keep that as a legacy alias so already-open
+  // gallery tabs do not remain stuck in pane-only fullscreen after upgrading.
   const brands=(navigator.userAgentData&&navigator.userAgentData.brands||[]).map(b=>b.brand).join(' ');
   const sig=[navigator.userAgent||'',navigator.vendor||'',brands].join(' ');
   if(/\b(Orca|Electron|cmux)\b/i.test(sig)) return false;
   if(window.self!==window.top) return false;
   return false;
-}
-function lbOrcaFsExitAllowed(){
-  let p=null; try{p=new URLSearchParams(location.search);}catch(_){}
-  return !!(p&&p.get('orcaFs')==='1');
 }
 async function lbOrcaFsExit(){
   if(!lbOrcaFsExitAllowed()) return null;

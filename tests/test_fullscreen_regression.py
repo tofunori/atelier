@@ -8,9 +8,9 @@ not calling both exit APIs, not requesting FS on a child element.
 
 So inside Orca we use a server-assisted mode: the lightbox enters native
 fullscreen, but exit calls a local-only server route that activates Orca and
-sends the macOS fullscreen toggle through the Orca desktop bridge. Real browsers
-keep plain ?nativeFs=1. Other embedded shells still default to CSS-only unless
-they explicitly opt in.
+sends a trusted Escape through the Orca desktop bridge. Real browsers keep plain
+?nativeFs=1. Other embedded shells still default to CSS-only unless they
+explicitly opt in.
 """
 
 import unittest
@@ -31,6 +31,10 @@ class FullscreenRegressionTests(unittest.TestCase):
         self.assertIn("def orca_fullscreen_exit()", server)
         self.assertIn("get-app-state", server)
         self.assertIn("list-windows", server)
+        self.assertIn("press-key", server)
+        self.assertIn('"Escape"', server)
+        self.assertIn("def _orca_ax_fullscreen()", server)
+        self.assertIn("if ax_after_escape is True:", server)
         self.assertIn("Control+Command+F", server)
 
     def test_gallery_skips_native_fullscreen_in_embedded_shells(self):
@@ -39,7 +43,8 @@ class FullscreenRegressionTests(unittest.TestCase):
         self.assertIn("function lbNativeFsAllowed()", gallery)
         self.assertIn("function lbOrcaFsExitAllowed()", gallery)
         self.assertIn("/orca-fullscreen-exit", gallery)
-        self.assertIn("p.get('orcaFs')==='1'", gallery)
+        self.assertIn("p.get('orcaFs')==='1'||p.get('cssFs')==='1'", gallery)
+        self.assertIn("if(lbOrcaFsExitAllowed()) return true;", gallery)
         self.assertIn(r"\b(Orca|Electron|cmux)\b", gallery)
         guard = "if(!lbNativeFsAllowed()){nativeFsOk=false;return;}"
         native_call = "const req=root.requestFullscreen||root.webkitRequestFullscreen;"
