@@ -6,11 +6,11 @@ LESSON (learned the hard way, twice): Orca's embedded WebKit ACCEPTS
 stays stuck full-screen on exit. No client-side trick fixes it: not a reflow,
 not calling both exit APIs, not requesting FS on a child element.
 
-So inside Orca we use a server-assisted mode: the lightbox enters native
-fullscreen, but exit calls a local-only server route that activates Orca and
-sends a trusted Escape through the Orca desktop bridge. Real browsers keep plain
-?nativeFs=1. Other embedded shells still default to CSS-only unless they
-explicitly opt in.
+So inside Orca we do not enter WebKit fullscreen at all. The gallery asks the
+local server to launch the project-owned native macOS fullscreen viewer for the
+selected image; closing that viewer cannot leave Orca's webview stuck. Real
+browsers keep plain ?nativeFs=1. Other embedded shells still default to CSS-only
+unless they explicitly opt in.
 """
 
 import unittest
@@ -27,25 +27,27 @@ import cmux_gallery
 class FullscreenRegressionTests(unittest.TestCase):
     def test_server_has_orca_fullscreen_exit_route(self):
         server = (ROOT / "fig_annotate_server.py").read_text()
-        self.assertIn("/orca-fullscreen-exit", server)
-        self.assertIn("def orca_fullscreen_exit()", server)
-        self.assertIn("get-app-state", server)
-        self.assertIn("list-windows", server)
-        self.assertIn("press-key", server)
-        self.assertIn('"Escape"', server)
-        self.assertIn("def _orca_ax_fullscreen()", server)
-        self.assertIn("if ax_after_escape is True:", server)
-        self.assertIn("Control+Command+F", server)
+        self.assertIn("/orca-native-fullscreen", server)
+        self.assertIn("def launch_native_fullscreen(path)", server)
+        self.assertIn("native_fullscreen_viewer.py", server)
+        self.assertIn("NATIVE_FULLSCREEN_EXTS", server)
+        self.assertIn("threading.Thread(target=proc.wait", server)
+        self.assertIn('"method": "noop; use /orca-native-fullscreen"', server)
+        self.assertNotIn("def _orca_reanchor_browser_tab", server)
+        self.assertNotIn('"tab", "switch"', server)
+        self.assertNotIn('"terminal", "switch"', server)
 
     def test_gallery_skips_native_fullscreen_in_embedded_shells(self):
         gallery = (ROOT / "build_gallery.py").read_text()
 
         self.assertIn("function lbNativeFsAllowed()", gallery)
         self.assertIn("function lbOrcaFsExitAllowed()", gallery)
-        self.assertIn("/orca-fullscreen-exit", gallery)
+        self.assertIn("function lbOrcaNativeFullscreen()", gallery)
+        self.assertIn("/orca-native-fullscreen", gallery)
         self.assertIn("p.get('orcaFs')==='1'||p.get('cssFs')==='1'", gallery)
-        self.assertIn("if(lbOrcaFsExitAllowed()) return true;", gallery)
+        self.assertIn("if(lbOrcaFsExitAllowed()) return false;", gallery)
         self.assertIn(r"\b(Orca|Electron|cmux)\b", gallery)
+        self.assertIn("if(lbOrcaFsExitAllowed()){\n    await lbOrcaNativeFullscreen();\n    return;\n  }", gallery)
         guard = "if(!lbNativeFsAllowed()){nativeFsOk=false;return;}"
         native_call = "const req=root.requestFullscreen||root.webkitRequestFullscreen;"
         self.assertIn(guard, gallery)
@@ -91,6 +93,24 @@ class FullscreenRegressionTests(unittest.TestCase):
     def test_gallery_defaults_to_css_fullscreen_without_native_flag(self):
         gallery = (ROOT / "build_gallery.py").read_text()
         self.assertIn("return false;", gallery.split("function lbNativeFsAllowed()")[1])
+
+    def test_orca_native_viewer_uses_notch_safe_image_area(self):
+        viewer = (ROOT / "native_fullscreen_viewer.py").read_text()
+
+        self.assertIn("DEFAULT_IMAGE_MARGIN = 200", viewer)
+        self.assertIn("def safe_content_rect(screen):", viewer)
+        self.assertIn("screen.safeAreaInsets()", viewer)
+        self.assertIn("screen.visibleFrame()", viewer)
+        self.assertIn("CMUX_GALLERY_FULLSCREEN_MARGIN", viewer)
+        self.assertIn("root = NSView.alloc().initWithFrame_", viewer)
+        self.assertIn("content_frame = safe_content_rect(screen)", viewer)
+        self.assertIn("root.addSubview_(view)", viewer)
+        self.assertIn("window.setContentView_(root)", viewer)
+        self.assertIn("frame = safe_content_rect(screen)", viewer)
+        self.assertIn("def scrollWheel_(self, event):", viewer)
+        self.assertIn("def magnifyWithEvent_(self, event):", viewer)
+        self.assertIn("def mouseDragged_(self, event):", viewer)
+        self.assertIn("self._applyZoomAtPoint", viewer)
 
     def test_fullscreen_image_fills_the_viewport(self):
         # The fullscreen image must fill the viewport (width/height:100vw/vh) so
