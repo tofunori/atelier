@@ -257,22 +257,25 @@ HTML = """<!DOCTYPE html>
   body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
        background:var(--bg);color:var(--txt);font-size:14px}
   header{position:sticky;top:0;z-index:10;background:var(--bg);background:color-mix(in srgb,var(--bg) 90%,transparent);backdrop-filter:blur(8px);
-         border-bottom:1px solid var(--border);padding:9px 16px}
-  .brand{display:flex;align-items:baseline;gap:8px;margin-bottom:8px;flex-wrap:wrap}
+         border-bottom:1px solid var(--border);padding:7px 12px}
+  .brand{display:flex;align-items:baseline;gap:7px;margin-bottom:6px;flex-wrap:wrap}
   .brand .logo{color:var(--txt);align-self:center;display:block}
   .brand .wm{font-size:15px;font-weight:600;letter-spacing:.01em}
   .brand .proj{font-size:12px;color:var(--muted);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
   .brand .stat{margin-left:auto;font-size:12px;color:var(--muted)}
-  .controls{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
-  input[type=search]{flex:1;min-width:220px;padding:6px 10px;border-radius:6px;border:1px solid var(--border);
-        background:var(--card);color:var(--txt);font-size:13px}
+  .controls{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+  input[type=search]{flex:1;min-width:170px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);
+        background:var(--card);color:var(--txt);font-size:12px;height:26px}
   input[type=search].collapsed{display:none}
   #searchChip.on{border-color:var(--accent);color:var(--accent)}
-  select,button{padding:5px 9px;border-radius:6px;border:1px solid var(--border);background:var(--card);
-        color:var(--txt);font-size:12px;cursor:pointer}
-  #folder{max-width:200px}   /* keep it compact; long folder paths would otherwise stretch it to its own line */
-  .chip{display:inline-flex;align-items:center;gap:5px;padding:4px 9px;border-radius:6px;
-        border:1px solid var(--border);background:var(--card);cursor:pointer;user-select:none;font-size:11.5px}
+  select,button{padding:3px 7px;border-radius:6px;border:1px solid rgba(255,255,255,.12);background:transparent;
+        color:var(--txt);font-size:11px;cursor:pointer;height:26px;line-height:1.2}
+  select:hover,button:hover{border-color:rgba(255,255,255,.28)}
+  #sort{max-width:170px}
+  #folder{max-width:145px}   /* keep it compact; long folder paths would otherwise stretch it to its own line */
+  .chip{display:inline-flex;align-items:center;gap:4px;padding:3px 7px;border-radius:6px;
+        border:1px solid rgba(255,255,255,.12);background:transparent;cursor:pointer;user-select:none;font-size:11px;min-height:26px}
+  .chip:hover{border-color:rgba(255,255,255,.28)}
   .chip.off{opacity:.4}
   .menu{position:fixed;z-index:60;display:none;flex-direction:column;gap:2px;
         background:var(--card);border:1px solid var(--border);border-radius:10px;padding:7px;min-width:min(200px,calc(100vw - 16px));max-width:min(360px,calc(100vw - 16px));
@@ -295,11 +298,6 @@ HTML = """<!DOCTYPE html>
   .menu input[type=checkbox]{accent-color:var(--accent);margin-right:6px;vertical-align:-1px}
   .menu .mhd.sep{border-top:1px solid var(--border);margin-top:4px;padding-top:7px}
   .menu label.lbl{display:flex;align-items:center}
-  .tags{display:flex;flex-wrap:wrap;gap:4px;margin:3px 0 0}
-  .tagc{display:inline-flex;align-items:center;gap:3px;background:#33415a;color:#cfe0ff;border-radius:10px;padding:1px 7px;font-size:10.5px;cursor:pointer}
-  .tagc.on{background:var(--accent);color:#06121f}
-  .tagc .x{color:inherit;opacity:.55;cursor:pointer}
-  .tagc .x:hover{opacity:1}
   .playbtn{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:3;
         width:48px;height:48px;border-radius:50%;background:rgba(0,0,0,.5);color:#fff;
         display:flex;align-items:center;justify-content:center;font-size:17px;padding-left:3px;
@@ -310,9 +308,9 @@ HTML = """<!DOCTYPE html>
   .menu .mlink:hover{color:var(--accent)}
   .count{color:var(--muted);font-size:12px;margin-left:auto}
   main{padding:18px 20px;display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px}
-  .card{background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;
-        display:flex;flex-direction:column;transition:.12s}
-  .card:hover{box-shadow:0 4px 16px rgba(0,0,0,.28);transform:translateY(-1px)}
+  .card{background:var(--card);border:1px solid rgba(255,255,255,.07);border-radius:10px;overflow:hidden;
+        display:flex;flex-direction:column}
+  .card:hover{border-color:rgba(255,255,255,.18)}
   .thumb{height:150px;background:#fff;display:flex;align-items:center;justify-content:center;overflow:hidden}
   .thumb img{max-width:100%;max-height:100%;object-fit:contain}
   .ph{height:150px;display:flex;flex-direction:column;align-items:center;justify-content:center;
@@ -322,9 +320,13 @@ HTML = """<!DOCTYPE html>
         font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:8.5px;
         line-height:1.4;color:#9aa6b6;white-space:pre;tab-size:2;
         -webkit-mask-image:linear-gradient(#000 72%,transparent);mask-image:linear-gradient(#000 72%,transparent)}
-  .meta{padding:10px 12px;display:flex;flex-direction:column;gap:5px;flex:1}
-  .nm{font-size:13px;font-weight:600;word-break:break-word;line-height:1.3}
+  .meta{padding:9px 11px 10px;display:flex;flex-direction:column;gap:3px;flex:1}
+  .nm{font-size:12.5px;font-weight:500;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .fld{font-size:11px;color:var(--muted);word-break:break-all}
+  .row2{display:flex;gap:6px;align-items:center;font-size:10.5px;color:var(--muted);min-width:0;margin-top:auto}
+  .row2 .mf{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .row2 .md{flex:none}
+  .row2 .fv,.row2 .rt{color:#d9a441;flex:none}
   .row{display:flex;gap:8px;align-items:center;font-size:11px;color:var(--muted);margin-top:auto}
   .tag{padding:2px 7px;border-radius:5px;background:var(--card2);font-size:10px;text-transform:uppercase}
   .tag.archive{background:var(--arch);color:#d9a441}
@@ -335,27 +337,24 @@ HTML = """<!DOCTYPE html>
   .tag.workflow.candidate{background:#3b321d;color:#ffd978}
   .card.hid{opacity:.5}
   .card.hid:hover{opacity:1}
-  .acts{display:flex;gap:5px;padding:0 12px 11px}
-  .acts a,.acts button{flex:1;text-align:center;text-decoration:none;font-size:10.5px;padding:3px 4px;
-        background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--txt);cursor:pointer;transition:.12s}
-  .acts a:hover,.acts button:hover{border-color:#5b6575;color:#fff;background:rgba(255,255,255,.04)}
-  .acts .ico{flex:0 0 auto;min-width:25px;padding:3px 6px;font-size:11.5px;line-height:1}
-  .acts .ico.on{color:#ffce3a;border-color:#ffce3a}
-  .acts .del:hover{color:#ff9a9a;border-color:#7a2a2a;background:rgba(255,80,80,.08)}
+  .hov{position:absolute;top:6px;right:6px;z-index:4;display:none;gap:4px}
+  .card:hover .hov{display:flex}
+  .hov button{height:24px;min-width:26px;padding:0 8px;font-size:10.5px;line-height:1;cursor:pointer;
+        background:rgba(15,17,21,.9);border:1px solid rgba(255,255,255,.16);border-radius:6px;color:var(--txt)}
+  .hov button:hover{color:#fff;border-color:#8a93a3}
+  .hov button.on{color:#d9a441;border-color:#d9a441}
   .selbox{position:absolute;top:6px;left:6px;z-index:4;font-size:15px;cursor:pointer;line-height:1;
         background:rgba(15,17,21,.85);border:1px solid var(--border);border-radius:6px;padding:4px 7px;user-select:none;color:var(--txt);
-        opacity:0;transition:opacity .12s}
+        opacity:0}
   .card:hover .selbox,.selbox.on{opacity:1}
   .selbox.on{color:#ff6b6b;border-color:#ff6b6b}
   .star{position:absolute;top:6px;right:6px;font-size:18px;cursor:pointer;line-height:1;
         background:rgba(15,17,21,.85);border:1px solid var(--border);border-radius:50%;padding:5px 6px;user-select:none;color:var(--txt)}
   .star.on{color:#ffce3a;border-color:#ffce3a}
-  .rate{display:flex;gap:1px;margin-top:3px;font-size:13px;line-height:1;user-select:none}
-  .rate span{cursor:pointer;color:var(--border);transition:color .1s}
-  .rate span.on{color:#ffce3a}
-  .rate span:hover{color:#ffe28a}
-  .wfsel{width:100%;margin-top:3px;padding:3px 6px;border-radius:5px;border:1px solid var(--border);
-        background:var(--card2);color:var(--muted);font-size:10.5px}
+  .rate{display:flex;gap:2px;font-size:14px;line-height:1;user-select:none}
+  .rate span{cursor:pointer;color:var(--border)}
+  .rate span.on{color:#d9a441}
+  .rate span:hover{color:#e8c26a}
   .card{position:relative}
   .empty{grid-column:1/-1;text-align:center;color:var(--muted);padding:60px}
   #lb{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.88);display:none;
@@ -369,8 +368,8 @@ HTML = """<!DOCTYPE html>
      High-res figures scale down sharply; low-res ones fill but soften (the
      trade-off for "take the whole screen"). */
   #lb.fs img{max-width:100vw;max-height:100vh;width:100vw;height:100vh;object-fit:contain;border-radius:0;background:#000;box-shadow:none;cursor:none}
-  #lb.fs #lbCap,#lb.fs .lbBtn,#lb.fs #lbClose,#lb.fs #annotBar,#lb.fs #annotNote{display:none!important}
-  #lb.fs #lbFs{opacity:0;pointer-events:none;transition:opacity .22s;color:rgba(255,255,255,.75);
+  #lb.fs #lbCap,#lb.fs .lbBtn,#lb.fs #lbClose,#lb.fs #annotBar,#lb.fs #annotNote,#lb.fs #annotPill{display:none!important}
+  #lb.fs #lbFs{opacity:0;pointer-events:none;color:rgba(255,255,255,.75);
       background:rgba(0,0,0,.5);border-radius:8px;width:40px;height:40px;top:8px;right:8px}
   #lb.fs.fs-ui,#lb.fs.fs-ui img{cursor:default}
   #lb.fs.fs-ui #lbFs{opacity:1;pointer-events:auto}
@@ -395,14 +394,36 @@ HTML = """<!DOCTYPE html>
   #annotBar input[type=color]{width:30px;height:28px;border:none;background:none;cursor:pointer;padding:0}
   #lbWrap{position:relative;cursor:default}
   #annotCv{position:absolute;inset:0;display:none;touch-action:none}
-  #annotNote{position:fixed;z-index:103;display:none;align-items:center;gap:8px;
-      background:#2a2e38;border:1px solid var(--border);border-radius:22px;padding:7px 14px;
-      box-shadow:0 6px 24px rgba(0,0,0,.5)}
-  #annotNote input{background:none;border:none;outline:none;color:var(--txt);font-size:13px;width:240px}
-  #annotNote .del{cursor:pointer;color:#9aa3b2;font-size:15px;padding:0 2px}
+  #annotNote{position:fixed;z-index:103;display:none;flex-direction:column;gap:10px;width:340px;
+      background:rgba(24,27,34,.97);border:1px solid #3a4150;border-radius:16px;padding:12px 14px;
+      box-shadow:0 14px 48px rgba(0,0,0,.55)}
+  #annotNote .anRow{display:flex;gap:10px;align-items:flex-start}
+  #annotNote textarea{flex:1;background:rgba(255,255,255,.04);border:1px solid #3a4150;border-radius:10px;
+      outline:none;color:var(--txt);font-size:13px;line-height:1.45;padding:8px 10px;resize:none;
+      font-family:inherit;min-height:44px}
+  #annotNote textarea:focus{border-color:#5b9dff;box-shadow:0 0 0 2px rgba(91,157,255,.22)}
+  #annotNote .anBtns{display:flex;gap:8px;align-items:center}
+  #annotNote .anBtns .sp{flex:1}
+  #annotNote .anBtns button{padding:6px 14px;font-size:12.5px;border-radius:8px;cursor:pointer;
+      border:1px solid #3a4150;background:transparent;color:var(--txt)}
+  #annotNote .anBtns .anCancel:hover{border-color:#5b6575}
+  #annotNote .anBtns .anSave{background:#e8eaed;border-color:#e8eaed;color:#111;font-weight:600}
+  #annotNote .anBtns .anSave:hover{background:#fff}
+  #annotNote .del{cursor:pointer;color:#9aa3b2;font-size:15px;padding:2px}
   #annotNote .del:hover{color:#ff6b6b}
   #annotNote .nb{background:var(--accent);color:#fff;border-radius:50%;width:22px;height:22px;
-      display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex:none}
+      display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex:none;margin-top:6px}
+  #annotPill{position:fixed;bottom:26px;left:50%;transform:translateX(-50%);z-index:102;display:none;
+      align-items:center;gap:12px;background:rgba(24,27,34,.97);border:1px solid #3a4150;border-radius:28px;
+      padding:7px 7px 7px 18px;box-shadow:0 10px 36px rgba(0,0,0,.5);color:var(--txt);font-size:13.5px}
+  #lb.annot #annotPill.on{display:flex}
+  #annotPill .ic{font-size:15px;color:#9aa3b2}
+  #annotPill button{width:40px;height:40px;border-radius:50%;border:none;background:#c96442;color:#fff;
+      font-size:19px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex:none}
+  #annotPill button:hover{background:#e0714a}
+  #annotPill button.x{width:34px;height:34px;background:transparent;border:1px solid #3a4150;
+      color:#9aa3b2;font-size:14px}
+  #annotPill button.x:hover{background:transparent;border-color:#5b6575;color:#fff}
   #lb.annot #annotCv{display:block;cursor:crosshair}
   #lbClose{position:fixed;top:10px;right:14px;width:34px;height:34px;display:flex;align-items:center;justify-content:center;font-size:24px;color:var(--muted);cursor:pointer;z-index:101}
   #cmp{position:fixed;inset:0;z-index:120;background:#0b0b0d;display:none;flex-direction:column}
@@ -431,6 +452,13 @@ HTML = """<!DOCTYPE html>
   footer{padding:20px;text-align:center;color:var(--muted);font-size:11px}
   body.fs-mode{overflow:hidden;background:#000}
   body.fs-mode header,body.fs-mode main,body.fs-mode footer{display:none!important}
+  @media (max-width:700px){
+    header{padding:6px 10px}
+    .brand .wm{font-size:14px}.brand .proj{max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    #sort{max-width:155px}
+    #folder{max-width:130px}
+    .chip{padding-inline:6px}
+  }
 </style>
 </head>
 <body>
@@ -457,17 +485,13 @@ HTML = """<!DOCTYPE html>
     <span class="chip" id="fmtChip">Formats &#9662;</span>
     <div id="fmtMenu" class="menu"></div>
     <span class="chip off" id="favChip">&#9733; Favorites</span>
-    <span class="chip" id="tagChip" title="Filter by tag / collection">&#127991; Tags &#9662;</span>
-    <div id="tagMenu" class="menu"></div>
     <span class="chip" id="collChip" title="Collections and shortlists">&#9638; Collections &#9662;</span>
     <div id="collMenu" class="menu"></div>
-    <span class="chip" id="workflowChip" title="Filter by figure workflow status">&#9673; Workflow &#9662;</span>
+    <span class="chip" id="workflowChip" title="Filter by figure status">&#9673; Status &#9662;</span>
     <div id="workflowMenu" class="menu"></div>
     <span class="chip" id="recentChip" title="Recently opened files">&#8634; Recent &#9662;</span>
     <div id="recentMenu" class="menu"></div>
-    <span class="chip" id="healthChip" title="Gallery server health">&#9679; Health</span>
-    <div id="healthMenu" class="menu"></div>
-    <span class="chip" id="viewChip" title="View options — archives, hidden, auto-hide rules">&#9881; View &#9662;</span>
+    <span class="chip" id="viewChip" title="Settings — server health, theme, archives, hidden, auto-hide rules">&#9881; Settings &#9662;</span>
     <div id="viewMenu" class="menu"></div>
     <span id="rateFilter" style="display:none"></span>
     <button id="quoteClear" style="display:none" title="Clear the annotation pending in the Claude statusline">&#9998;&#10005; Annotation</button>
@@ -476,7 +500,6 @@ HTML = """<!DOCTYPE html>
     <button id="hideSel" style="display:none" title="Hide the selected files from the gallery (reversible)">Hide (0)</button>
     <button id="delSel" style="display:none;background:#5c1f1f;border-color:#7a2a2a">&#128465; Delete (0)</button>
     <button id="clrSel" style="display:none" title="Clear the selection">&#10005; Clear</button>
-    <button id="tagSel" style="display:none" title="Tag the selected files">&#127991; Tag (0)</button>
     <button id="collectSel" style="display:none" title="Add selected files to a collection">&#9638; Collect (0)</button>
     <button id="exportSel" style="display:none" title="Export selected: folder / zip / contact sheet">&#10515; Export (0) &#9662;</button>
     <div id="exportMenu" class="menu"></div>
@@ -489,15 +512,20 @@ HTML = """<!DOCTYPE html>
   <span class="lbBtn" id="lbPrev">&#8249;</span>
   <span class="lbBtn" id="lbNext">&#8250;</span>
   <div id="annotBar">
-    <button data-tool="arrow" title="Arrow (1)">&#8594;</button>
-    <button data-tool="rect" class="sel" title="Rectangle (2)">&#9645;</button>
-    <input type="color" id="annotColor" value="#ff2d2d" title="Color">
+    <button data-tool="ellipse" class="sel" title="Encercler (1)">&#9711;</button>
+    <button data-tool="arrow" title="Fl&egrave;che (2)">&#8594;</button>
+    <button data-tool="rect" title="Rectangle (3)">&#9645;</button>
+    <input type="color" id="annotColor" value="#33415e" title="Couleur">
     <button id="annotUndo" title="Undo">&#8630;</button>
     <button id="annotClear" title="Clear all">&#10006;</button>
     <button id="annotSend" title="Save the annotated PNG and paste the path into Claude Code" style="background:var(--border);color:var(--txt)">&#10148; Claude</button>
   </div>
   <div id="lbWrap"><img id="lbImg" src="" alt=""><canvas id="annotCv"></canvas></div>
-  <div id="annotNote"><span class="nb">1</span><input type="text" placeholder="Add a comment... (Enter)"><span class="del" title="Delete this annotation">&#128465;</span></div>
+  <div id="annotNote">
+    <div class="anRow"><span class="nb">1</span><textarea rows="2" placeholder="Ajouter une annotation&hellip;"></textarea></div>
+    <div class="anBtns"><span class="del" title="Supprimer cette annotation">&#128465;</span><span class="sp"></span><button class="anCancel">Annuler</button><button class="anSave">Enregistrer</button></div>
+  </div>
+  <div id="annotPill"><span class="ic">&#128172;</span><span id="annotPillN"></span><button class="x" id="annotPillCancel" title="Annuler : supprimer les commentaires sans envoyer">&#10005;</button><button id="annotPillSend" title="Envoyer directement dans la session Claude (avec soumission)">&#8593;</button></div>
   <iframe id="lbPdf" style="display:none;width:94vw;height:86vh;border:none;border-radius:6px;background:#fff"></iframe>
   <video id="lbVid" controls playsinline style="display:none;max-width:94vw;max-height:86vh;border-radius:6px;background:#000"></video>
   <div id="lbCap"></div>
@@ -532,8 +560,7 @@ document.addEventListener('click',e=>{
   else if(act==='lb') lbOpen(rel);
   else if(act==='open') openDefault(rel);
   else if(act==='src') findScript(rel);
-  else if(act==='tagf') setActiveTag(el.dataset.tag);
-  else if(act==='untag') removeTag(rel, el.dataset.tag);
+  else if(act==='more'){ e.stopImmediatePropagation(); cardMenu(el, rel); }
   else if(act==='rate') setRate(rel, +el.dataset.n, e);
   else if(act==='copy'){ navigator.clipboard.writeText(rel); el.textContent='✓'; setTimeout(()=>el.textContent='Path',1200); }
 });
@@ -578,7 +605,6 @@ function pushState(){
 const saveRatings = ()=>{localStorage.setItem('figRatings', JSON.stringify(ratings));pushState();};
 // --- tags / collections + rule-based (smart) hiding ---------------------------
 let tags = JSON.parse(localStorage.getItem('figTags')||'{}');            // {rel:[tag,...]}
-let activeTag = '';
 let collections = JSON.parse(localStorage.getItem('figCollections')||'{}'); // {name:[rel,...]}
 let activeCollection = '';
 let workflow = JSON.parse(localStorage.getItem('figWorkflow')||'{}');       // {rel:status}
@@ -599,8 +625,6 @@ function matchesRule(rel){
   const base = rel.slice(rel.lastIndexOf('/')+1);
   return hideRules.some(g=>{ const o=ruleToRe(g); return o.re.test(o.onBase?base:rel); });
 }
-const allTags = ()=>[...new Set(Object.values(tags).flat())].sort((a,b)=>a.localeCompare(b));
-function saveTags(){ localStorage.setItem('figTags', JSON.stringify(tags)); pushState(); }
 function saveRules(){ localStorage.setItem('figHideRules', JSON.stringify(hideRules)); for(const k in _ruleRe) delete _ruleRe[k]; pushState(); }
 fetch('/state').then(r=>r.json()).then(st=>{
   (st.favs||[]).forEach(f=>favs.add(f));
@@ -619,7 +643,7 @@ fetch('/state').then(r=>r.json()).then(st=>{
   localStorage.setItem('figCollections', JSON.stringify(collections));
   localStorage.setItem('figWorkflow', JSON.stringify(workflow));
   document.getElementById('favChip').textContent='\u2605 Favorites ('+favs.size+')';
-  updateHideChip(); buildTagChip(); buildCollectionChip(); buildWorkflowChip(); buildRecentChip(); buildHealthMenu(); buildViewMenu();
+  updateHideChip(); buildCollectionChip(); buildWorkflowChip(); buildRecentChip(); buildViewMenu();
   render();
 }).catch(()=>{}).finally(()=>{
   stateLoaded=true;                                 // disk state is merged in now; saves are safe
@@ -651,9 +675,6 @@ function updateDelBtn(){
   const h = document.getElementById('hideSel');
   h.style.display = selSet.size ? '' : 'none';
   h.textContent = 'Hide (' + selSet.size + ')';
-  const tg = document.getElementById('tagSel');
-  tg.style.display = selSet.size ? '' : 'none';
-  tg.textContent = '🏷 Tag (' + selSet.size + ')';
   const co = document.getElementById('collectSel');
   co.style.display = selSet.size ? '' : 'none';
   co.textContent = '▦ Collect (' + selSet.size + ')';
@@ -769,39 +790,13 @@ document.getElementById('hideSel').onclick = function(){
   selSet.clear();
   saveHidden(); updateHideChip(); updateDelBtn(); render();
 };
-// ============ tags / collections, smart-hide rules, export, figure -> script ============
-function tagsRow(rel){
-  const ts = tags[rel]||[];
-  if(!ts.length) return '';
-  return '<div class="tags">'+ts.map(t=>
-    `<span class="tagc${t===activeTag?' on':''}" data-act="tagf" data-tag="${escA(t)}" title="Filter by this tag">${esc(t)}<span class="x" data-act="untag" data-rel="${escA(rel)}" data-tag="${escA(t)}" title="Remove tag">×</span></span>`
-  ).join('')+'</div>';
-}
-function setActiveTag(t){ activeTag = (activeTag===t)?'':t; buildTagChip(); render(); }
-function removeTag(rel,t){
-  if(!tags[rel]) return;
-  tags[rel]=tags[rel].filter(x=>x!==t);
-  if(!tags[rel].length) delete tags[rel];
-  if(activeTag && !allTags().includes(activeTag)) activeTag='';
-  saveTags(); buildTagChip(); render();
-}
-function applyTagToSel(t){
-  t=(t||'').trim(); if(!t || !selSet.size) return;
-  selSet.forEach(rel=>{ const a=tags[rel]||(tags[rel]=[]); if(!a.includes(t)) a.push(t); });
-  saveTags(); buildTagChip(); render();
-}
-function deleteTagEverywhere(t){
-  for(const rel in tags){ tags[rel]=tags[rel].filter(x=>x!==t); if(!tags[rel].length) delete tags[rel]; }
-  if(activeTag===t) activeTag='';
-  saveTags(); buildTagChip(); render();
-}
+// ============ collections, smart-hide rules, export, figure -> script ============
 const WORKFLOW_STATUSES = [['draft','Draft'],['candidate','Candidate'],['final','Final'],['rejected','Rejected']];
 const allCollections = ()=>Object.keys(collections).sort((a,b)=>a.localeCompare(b));
 function cleanCollection(){
   const known = new Set(FILES.map(f=>f.rel));
   for(const name of Object.keys(collections)){
     collections[name] = [...new Set((collections[name]||[]).filter(r=>known.has(r)))].sort();
-    if(!collections[name].length) delete collections[name];
   }
 }
 function saveCollections(){ cleanCollection(); localStorage.setItem('figCollections', JSON.stringify(collections)); pushState(); }
@@ -812,7 +807,7 @@ function addRecent(rel){
   saveRecent(); buildRecentChip();
 }
 function applyCollectionToSel(name){
-  name=(name||'').trim(); if(!name || !selSet.size) return;
+  name=(name||'').trim(); if(!name) return;
   const cur = new Set(collections[name]||[]);
   selSet.forEach(rel=>cur.add(rel));
   collections[name]=[...cur].sort();
@@ -862,7 +857,7 @@ function buildWorkflowChip(){
   if(!chip||!menu) return;
   chip.classList.toggle('on', !!workflowFilter);
   const label = WORKFLOW_STATUSES.find(x=>x[0]===workflowFilter);
-  chip.innerHTML='◎ '+(label?('Workflow: '+label[1]):'Workflow')+' ▾';
+  chip.innerHTML='◎ '+(label?('Status: '+label[1]):'Status')+' ▾';
   const counts = {};
   Object.values(workflow).forEach(s=>counts[s]=(counts[s]||0)+1);
   menu.innerHTML=(workflowFilter?'<div class="mi clr" data-clear="1">Clear filter</div>':'')+
@@ -885,41 +880,21 @@ function buildRecentChip(){
   menu.querySelectorAll('[data-open]').forEach(el=>el.onclick=()=>{ lbOpenAny(el.dataset.open); menu.style.display='none'; });
   const c=menu.querySelector('[data-clear-recent]'); if(c)c.onclick=()=>{ recents=[]; saveRecent(); buildRecentChip(); menu.style.display='none'; };
 }
-function buildHealthMenu(data){
-  const chip=document.getElementById('healthChip'), menu=document.getElementById('healthMenu');
-  if(!chip||!menu) return;
+let healthStatus = null;
+function healthRows(data){
   const ok=data&&data.ok;
-  chip.classList.toggle('on', !!ok);
-  chip.classList.toggle('off', data && !ok);
-  chip.innerHTML=(ok?'●':'○')+' Health';
   const project=data&&data.project?data.project:'checking...';
-  menu.innerHTML='<div class="mhd">Server</div>'+
+  return '<div class="mhd sep">Server health</div>'+
     `<div class="mi"><span class="lbl">Status</span><span class="ct">${ok?'OK':(data?'Offline':'Checking')}</span></div>`+
     `<div class="mi"><span class="lbl">Project</span><span class="ct">${esc(project)}</span></div>`+
     `<div class="mi"><span class="lbl">Mode</span><span class="ct">${lbOrcaFsExitAllowed()?'Orca native viewer':'Browser fullscreen'}</span></div>`+
     '<div class="madd"><button id="healthRefresh">Refresh</button></div>';
-  const b=menu.querySelector('#healthRefresh'); if(b)b.onclick=()=>checkHealth();
 }
 function checkHealth(){
-  buildHealthMenu(null);
-  fetch('/ping').then(r=>r.json()).then(j=>buildHealthMenu(j)).catch(()=>buildHealthMenu({ok:false,project:''}));
-}
-function buildTagChip(){
-  const chip=document.getElementById('tagChip'), menu=document.getElementById('tagMenu');
-  if(!chip||!menu) return;
-  const ts=allTags();
-  chip.classList.toggle('on', !!activeTag);
-  chip.innerHTML='🏷 '+(activeTag?('Tag: '+esc(activeTag)):'Tags')+' ▾';
-  let h = ts.length ? ts.map(t=>{
-    const n=Object.values(tags).filter(a=>a.includes(t)).length;
-    return `<div class="mi${t===activeTag?' on':''}"><span class="lbl" data-pick="${escA(t)}">${esc(t)} <span class="ct">${n}</span></span><span class="x" data-del="${escA(t)}" title="Delete this tag everywhere">×</span></div>`;
-  }).join('') : '<div class="mi muted">No tags yet — select files, then Tag.</div>';
-  if(activeTag) h='<div class="mi clr" data-clear="1">Clear filter</div>'+h;
-  menu.innerHTML=h;
-  menu.onclick=e=>e.stopPropagation();
-  menu.querySelectorAll('[data-pick]').forEach(el=>el.onclick=()=>{ setActiveTag(el.dataset.pick); menu.style.display='none'; });
-  menu.querySelectorAll('[data-del]').forEach(el=>el.onclick=()=>deleteTagEverywhere(el.dataset.del));
-  const c=menu.querySelector('[data-clear]'); if(c) c.onclick=()=>{ activeTag=''; buildTagChip(); render(); menu.style.display='none'; };
+  healthStatus = null;
+  buildViewMenu();
+  fetch('/ping').then(r=>r.json()).then(j=>{ healthStatus=j; buildViewMenu(); })
+    .catch(()=>{ healthStatus={ok:false,project:''}; buildViewMenu(); });
 }
 function updateViewChip(){
   const c=document.getElementById('viewChip'); if(!c) return;
@@ -936,7 +911,8 @@ function buildViewMenu(){
     `<div class="mi"><label class="lbl"><input type="checkbox" id="vHidden" ${showHidden?'checked':''}> Show hidden${hidden.size?(' ('+hidden.size+')'):''}</label></div>`+
     '<div class="mhd sep">Auto-hide rules (glob)</div>'+
     (hideRules.length?hideRules.map(g=>`<div class="mi"><span class="lbl mono">${esc(g)}</span><span class="x" data-rm="${escA(g)}" title="Remove rule">×</span></div>`).join(''):'<div class="mi muted">No rules.</div>')+
-    '<div class="madd"><input type="text" id="ruleInput" placeholder="e.g. **/_qa/** or *_preview.png"><button id="ruleAdd">Add</button></div>';
+    '<div class="madd"><input type="text" id="ruleInput" placeholder="e.g. **/_qa/** or *_preview.png"><button id="ruleAdd">Add</button></div>'+
+    healthRows(healthStatus);
   menu.onclick=e=>e.stopPropagation();
   menu.querySelectorAll('[data-theme]').forEach(el=>el.onclick=()=>{ applyTheme(el.dataset.theme); buildViewMenu(); });
   menu.querySelector('#vArch').onchange=function(){ showArch=this.checked; updateViewChip(); render(); };
@@ -945,6 +921,7 @@ function buildViewMenu(){
   const inp=menu.querySelector('#ruleInput'), add=menu.querySelector('#ruleAdd');
   const doAdd=()=>{ const v=(inp.value||'').trim(); if(v && !hideRules.includes(v)){ hideRules.push(v); saveRules(); buildViewMenu(); render(); const ni=menu.querySelector('#ruleInput'); if(ni) ni.focus(); } };
   add.onclick=doAdd; inp.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); doAdd(); } };
+  const hb=menu.querySelector('#healthRefresh'); if(hb)hb.onclick=()=>checkHealth();
 }
 function buildExportMenu(){
   const menu=document.getElementById('exportMenu');
@@ -961,21 +938,6 @@ function doExport(mode){
     .catch(()=>{ ex.textContent='✗ server off'; setTimeout(updateDelBtn,3000); });
 }
 function closeFloat(){ const f=document.getElementById('floatMenu'); if(f) f.remove(); }
-function tagSelMenu(anchor){
-  closeFloat();
-  const m=document.createElement('div'); m.className='menu'; m.id='floatMenu';
-  const ts=allTags();
-  m.innerHTML='<div class="mhd">Tag '+selSet.size+' file(s)</div>'+
-    ts.map(t=>`<div class="mi"><span class="lbl" data-apply="${escA(t)}">${esc(t)}</span></div>`).join('')+
-    '<div class="madd"><input type="text" id="tagInput" placeholder="new tag…"><button id="tagApply">Add</button></div>';
-  m.onclick=e=>e.stopPropagation();
-  placeMenu(m, anchor);
-  m.querySelectorAll('[data-apply]').forEach(el=>el.onclick=()=>{ applyTagToSel(el.dataset.apply); closeFloat(); });
-  const inp=m.querySelector('#tagInput'), btn=m.querySelector('#tagApply');
-  const go=()=>{ applyTagToSel(inp.value); closeFloat(); };
-  btn.onclick=go; inp.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); go(); } };
-  inp.focus();
-}
 function collectSelMenu(anchor){
   closeFloat();
   const m=document.createElement('div'); m.className='menu'; m.id='floatMenu';
@@ -990,6 +952,26 @@ function collectSelMenu(anchor){
   const go=()=>{ applyCollectionToSel(inp.value); closeFloat(); };
   btn.onclick=go; inp.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); go(); } };
   inp.focus();
+}
+function cardMenu(anchor, rel){
+  closeFloat();
+  const f=FILES.find(x=>x.rel===rel); if(!f) return;
+  const isHid=hidden.has(rel), wf=workflow[rel]||'';
+  const m=document.createElement('div'); m.className='menu'; m.id='floatMenu';
+  m.innerHTML='<div class="mhd">'+esc(f.name)+'</div>'
+    +'<div class="mi" style="cursor:default">'+rateRow(rel)+'</div>'
+    +'<div class="mhd sep">Status</div>'
+    +'<div class="mi'+(wf===''?' on':'')+'"><span class="lbl" data-wfset="">none</span></div>'
+    +WORKFLOW_STATUSES.map(([s,l])=>'<div class="mi'+(wf===s?' on':'')+'"><span class="lbl" data-wfset="'+escA(s)+'">'+esc(l)+'</span></div>').join('')
+    +'<div class="mhd sep"></div>'
+    +'<div class="mi"><span class="lbl" data-cact="hide">'+(isHid?'Unhide':'Hide')+'</span></div>'
+    +'<div class="mi clr"><span class="lbl" data-cact="del">Move to Trash</span></div>';
+  m.addEventListener('click',e=>e.stopPropagation());
+  placeMenu(m, anchor);
+  m.querySelectorAll('[data-act="rate"]').forEach(sp=>{ sp.onclick=ev=>{ setRate(rel, +sp.dataset.n, ev); closeFloat(); }; });
+  m.querySelectorAll('[data-wfset]').forEach(el=>el.onclick=()=>{ setWorkflow(rel, el.dataset.wfset); closeFloat(); });
+  m.querySelector('[data-cact="hide"]').onclick=()=>{ closeFloat(); toggleHide(rel); };
+  m.querySelector('[data-cact="del"]').onclick=()=>{ closeFloat(); delOne(rel); };
 }
 function placeMenu(menu, anchor){
   // append to <body> to escape the sticky header's backdrop-filter containing block,
@@ -1022,14 +1004,11 @@ function findScript(rel){
     else alert('No generating script found for "'+stem+'".');
   }).catch(()=>alert('Script search failed (server off?).'));
 }
-document.getElementById('tagChip').onclick=e=>{ e.stopPropagation(); buildTagChip(); menuToggle(document.getElementById('tagMenu'), e.currentTarget); };
 document.getElementById('collChip').onclick=e=>{ e.stopPropagation(); buildCollectionChip(); menuToggle(document.getElementById('collMenu'), e.currentTarget); };
 document.getElementById('workflowChip').onclick=e=>{ e.stopPropagation(); buildWorkflowChip(); menuToggle(document.getElementById('workflowMenu'), e.currentTarget); };
 document.getElementById('recentChip').onclick=e=>{ e.stopPropagation(); buildRecentChip(); menuToggle(document.getElementById('recentMenu'), e.currentTarget); };
-document.getElementById('healthChip').onclick=e=>{ e.stopPropagation(); checkHealth(); menuToggle(document.getElementById('healthMenu'), e.currentTarget); };
 document.getElementById('viewChip').onclick=e=>{ e.stopPropagation(); buildViewMenu(); menuToggle(document.getElementById('viewMenu'), e.currentTarget); };
 document.getElementById('exportSel').onclick=e=>{ e.stopPropagation(); buildExportMenu(); menuToggle(document.getElementById('exportMenu'), e.currentTarget); };
-document.getElementById('tagSel').onclick=e=>{ e.stopPropagation(); tagSelMenu(e.currentTarget); };
 document.getElementById('collectSel').onclick=e=>{ e.stopPropagation(); collectSelMenu(e.currentTarget); };
 document.addEventListener('click',()=>{ document.querySelectorAll('.menu').forEach(x=>x.style.display='none'); closeFloat(); });
 function openDefault(rel){
@@ -1101,7 +1080,11 @@ function lbNativeFsAllowed(){
   const sig=[navigator.userAgent||'',navigator.vendor||'',brands].join(' ');
   if(/\b(Orca|Electron|cmux)\b/i.test(sig)) return false;
   if(window.self!==window.top) return false;
-  return false;
+  // Real top-level browser (not Orca/Electron/cmux, not iframed): native
+  // fullscreen is safe and exitFullscreen works here, so allow it even when the
+  // page was opened at the bare URL without ?nativeFs=1. Embedded shells already
+  // returned false above; the Orca launcher still routes through ?orcaFs=1.
+  return true;
 }
 async function lbOrcaNativeFullscreen(){
   if(!lbOrcaFsExitAllowed()) return null;
@@ -1207,14 +1190,14 @@ document.addEventListener('keydown',e=>{
   if(!lb().classList.contains('show'))return;
   if(lb().classList.contains('annot')){
     if((e.metaKey||e.ctrlKey)&&e.key==='z'){e.preventDefault();document.getElementById('annotUndo').onclick();return;}
-    if(e.key>='1'&&e.key<='2'){
+    if(e.key>='1'&&e.key<='3'){
       const b=document.querySelectorAll('#annotBar button[data-tool]')[+e.key-1];
       if(b)b.onclick(); return;
     }
     if(e.key==='Escape'){
       if(annotCur){annotCur=null;annotRedraw();return;}
       const box=document.getElementById('annotNote');
-      if(box.style.display==='flex'){box.style.display='none';return;}
+      if(box.style.display==='flex'){box.querySelector('.anCancel').click();return;}
       annotToggle(); return;
     }
   }
@@ -1291,7 +1274,6 @@ function render(){
     if(!exts[f.ext]) return false;
     if(!showArch && f.archive) return false;
     if(!showHidden && (hidden.has(f.rel) || matchesRule(f.rel))) return false;
-    if(activeTag && !(tags[f.rel]||[]).includes(activeTag)) return false;
     if(activeCollection && !(collections[activeCollection]||[]).includes(f.rel)) return false;
     if(workflowFilter && workflow[f.rel]!==workflowFilter) return false;
     if(onlyFavs && !favs.has(f.rel)) return false;
@@ -1337,26 +1319,20 @@ function render(){
     const hidTag = isHid?`<span class="tag hid">hidden</span>`:'';
     const wf = workflow[f.rel]||'';
     const wfTag = wf?`<span class="tag workflow ${escA(wf)}">${esc(WORKFLOW_STATUSES.find(x=>x[0]===wf)?.[1]||wf)}</span>`:'';
-    const wfSel = `<select class="wfsel" data-rel="${escA(f.rel)}" title="Workflow status"><option value="">Workflow: none</option>`+
-      WORKFLOW_STATUSES.map(([s,l])=>`<option value="${s}" ${wf===s?'selected':''}>${l}</option>`).join('')+'</select>';
+    const rt = ratings[f.rel]||0;
     return `<div class="card ${f.archive?'arch':''} ${isHid?'hid':''}">
-      <span class="selbox ${selSet.has(f.rel)?'on':''}" data-act="sel" data-rel="${escA(f.rel)}" title="Select — Shift-click to select a range">${selSet.has(f.rel)?'■':'▢'}</span>
+      <span class="selbox ${selSet.has(f.rel)?'on':''}" data-act="sel" data-rel="${escA(f.rel)}" title="Select \u2014 Shift-click to select a range">${selSet.has(f.rel)?'\u25a0':'\u25a2'}</span>
       ${(imgExt(f.ext)||videoExt(f.ext)||f.ext==='pdf'||f.ext==='md'||codeExt(f.ext))?`<div data-act="lb" data-rel="${escA(f.rel)}" style="cursor:zoom-in;position:relative">${videoExt(f.ext)?'<span class="playbtn">&#9654;</span>':''}${thumb}</div>`:appExt(f.ext)?`<div data-act="open" data-rel="${escA(f.rel)}" style="cursor:pointer" title="Open with default app">${thumb}</div>`:`<a href="${escA(f.rel)}" target="_blank" style="text-decoration:none">${thumb}</a>`}
-      <div class="meta">
-        <div class="nm">${esc(f.name)}</div>
-        ${rateRow(f.rel)}
-        <div class="fld">${esc(f.folder)}</div>
-        ${wfSel}
-        ${tagsRow(f.rel)}
-        <div class="row"><span class="tag">${esc(f.ext)}</span>${arch}${hidTag}${wfTag}<span title="created ${escA(f.bdate)} \u00b7 modified ${escA(f.mdate)}">${sort.startsWith('btime')?esc(f.bdate):esc(f.mdate)}</span><span>${fmtSize(f.size)}</span></div>
-      </div>
-      <div class="acts">
+      <div class="hov">
         <button data-act="open" data-rel="${escA(f.rel)}" title="Open with default app">Open</button>
-        <button data-act="copy" data-rel="${escA(f.rel)}">Path</button>
-        ${(imgExt(f.ext)||f.ext==='pdf')?`<button data-act="src" data-rel="${escA(f.rel)}" title="Open the script that generated this figure">&lt;/&gt; src</button>`:''}
-        <button data-act="hide" data-rel="${escA(f.rel)}" title="${isHid?'Show this file again':'Hide this file from the gallery (reversible)'}">${isHid?'Unhide':'Hide'}</button>
-        <button class="ico${isFav?' on':''}" data-act="fav" data-rel="${escA(f.rel)}" title="${isFav?'Remove favorite':'Add favorite'}">${isFav?'★':'☆'}</button>
-        <button class="ico del" data-act="del" data-rel="${escA(f.rel)}" title="Move to Trash">🗑</button>
+        <button data-act="copy" data-rel="${escA(f.rel)}" title="Copy path">Path</button>
+        ${(imgExt(f.ext)||f.ext==='pdf')?`<button data-act="src" data-rel="${escA(f.rel)}" title="Open the script that generated this figure">&lt;/&gt;</button>`:''}
+        <button data-act="fav" data-rel="${escA(f.rel)}" class="${isFav?'on':''}" title="${isFav?'Remove favorite':'Add favorite'}">${isFav?'\u2605':'\u2606'}</button>
+        <button data-act="more" data-rel="${escA(f.rel)}" title="Status, rating, hide, delete">\u22ef</button>
+      </div>
+      <div class="meta">
+        <div class="nm" title="${escA(f.name)}">${esc(f.name)}</div>
+        <div class="row2">${isFav?'<span class="fv">\u2605</span>':''}${rt?`<span class="rt">\u2605${rt}</span>`:''}${wfTag}${arch}${hidTag}<span class="mf" title="${escA(f.folder)}">${esc(f.folder)}</span><span class="md" title="created ${escA(f.bdate)} \u00b7 modified ${escA(f.mdate)}">${sort.startsWith('btime')?esc(f.bdate):esc(f.mdate)}</span><span class="md">${fmtSize(f.size)}</span></div>
       </div>
     </div>`;
   }).join('') + (list.length>MAX?`<div class="empty">… and ${list.length-MAX} more. Refine your search to see them.</div>`:'');
@@ -1423,7 +1399,7 @@ document.addEventListener('keydown',e=>{
   e.preventDefault(); openSearch();
 });
 // ---- Annotation ----
-let annotTool='rect', annotStrokes=[], annotCur=null, annotSent=true;
+let annotTool='ellipse', annotStrokes=[], annotCur=null, annotSent=true;
 async function annotGuard(){
   if(lb().classList.contains('annot') && annotStrokes.length && !annotSent)
     return await confirmDialog('Discard unsaved annotations?', 'Discard');
@@ -1448,16 +1424,24 @@ function annotPos(e){
 function annotRedraw(){
   const c=cv(), x=c.getContext('2d');
   x.clearRect(0,0,c.width,c.height);
-  const lw=Math.max(2,c.width/300);
+  const lw=Math.max(2,c.width/300);          // badge scale (unchanged)
+  const sw=Math.max(1.4,lw*0.65);            // subtle stroke for the marks themselves
   for(const s of annotStrokes.concat(annotCur?[annotCur]:[])){
-    x.strokeStyle=s.color; x.fillStyle=s.color; x.lineWidth=lw; x.lineCap='round'; x.lineJoin='round';
+    x.strokeStyle=s.color; x.fillStyle=s.color; x.lineWidth=sw; x.lineCap='round'; x.lineJoin='round';
     if(s.tool==='pen'){
       x.beginPath(); s.pts.forEach((p,i)=>i?x.lineTo(p.x,p.y):x.moveTo(p.x,p.y)); x.stroke();
+    }else if(s.tool==='ellipse'){
+      x.save(); x.setLineDash([sw*4,sw*3.2]);
+      x.beginPath();
+      x.ellipse((s.x1+s.x2)/2,(s.y1+s.y2)/2,Math.abs(s.x2-s.x1)/2||1,Math.abs(s.y2-s.y1)/2||1,0,0,2*Math.PI);
+      x.stroke(); x.restore();
     }else if(s.tool==='rect'){
+      x.save(); x.setLineDash([sw*4,sw*3.2]);
       x.strokeRect(s.x1,s.y1,s.x2-s.x1,s.y2-s.y1);
+      x.restore();
     }else if(s.tool==='arrow'){
       x.beginPath(); x.moveTo(s.x1,s.y1); x.lineTo(s.x2,s.y2); x.stroke();
-      const a=Math.atan2(s.y2-s.y1,s.x2-s.x1), h=lw*5;
+      const a=Math.atan2(s.y2-s.y1,s.x2-s.x1), h=sw*7;
       x.beginPath(); x.moveTo(s.x2,s.y2);
       x.lineTo(s.x2-h*Math.cos(a-0.45),s.y2-h*Math.sin(a-0.45));
       x.lineTo(s.x2-h*Math.cos(a+0.45),s.y2-h*Math.sin(a+0.45));
@@ -1476,8 +1460,15 @@ function annotRedraw(){
       x.textAlign='start';x.textBaseline='alphabetic';
     }
   }
+  annotPillUpdate();
+}
+function annotPillUpdate(){
+  const n=annotStrokes.filter(s=>s.note).length;
+  document.getElementById('annotPillN').textContent=n+(n>1?' commentaires':' commentaire');
+  document.getElementById('annotPill').classList.toggle('on', n>0);
 }
 function badgeAnchor(s){
+  if(s.tool==='ellipse') return {bx:(s.x1+s.x2)/2, by:Math.min(s.y1,s.y2)};
   if(s.tool==='rect') return {bx:Math.min(s.x1,s.x2), by:Math.min(s.y1,s.y2)};
   if(s.tool==='arrow') return {bx:s.x1, by:s.y1};
   if(s.tool==='pen') return {bx:s.pts[0].x, by:s.pts[0].y};
@@ -1493,31 +1484,42 @@ function badgeHit(p){
   return null;
 }
 function annotAskNote(stroke, clientX, clientY){
-  const box=document.getElementById('annotNote'), inp=box.querySelector('input');
+  const box=document.getElementById('annotNote'), inp=box.querySelector('textarea');
   const isEdit = !!stroke.note;
   if(!stroke.n) stroke.n=annotStrokes.filter(s=>s.n).length+1;
   box.querySelector('.nb').textContent=stroke.n;
   box.style.display='flex';
-  box.style.left=Math.min(clientX, window.innerWidth-340)+'px';
-  box.style.top=Math.min(clientY+14, window.innerHeight-60)+'px';
+  box.style.left=Math.min(clientX, window.innerWidth-364)+'px';
+  box.style.top=Math.min(clientY+14, window.innerHeight-170)+'px';
   inp.value=stroke.note||''; inp.focus(); inp.select();
   annotRedraw();
   const close=()=>{box.style.display='none'; annotRedraw();};
+  const save=()=>{
+    stroke.note=inp.value.trim();
+    if(!stroke.note){delete stroke.n; delete stroke.note; annotRenumber();}
+    annotSent=false; close();
+  };
+  const cancel=()=>{
+    if(!isEdit){
+      // Cancel on a fresh selection discards the drawn mark entirely
+      const i=annotStrokes.indexOf(stroke);
+      if(i>=0) annotStrokes.splice(i,1);
+      annotRenumber();
+      if(!annotStrokes.length) annotSent=true;
+    }
+    close();
+  };
   box.querySelector('.del').onclick=()=>{
     const i=annotStrokes.indexOf(stroke);
     if(i>=0) annotStrokes.splice(i,1);
     annotRenumber(); annotSent=false; close();
   };
+  box.querySelector('.anSave').onclick=e=>{e.stopPropagation();save();};
+  box.querySelector('.anCancel').onclick=e=>{e.stopPropagation();cancel();};
   inp.onkeydown=e=>{
     e.stopPropagation();
-    if(e.key==='Enter'){
-      stroke.note=inp.value.trim();
-      if(!stroke.note){delete stroke.n; delete stroke.note; annotRenumber();}
-      annotSent=false; close();
-    }else if(e.key==='Escape'){
-      if(!isEdit){delete stroke.n; annotRenumber();}
-      close();
-    }
+    if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();save();}
+    else if(e.key==='Escape'){cancel();}
   };
 }
 function annotRenumber(){
@@ -1553,25 +1555,50 @@ function annotInit(){
   });
   document.getElementById('annotUndo').onclick=()=>{annotStrokes.pop();annotRenumber();if(!annotStrokes.length)annotSent=true;document.getElementById('annotNote').style.display='none';annotRedraw();};
   document.getElementById('annotClear').onclick=()=>{annotStrokes=[];annotSent=true;document.getElementById('annotNote').style.display='none';annotRedraw();};
-  document.getElementById('annotSend').onclick=async function(){
+  async function annotPost(direct){
     const f=lbList[lbIdx], img=document.getElementById('lbImg');
     const scale=Math.min(1, 2200/img.naturalWidth);
     const out=document.createElement('canvas');
     out.width=Math.round(img.naturalWidth*scale); out.height=Math.round(img.naturalHeight*scale);
     const x=out.getContext('2d');
     x.drawImage(img,0,0,out.width,out.height); x.drawImage(cv(),0,0,out.width,out.height);
+    const r=await fetch('/save',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({name:f.name,dataURL:out.toDataURL('image/png'),direct:!!direct,
+        notes:annotStrokes.filter(s=>s.note).map(s=>({n:s.n,text:s.note}))})});
+    return await r.json();
+  }
+  document.getElementById('annotSend').onclick=async function(){
     this.textContent='\u23f3...';
     try{
-      const r=await fetch('/save',{method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({name:f.name,dataURL:out.toDataURL('image/png'),notes:annotStrokes.filter(s=>s.note).map(s=>({n:s.n,text:s.note}))})});
-      const j=await r.json();
+      const j=await annotPost(false);
       annotSent=true;
       this.textContent=j.sentToClaude?'Pasted to Claude \u2713':'Saved (path copied) \u2713';
     }catch(e){
       this.textContent='Server off \u2014 start the server';
     }
     setTimeout(()=>this.textContent='\u279c Claude',2500);
+  };
+  document.getElementById('annotPillCancel').onclick=async function(){
+    const n=annotStrokes.filter(s=>s.note).length;
+    if(!(await confirmDialog(n>1?`Supprimer les ${n} commentaires ?`:'Supprimer le commentaire ?','Supprimer')))return;
+    annotStrokes=[]; annotSent=true;
+    document.getElementById('annotNote').style.display='none';
+    annotRedraw();
+  };
+  document.getElementById('annotPillSend').onclick=async function(){
+    const lbl=document.getElementById('annotPillN');
+    this.textContent='\u23f3';
+    try{
+      const j=await annotPost(true);
+      annotSent=true;
+      this.textContent='\u2713';
+      lbl.textContent=j.submitted?'Envoy\u00e9 \u00e0 la session \u2713':'Coll\u00e9 dans Claude \u2713';
+    }catch(e){
+      this.textContent='!';
+      lbl.textContent='Serveur off \u2014 d\u00e9marrer le serveur';
+    }
+    setTimeout(()=>{this.textContent='\u2191'; annotPillUpdate();},2400);
   };
 }
 annotInit();
