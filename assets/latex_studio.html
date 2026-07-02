@@ -13,17 +13,33 @@
 :root{--bg:#202024;--card:#27272a;--card2:#1f1f23;--txt:#e4e4e7;--muted:#a1a1aa;--accent:#5b9dff;--border:#3f3f46}
   html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);
             font-family:-apple-system,sans-serif;display:flex;flex-direction:column;overflow:hidden}
-  header{background:var(--card);border-bottom:1px solid var(--border);padding:7px 14px;
-         display:flex;gap:12px;align-items:center;font-size:12.5px;flex-shrink:0}
+  header{background:var(--card);border-bottom:1px solid var(--border);padding:6px 10px;
+         display:flex;gap:6px;align-items:center;font-size:12.5px;flex-shrink:0;
+         overflow:hidden;white-space:nowrap}
+  header .grp{display:flex;gap:4px;align-items:center;flex:none}
+  header .sep{width:1px;height:18px;background:var(--border);flex:none;margin:0 3px}
   header button{background:transparent;color:var(--muted);border:1px solid var(--border);
-                border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer}
-  header button:hover{color:var(--txt);border-color:var(--border)}
+                border-radius:6px;padding:0 10px;height:26px;font-size:12px;cursor:pointer;flex:none}
+  header button:hover{color:var(--txt);border-color:#5b6575}
+  header button.on{background:var(--border);color:var(--txt)}
+  header select{background:transparent;color:var(--txt);border:1px solid var(--border);
+                border-radius:6px;padding:0 6px;height:26px;font-size:12px;cursor:pointer;flex:none}
   #build{background:var(--border);color:var(--txt);border-color:var(--border)}
   #build:hover{background:#5b5b63;border-color:#5b5b63}
-  #state{color:var(--muted);max-width:45%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  #state.err{color:#ff6b6b;white-space:pre-wrap}
+  #fname{font-size:12.5px;max-width:150px;overflow:hidden;text-overflow:ellipsis;flex:none}
+  #ddot{color:#ffd54a;display:none;flex:none}
+  #state{color:var(--muted);flex:1;min-width:0;text-align:right;overflow:hidden;
+         text-overflow:ellipsis;white-space:nowrap}
+  #state.err{color:#ff6b6b}
   #state.ok{color:#7ec97e}
   #state.dirty{color:#ffd54a}
+  #helpPop{position:fixed;top:44px;right:10px;z-index:400;display:none;flex-direction:column;gap:7px;
+           background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 16px;
+           font-size:12px;color:var(--muted);box-shadow:0 8px 30px rgba(0,0,0,.5);line-height:1.5}
+  #helpPop b{color:var(--txt);font-weight:600}
+  .pdfmode .editonly{display:none!important}
+  body:not(.pdfmode) .pdfonly{display:none!important}
+  .pdfmode #left{display:none}
   #split{flex:1;display:flex;min-height:0}
   #left{width:50%;display:flex;flex-direction:column;border-right:1px solid var(--border);min-width:0;background:#212121}
   #right{flex:1;overflow:auto;background:var(--card2);position:relative;scrollbar-gutter:stable}
@@ -51,29 +67,78 @@
   #pickerList div{padding:7px 14px;font-size:13px;cursor:pointer;display:flex;gap:8px}
   #pickerList div:hover{background:var(--border)}
   #pickerList .d{color:var(--accent)}
+  /* selection pill + annotation card (same language as the gallery/HTML overlay) */
+  #selPill{position:fixed;z-index:300;display:none;align-items:center;gap:8px;
+      background:rgba(24,27,34,.97);border:1px solid #3a4150;border-radius:22px;padding:5px 6px 5px 12px;
+      box-shadow:0 10px 36px rgba(0,0,0,.45);color:var(--txt);font-size:13px;user-select:none;-webkit-user-select:none}
+  #selPill .n{color:var(--muted);font-size:12px;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #selPill button{border:none;cursor:pointer;display:flex;align-items:center;justify-content:center}
+  #selPill .cm2{height:26px;padding:0 10px;border-radius:14px;background:transparent;
+      border:1px solid #3a4150;color:var(--txt);font-size:12px;flex:none}
+  #selPill .cm2:hover{border-color:#5b6575}
+  #selPill .x{width:28px;height:28px;border-radius:50%;background:transparent;
+      border:1px solid #3a4150;color:var(--muted);font-size:13px;flex:none}
+  #selPill .x:hover{border-color:#5b6575;color:#fff}
+  #selPill .go{width:32px;height:32px;border-radius:50%;background:#c96442;color:#fff;font-size:16px;flex:none}
+  #selPill .go:hover{background:#e0714a}
+  #selCard{position:fixed;z-index:301;display:none;flex-direction:column;gap:10px;width:340px;
+      background:rgba(24,27,34,.97);border:1px solid #3a4150;border-radius:16px;padding:12px 14px;
+      box-shadow:0 14px 48px rgba(0,0,0,.55);color:var(--txt);font-size:13px}
+  #selCard textarea{background:rgba(255,255,255,.04);border:1px solid #3a4150;border-radius:10px;
+      outline:none;color:var(--txt);font-size:13px;line-height:1.45;padding:8px 10px;resize:none;
+      font-family:inherit;min-height:44px;width:100%;box-sizing:border-box}
+  #selCard textarea:focus{border-color:#5b9dff;box-shadow:0 0 0 2px rgba(91,157,255,.22)}
+  #selCard .b{display:flex;gap:8px;justify-content:flex-end}
+  #selCard button{padding:6px 14px;font-size:12.5px;border-radius:8px;cursor:pointer;
+      border:1px solid #3a4150;background:transparent;color:var(--txt)}
+  #selCard .cc:hover{border-color:#5b6575}
+  #selCard .sv{background:#e8eaed;border-color:#e8eaed;color:#111;font-weight:600}
+  #selCard .sv:hover{background:#fff}
 </style>
 <script>(function(){var T={'Default':{bg:'#202024',card:'#27272a',card2:'#1f1f23',txt:'#e4e4e7',muted:'#a1a1aa',accent:'#5b9dff',border:'#3f3f46'},'Codex One':{bg:'#202024',card:'#2f343f',card2:'#21252b',txt:'#abb2bf',muted:'#7f848e',accent:'#4d78cc',border:'#3e4451'},'Dracula':{bg:'#282a36',card:'#343746',card2:'#21222c',txt:'#f8f8f2',muted:'#9aa0b3',accent:'#bd93f9',border:'#44475a'},'Nord':{bg:'#2e3440',card:'#3b4252',card2:'#272c36',txt:'#e5e9f0',muted:'#9aa3b2',accent:'#88c0d0',border:'#434c5e'}};var t;try{t=T[localStorage.getItem('figTheme')];}catch(e){}t=t||T['Default'];var r=document.documentElement.style;for(var k in t)r.setProperty('--'+k,t[k]);})();</script>
 </head>
 <body>
 <header>
-  <b id="fname"></b>
-  <button id="build">Compile</button>
-  <button id="openFile" style="background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer">Open…</button>
-  <select id="wrapSel" title="Word wrap" style="background:var(--card);color:var(--txt);border:1px solid var(--border);border-radius:6px;padding:3px 6px;font-size:12px;cursor:pointer">
-    <option value="win">Wrap: window</option>
-    <option value="off">Wrap: off</option>
-    <option value="80">Wrap: 80</option>
-    <option value="100">Wrap: 100</option>
-    <option value="120">Wrap: 120</option>
-  </select>
-  <button id="togglePdf">PDF</button>
-  <button id="popPdf" title="Open the PDF in a separate tab">↗</button>
-  <button id="zoomOut" title="Zoom out">−</button>
-  <button id="zoomFit" title="Fit to width">⤢</button>
-  <button id="zoomIn" title="Zoom in">+</button>
+  <b id="fname"></b><span id="ddot" title="Modifications non sauvegardées">&#9679;</span>
+  <span class="grp editonly">
+    <button id="build" title="Compiler (&#8984;B)">Compile</button>
+    <button id="saveBtn" title="Sauvegarder (&#8984;S)">Save</button>
+    <button id="openFile" title="Ouvrir un autre fichier">Open&hellip;</button>
+  </span>
+  <span class="sep editonly"></span>
+  <span class="grp editonly">
+    <select id="wrapSel" title="Retour à la ligne">
+      <option value="win">Wrap: window</option>
+      <option value="off">Wrap: off</option>
+      <option value="80">Wrap: 80</option>
+      <option value="100">Wrap: 100</option>
+      <option value="120">Wrap: 120</option>
+    </select>
+  </span>
+  <span class="sep editonly"></span>
+  <span class="grp editonly">
+    <button id="togglePdf" title="Vue scindée éditeur + PDF">Split</button>
+    <button id="popPdf" title="Ouvrir le PDF dans un onglet séparé — synctex actif (clic PDF &#8594; ligne source ici)">PDF &#8599;</button>
+  </span>
+  <span class="grp pdfonly">
+    <button id="reloadPdf" title="Recharger le PDF">&#8635;</button>
+  </span>
+  <span class="sep"></span>
+  <span class="grp">
+    <button id="zoomOut" title="Zoom arrière">&#8722;</button>
+    <button id="zoomFit" title="Ajuster à la largeur">&#10530;</button>
+    <button id="zoomIn" title="Zoom avant">+</button>
+  </span>
   <span id="state"></span>
-  <span style="margin-left:auto;color:var(--muted)">⌘S save · ⌘J source→PDF · click PDF→source</span>
+  <button id="helpBtn" title="Raccourcis clavier">?</button>
 </header>
+<div id="helpPop">
+  <span><b>&#8984;S</b> sauvegarder &nbsp;&middot;&nbsp; <b>&#8984;B</b> compiler</span>
+  <span><b>&#8984;J</b> position source &#8594; PDF (vue scindée et onglet PDF)</span>
+  <span><b>Clic dans le PDF</b> &#8594; saute à la ligne source (synctex)</span>
+  <span><b>Sélection de texte</b> &#8594; pastille : annoter / envoyer à Claude</span>
+  <span><b>Esc</b> annule la sélection</span>
+</div>
 <div id="split">
   <div id="left"></div>
   <div id="right"><div id="marker"></div></div>
@@ -82,20 +147,31 @@
   <div id="pickerPath"></div>
   <div id="pickerList"></div>
 </div></div>
+<div id="selPill"><span class="n"></span><button class="cm2" title="Ajouter un commentaire puis envoyer">&#128172; Annoter</button><button class="x" title="Annuler la sélection (Esc)">&#10005;</button><button class="go" title="Envoyer la sélection à la session Claude">&#8593;</button></div>
+<div id="selCard"><textarea rows="2" placeholder="Ajouter une annotation&hellip;"></textarea>
+  <div class="b"><button class="cc">Annuler</button><button class="sv">Envoyer</button></div></div>
 <script>
 pdfjsLib.GlobalWorkerOptions.workerSrc = "/.fig_thumbs/pdfjs/pdf.worker.min.js";
 const path = new URLSearchParams(location.search).get("path");
+const isPdfMode = new URLSearchParams(location.search).get("mode") === "pdf";
+// cross-tab sync (editor tab <-> PDF tab): synctex jumps + reload after compile
+const bc = ("BroadcastChannel" in window && path) ? new BroadcastChannel("latexstudio:" + path) : null;
 let pdfPath = path ? path.replace(/\.tex$/, ".pdf") : null;
+// single initial-load trigger: resolve the real PDF path first, THEN load once
+// (two concurrent getDocument() calls can deadlock pdf.js worker startup)
 if(path) fetch("/texroot?path=" + encodeURIComponent(path)).then(r=>r.json()).then(j=>{
-  if(j.pdf){ pdfPath = j.pdf; loadPdf(); }
-}).catch(()=>{});
-document.getElementById("fname").textContent = path ? path.split("/").pop() : "(no file)";
-document.title = path ? path.split("/").pop() : "LaTeX Studio";
+  if(j.pdf) pdfPath = j.pdf;
+  loadPdf();
+}).catch(()=>{ loadPdf(); });
+const _base = path ? path.split("/").pop() : "(no file)";
+document.getElementById("fname").textContent = _base;
+document.title = isPdfMode ? _base + " — PDF" : _base;
 
 let cm = null, diskMtime = 0, dirty = false, pdfDoc = null, pageEls = [], pdfVps = [];
 let zoom = parseFloat(localStorage.getItem("texZoom") || "1");
 const stateEl = document.getElementById("state");
-const setState = (cls, txt) => { stateEl.className = cls; stateEl.textContent = txt; };
+const setState = (cls, txt) => { stateEl.className = cls; stateEl.textContent = txt; stateEl.title = txt; };
+const ddot = document.getElementById("ddot");
 
 // word wrap (VS Code-style): off | window | fixed column (80/100/120)
 const wrapSel = document.getElementById("wrapSel");
@@ -125,7 +201,7 @@ async function load(){
     value: j.text, mode: "stex", theme: "material-darker",
     lineNumbers: true, lineWrapping: true, viewportMargin: 50, styleSelectedText: true
   });
-  cm.on("change", (_, ch) => { if(ch.origin !== "setValue"){ dirty = true; setState("dirty", "modified"); } });
+  cm.on("change", (_, ch) => { if(ch.origin !== "setValue"){ dirty = true; ddot.style.display = "inline"; setState("dirty", "modified"); } });
   let selT = null;
   cm.on("cursorActivity", () => {
     clearTimeout(selT);
@@ -141,11 +217,12 @@ async function load(){
             text: sel, rel: path, name: path.split("/").pop(),
             page: "L" + (f.line+1) + "-" + (t.line+1)
           })}).catch(()=>{});
-      }
+        selPillShow(f, t, sel);
+      } else { selHide(); }
     }, 200);
   });
   applyWrap(wrapSel.value);
-  loadPdf();
+  // initial loadPdf is triggered by the /texroot resolution (single-trigger rule)
 }
 
 async function save(){
@@ -153,7 +230,7 @@ async function save(){
     body: JSON.stringify({path, text: cm.getValue(), mtime: diskMtime})});
   const j = await r.json();
   if(j.error === "conflit"){ setState("err", "disk conflict — re-⌘S to overwrite"); diskMtime = j.mtime; return false; }
-  diskMtime = j.mtime; dirty = false; setState("ok", "saved");
+  diskMtime = j.mtime; dirty = false; ddot.style.display = "none"; setState("ok", "saved");
   return true;
 }
 
@@ -167,6 +244,7 @@ async function compile(){
   if(j.pdf) pdfPath = j.pdf;
   setState("ok", "✓ compiled " + new Date().toLocaleTimeString());
   loadPdf();
+  if(bc) bc.postMessage({t: "compiled"});   // PDF tabs reload themselves
 }
 
 let _pdfToken = 0;
@@ -207,18 +285,13 @@ async function loadPdf(){
       };
     }
     right.scrollTop = scroll;
-  }catch(e){ /* pas encore de PDF */ }
+  }catch(e){ console.warn("loadPdf:", e); /* souvent: pas encore de PDF */ }
 }
 
-async function synctexView(){
-  if(!pdfDoc) return;
-  const line = cm.getCursor().line + 1;
-  const r = await fetch("/synctex", {method:"POST", headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({dir:"view", tex: path, pdf: pdfPath, line})});
-  const j = await r.json();
-  if(!j.page || !pageEls[j.page]) return setState("err", "synctex: no match");
-  const el = pageEls[j.page], vp = pdfVps[j.page];
-  const y = j.y * vp.scale;
+function showMarker(page, y0){
+  if(!pageEls[page]) return false;
+  const el = pageEls[page], vp = pdfVps[page];
+  const y = y0 * vp.scale;
   const marker = document.getElementById("marker");
   el.appendChild(marker);
   marker.style.top = (y - 14) + "px";
@@ -226,15 +299,24 @@ async function synctexView(){
   el.scrollIntoView({block:"nearest"});
   document.getElementById("right").scrollTop = el.offsetTop + y - document.getElementById("right").clientHeight/2;
   setTimeout(() => marker.style.display = "none", 2500);
+  return true;
+}
+
+async function synctexView(){
+  if(!cm) return;
+  const line = cm.getCursor().line + 1;
+  const r = await fetch("/synctex", {method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({dir:"view", tex: path, pdf: pdfPath, line})});
+  const j = await r.json();
+  if(!j.page) return setState("err", "synctex: no match");
+  if(bc) bc.postMessage({t: "view", page: j.page, y: j.y});   // separate PDF tabs scroll too
+  if(pdfDoc && !showMarker(j.page, j.y) ) setState("err", "synctex: page not rendered");
 }
 
 let lastSyncLine = null;
-async function synctexEdit(page, x, y){
-  const r = await fetch("/synctex", {method:"POST", headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({dir:"edit", tex: path, pdf: pdfPath, page, x, y})});
-  const j = await r.json();
-  if(!j.line) return setState("err", "synctex: no match");
-  const ln = j.line - 1;
+function jumpToLine(line){
+  if(!cm) return;
+  const ln = line - 1;
   cm.setCursor({line: ln, ch: 0});
   cm.scrollIntoView({line: ln, ch: 0}, 120);
   if(lastSyncLine !== null) cm.removeLineClass(lastSyncLine, "background", "cm-syncline");
@@ -242,13 +324,94 @@ async function synctexEdit(page, x, y){
   lastSyncLine = ln;
   cm.focus();
 }
+async function synctexEdit(page, x, y){
+  const r = await fetch("/synctex", {method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({dir:"edit", tex: path, pdf: pdfPath, page, x, y})});
+  const j = await r.json();
+  if(!j.line) return setState("err", "synctex: no match");
+  if(cm) jumpToLine(j.line);
+  if(bc) bc.postMessage({t: "jump", line: j.line});   // editor tab jumps when we're the PDF tab
+}
+if(bc) bc.onmessage = e => {
+  const m = e.data || {};
+  if(isPdfMode){
+    if(m.t === "compiled") loadPdf();
+    else if(m.t === "view") showMarker(m.page, m.y);
+  } else if(m.t === "jump"){
+    jumpToLine(m.line);
+  }
+};
+
+// --- selection pill: annotate + send directly to the Claude session (same flow
+//     as the figure pill and the HTML report overlay; /quote with direct:true) ---
+const selPill = document.getElementById("selPill"), selCard = document.getElementById("selCard");
+let lastSel = null;
+function selPillShow(f, t, sel){
+  lastSel = {text: sel, page: "L" + (f.line+1) + "-" + (t.line+1)};
+  selPill.querySelector(".n").textContent = sel.length > 48 ? sel.slice(0,45).replace(/\s+\S*$/,"") + "…" : sel;
+  const c = cm.charCoords(t, "window");
+  selPill.style.display = "flex";
+  const w = selPill.offsetWidth, h = selPill.offsetHeight;
+  let x = Math.min(Math.max(8, c.left - w/2), innerWidth - w - 8);
+  let y = c.bottom + 10;
+  if(y + h > innerHeight - 8) y = c.top - h - 10;
+  selPill.style.left = x + "px"; selPill.style.top = Math.max(8, y) + "px";
+}
+function selHide(){ selPill.style.display = "none"; selCard.style.display = "none"; }
+function selCancel(){
+  selHide(); lastSel = null;
+  if(cm) cm.setCursor(cm.getCursor());
+  if(window._clMark){ window._clMark.clear(); window._clMark = null; }
+  fetch("/selinfo", {method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({lines:0, words:0})}).catch(()=>{});
+}
+function selSend(comment){
+  if(!lastSel) return;
+  const go = selPill.querySelector(".go");
+  go.textContent = "⏳";
+  fetch("/quote", {method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({rel: path, page: lastSel.page, text: lastSel.text, comment: comment || "", direct: true})})
+    .then(r => r.json())
+    .then(() => { go.textContent = "✓"; setTimeout(() => { go.textContent = "↑"; selHide(); }, 1200); })
+    .catch(() => { go.textContent = "!"; setTimeout(() => { go.textContent = "↑"; }, 1600); });
+}
+selPill.addEventListener("mousedown", e => e.preventDefault());
+selPill.querySelector(".go").onclick = () => selSend("");
+selPill.querySelector(".x").onclick = e => { e.stopPropagation(); selCancel(); };
+selPill.querySelector(".cm2").onclick = () => {
+  selCard.style.display = "flex";
+  selCard.style.left = Math.min(parseFloat(selPill.style.left) || 8, innerWidth - 356) + "px";
+  selCard.style.top = selPill.style.top;
+  selCard.querySelector("textarea").focus();
+};
+selCard.querySelector(".cc").onclick = () => { selCard.style.display = "none"; selCard.querySelector("textarea").value = ""; };
+selCard.querySelector(".sv").onclick = () => {
+  const v = selCard.querySelector("textarea").value.trim();
+  selCard.style.display = "none"; selCard.querySelector("textarea").value = "";
+  selSend(v);
+};
+selCard.querySelector("textarea").addEventListener("keydown", e => {
+  e.stopPropagation();
+  if(e.key === "Enter" && !e.shiftKey){ e.preventDefault(); selCard.querySelector(".sv").click(); }
+  else if(e.key === "Escape"){ selCard.querySelector(".cc").click(); }
+});
 
 document.getElementById("build").onclick = compile;
+document.getElementById("saveBtn").onclick = () => save();
+document.getElementById("reloadPdf").onclick = () => loadPdf();
+const helpPop = document.getElementById("helpPop");
+document.getElementById("helpBtn").onclick = e => {
+  e.stopPropagation();
+  helpPop.style.display = helpPop.style.display === "flex" ? "none" : "flex";
+};
+document.addEventListener("click", () => { helpPop.style.display = "none"; });
 const rightEl = document.getElementById("right");
 function applyPdfVisible(v){
+  if(isPdfMode) return;                       // PDF tab: the PDF pane is the whole view
   rightEl.style.display = v ? "" : "none";
   document.getElementById("left").style.width = v ? "50%" : "100%";
   document.getElementById("left").style.borderRight = v ? "" : "none";
+  document.getElementById("togglePdf").classList.toggle("on", v);
   localStorage.setItem("texPdfVisible", v ? "1" : "0");
   if(cm) cm.refresh();
 }
@@ -270,21 +433,19 @@ new ResizeObserver(() => {
   }, 500);
 }).observe(rightEl);
 document.getElementById("popPdf").onclick = () => {
-  window.open("/raw?path=" + encodeURIComponent(pdfPath) + "&t=" + Date.now(), "_blank");
+  // synctex-aware PDF tab (same studio in mode=pdf; BroadcastChannel links the two)
+  window.open("/.fig_thumbs/latex_studio.html?path=" + encodeURIComponent(path) + "&mode=pdf", "_blank");
   applyPdfVisible(false);
 };
-if(localStorage.getItem("texPdfVisible") === "0") applyPdfVisible(false);
+if(!isPdfMode && localStorage.getItem("texPdfVisible") === "0") applyPdfVisible(false);
 document.addEventListener("keydown", e => {
   if(e.key === "Escape"){
-    if(cm){ cm.setCursor(cm.getCursor()); }
-    if(window._clMark){ window._clMark.clear(); window._clMark = null; }
-    fetch("/selinfo", {method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({lines:0, words:0})}).catch(()=>{});
+    if(cm) selCancel();
     return;
   }
-  if((e.metaKey || e.ctrlKey) && e.key === "s"){ e.preventDefault(); save(); }
-  if((e.metaKey || e.ctrlKey) && e.key === "b"){ e.preventDefault(); compile(); }
-  if((e.metaKey || e.ctrlKey) && e.key === "j"){ e.preventDefault(); synctexView(); }
+  if((e.metaKey || e.ctrlKey) && e.key === "s" && cm){ e.preventDefault(); save(); }
+  if((e.metaKey || e.ctrlKey) && e.key === "b" && cm){ e.preventDefault(); compile(); }
+  if((e.metaKey || e.ctrlKey) && e.key === "j" && cm){ e.preventDefault(); synctexView(); }
 });
 
 // reload if Claude edits the .tex on disk
@@ -302,7 +463,11 @@ setInterval(async () => {
   }catch(e){}
 }, 2000);
 
-if(path) load();
+if(path && isPdfMode){
+  document.body.classList.add("pdfmode");
+  setState("ok", "clic dans le PDF → ligne source dans l'onglet éditeur");
+  // initial loadPdf is triggered by the /texroot resolution above
+} else if(path) load();
 else {
   setState("ok", "choose a .tex file");
   pickerShow("");
