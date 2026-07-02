@@ -732,6 +732,31 @@ class Handler(SimpleHTTPRequestHandler):
         from urllib.parse import urlparse as _up
         if os.path.splitext(_up(self.path).path)[1].lower() in VIDEO_EXTS:
             return self._serve_video()
+        # Project .html reports: inject the text-selection → Claude overlay
+        # (never the gallery index itself, nor the /.fig_thumbs viewers which
+        # have their own selection systems).
+        _pth = _up(self.path).path
+        if (os.path.splitext(_pth)[1].lower() in (".html", ".htm")
+                and not _pth.startswith("/.fig_thumbs/")
+                and os.path.basename(_pth) != "figures_index.html"):
+            from urllib.parse import unquote as _uq
+            p = self._safe_path(_uq(_pth).lstrip("/"))
+            if p and os.path.isfile(p):
+                try:
+                    with open(p, "rb") as f:
+                        body = f.read()
+                    tag = b'<script defer src="/.fig_thumbs/sel_overlay.js?v=2"></script>'
+                    i = body.lower().rfind(b"</body>")
+                    body = body[:i] + tag + body[i:] if i != -1 else body + tag
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/html; charset=utf-8")
+                    self.send_header("Content-Length", str(len(body)))
+                    self.send_header("Cache-Control", "no-cache")
+                    self.end_headers()
+                    self.wfile.write(body)
+                    return
+                except OSError:
+                    pass
         super().do_GET()
 
     def do_HEAD(self):
@@ -899,8 +924,7 @@ class Handler(SimpleHTTPRequestHandler):
                         name = str(k).strip()[:80]
                         if name and isinstance(v, list):
                             clean = sorted({str(rel) for rel in v if isinstance(rel, str) and str(rel).strip()})[:1000]
-                            if clean:
-                                collections[name] = clean
+                            collections[name] = clean
                 workflow_in = req.get("workflow", {})
                 workflow = {}
                 if isinstance(workflow_in, dict):
@@ -1069,8 +1093,11 @@ class Handler(SimpleHTTPRequestHandler):
                 if not p:
                     return self._respond(403, {"error": "outside the project"})
                 root = find_tex_root(p)
+                # -g: force a build even when latexmk thinks everything is up to date —
+                # an explicit Compile click must (re)generate the PDF AND its .synctex.gz
+                # (old PDFs compiled without -synctex=1 otherwise never gain sync data).
                 r = subprocess.run(
-                    ["/Library/TeX/texbin/latexmk", "-pdf", "-synctex=1",
+                    ["/Library/TeX/texbin/latexmk", "-pdf", "-synctex=1", "-g",
                      "-interaction=nonstopmode", "-halt-on-error",
                      os.path.basename(root)],
                     cwd=os.path.dirname(root), capture_output=True, text=True, timeout=180)
@@ -1165,7 +1192,13 @@ class Handler(SimpleHTTPRequestHandler):
                 length = int(self.headers.get("Content-Length", 0))
                 req = json.loads(self.rfile.read(length))
                 pdf = os.path.join(PROJECT, req["rel"])
-                msg = f"{pdf} (p.{req['page']}) : \u00ab {req['text'].strip()} \u00bb "
+                page = req.get("page")
+                loc = f" (p.{page})" if page not in (None, "", "html") else ""
+                msg = f"{pdf}{loc} : \u00ab {req['text'].strip()} \u00bb "
+                comment = (req.get("comment") or "").strip()
+                if comment:
+                    msg = msg.rstrip() + f"\nCommentaire : {comment}"
+                direct = bool(req.get("direct"))
                 subprocess.run("pbcopy", input=msg.encode(), timeout=5)
                 with open(os.path.expanduser("~/.claude/fig-last-quote.txt"), "w") as f:
                     f.write(msg)
@@ -1175,7 +1208,12 @@ class Handler(SimpleHTTPRequestHandler):
                     r = subprocess.run(["cmux", "send", "--surface", ref, msg],
                                        capture_output=True, timeout=5)
                     sent = r.returncode == 0
-                return self._respond(200, {"sentToClaude": sent, "clipboard": True})
+                    if sent and direct:
+                        time.sleep(0.4)   # let the composer settle before submitting
+                        subprocess.run(["cmux", "send-key", "--surface", ref, "enter"],
+                                       capture_output=True, timeout=5)
+                return self._respond(200, {"sentToClaude": sent, "clipboard": True,
+                                           "submitted": sent and direct})
             except (KeyError, ValueError, json.JSONDecodeError) as e:
                 return self._respond(400, {"error": "bad request: " + str(e)})
             except Exception as e:
@@ -1194,10 +1232,16 @@ class Handler(SimpleHTTPRequestHandler):
                 f.write(raw)
 
             notes = req.get("notes") or []
+            direct = bool(req.get("direct"))
             msg = path
             if notes:
                 lignes = "\n".join(f"{n['n']}. {n['text']}" for n in notes)
                 msg = f"{path}\nAnnotations (badges numerotes sur l'image) :\n{lignes}"
+            if direct:
+                # Direct send: self-contained actionable prompt, auto-submitted below —
+                # no need to invoke the corrige-figure skill afterwards.
+                msg += ("\nApplique directement ces annotations : retrouve le script qui genere "
+                        "cette figure, fais les corrections demandees et regenere la figure.")
 
             subprocess.run("pbcopy", input=msg.encode(), timeout=5)
             with open(os.path.expanduser("~/.claude/fig-last-quote.txt"), "w") as f:
@@ -1210,12 +1254,16 @@ class Handler(SimpleHTTPRequestHandler):
                     if ref:
                         subprocess.run(["cmux", "send", "--surface", ref, msg + " "],
                                        capture_output=True, timeout=5, start_new_session=True)
+                        if direct:
+                            time.sleep(0.4)   # let the composer settle before submitting
+                            subprocess.run(["cmux", "send-key", "--surface", ref, "enter"],
+                                           capture_output=True, timeout=5, start_new_session=True)
                 except Exception:
                     pass
             threading.Thread(target=push, daemon=True).start()
 
             self._respond(200, {"path": path, "sentToClaude": True,
-                                "clipboard": True})
+                                "clipboard": True, "submitted": direct})
         except Exception as e:
             self._respond(500, {"error": str(e)})
 
