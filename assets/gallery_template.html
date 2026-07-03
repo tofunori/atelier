@@ -245,6 +245,7 @@
     <div id="workflowMenu" class="menu"></div>
     <span class="chip" id="recentChip" title="Recently opened files">&#8634; Recent &#9662;</span>
     <div id="recentMenu" class="menu"></div>
+    <span class="chip" id="boardChip" title="Open the project whiteboard (tldraw)">&#9635; Board</span>
     <span class="chip" id="viewChip" title="Settings — server health, theme, archives, hidden, auto-hide rules">&#9881; Settings &#9662;</span>
     <div id="viewMenu" class="menu"></div>
     <span id="rateFilter" style="display:none"></span>
@@ -314,6 +315,7 @@ document.addEventListener('click',e=>{
   else if(act==='lb') lbOpen(rel);
   else if(act==='open') openDefault(rel);
   else if(act==='src') findScript(rel);
+  else if(act==='board') sendToBoard(rel, el);
   else if(act==='more'){ e.stopImmediatePropagation(); cardMenu(el, rel); }
   else if(act==='rate') setRate(rel, +el.dataset.n, e);
   else if(act==='copy'){ navigator.clipboard.writeText(rel); el.textContent='✓'; setTimeout(()=>el.textContent='Path',1200); }
@@ -758,6 +760,14 @@ function findScript(rel){
     else alert('No generating script found for "'+stem+'".');
   }).catch(()=>alert('Script search failed (server off?).'));
 }
+function sendToBoard(rel, el){
+  fetch('/board/command',{method:'POST',headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({type:'add_image', url:'/'+rel})})
+    .then(r=>r.json()).then(j=>{
+      if(el){ const t=el.textContent; el.textContent=j.ok?'✓':'✗'; setTimeout(()=>el.textContent=t,1200); }
+    }).catch(()=>{ if(el){ el.textContent='✗'; setTimeout(()=>el.textContent='▦',1200); } });
+}
+document.getElementById('boardChip').onclick=()=>window.open('/.fig_thumbs/whiteboard/index.html','_blank');
 document.getElementById('collChip').onclick=e=>{ e.stopPropagation(); buildCollectionChip(); menuToggle(document.getElementById('collMenu'), e.currentTarget); };
 document.getElementById('workflowChip').onclick=e=>{ e.stopPropagation(); buildWorkflowChip(); menuToggle(document.getElementById('workflowMenu'), e.currentTarget); };
 document.getElementById('recentChip').onclick=e=>{ e.stopPropagation(); buildRecentChip(); menuToggle(document.getElementById('recentMenu'), e.currentTarget); };
@@ -1081,6 +1091,7 @@ function render(){
         <button data-act="open" data-rel="${escA(f.rel)}" title="Open with default app">Open</button>
         <button data-act="copy" data-rel="${escA(f.rel)}" title="Copy path">Path</button>
         ${(imgExt(f.ext)||f.ext==='pdf')?`<button data-act="src" data-rel="${escA(f.rel)}" title="Open the script that generated this figure">&lt;/&gt;</button>`:''}
+        ${imgExt(f.ext)?`<button data-act="board" data-rel="${escA(f.rel)}" title="Send this figure to the whiteboard">▦</button>`:''}
         <button data-act="fav" data-rel="${escA(f.rel)}" class="${isFav?'on':''}" title="${isFav?'Remove favorite':'Add favorite'}">${isFav?'★':'☆'}</button>
         <button data-act="more" data-rel="${escA(f.rel)}" title="Status, rating, hide, delete">⋯</button>
       </div>

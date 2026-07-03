@@ -31,6 +31,11 @@ PORT = int(os.environ.get("FIG_PORT", 8790))
 _THUMB_SEM = threading.BoundedSemaphore(max(2, min(8, (os.cpu_count() or 4))))
 _CHROME_SEM = threading.BoundedSemaphore(2)
 
+# Whiteboard: pending commands (Claude/gallery → canvas), drained by /board/poll.
+_BOARD_QUEUE = []
+_BOARD_LOCK = threading.Lock()
+_BOARD_QUEUE_MAX = 500
+
 
 def _kill_pg(proc):
     """SIGKILL a process AND its group. qlmanage/Chrome fork helper processes that
@@ -667,6 +672,19 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._respond(400, {"error": "bad request: " + str(e)})
             except Exception as e:
                 return self._respond(500, {"error": str(e)})
+        if self.path == "/board/load":
+            try:
+                bp = os.path.join(PROJECT, ".fig_thumbs", "board.tldr.json")
+                if os.path.isfile(bp):
+                    with open(bp, encoding="utf-8") as f:
+                        return self._respond(200, {"snapshot": json.load(f)})
+                return self._respond(200, {"snapshot": None})
+            except Exception as e:
+                return self._respond(500, {"error": str(e)})
+        if self.path == "/board/poll":
+            with _BOARD_LOCK:
+                cmds, _BOARD_QUEUE[:] = _BOARD_QUEUE[:], []
+            return self._respond(200, {"commands": cmds})
         if self.path == "/ping":
             return self._respond(200, {"ok": True, "service": "fig-annotate",
                                        "project": os.path.realpath(PROJECT)})
@@ -790,6 +808,49 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._respond(400, {"ok": False, "error": "bad request: " + str(e)})
             except Exception as e:
                 return self._respond(500, {"ok": False, "error": str(e)})
+        if self.path == "/board/save":
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+                if length <= 0 or length > 64 * 1024 * 1024:        # 64 MB cap
+                    return self._respond(413, {"error": "empty or oversized snapshot"})
+                req = json.loads(self.rfile.read(length))
+                snap = req.get("snapshot")
+                if not isinstance(snap, dict):
+                    return self._respond(400, {"error": "snapshot must be an object"})
+                bdir = os.path.join(PROJECT, ".fig_thumbs")
+                os.makedirs(bdir, exist_ok=True)
+                fd, tmp = tempfile.mkstemp(dir=bdir, prefix=".board.", suffix=".tmp")
+                with os.fdopen(fd, "w", encoding="utf-8") as f:
+                    json.dump(snap, f, ensure_ascii=False)
+                os.replace(tmp, os.path.join(bdir, "board.tldr.json"))  # atomic
+                return self._respond(200, {"ok": True})
+            except (KeyError, ValueError, json.JSONDecodeError) as e:
+                return self._respond(400, {"error": "bad request: " + str(e)})
+            except Exception as e:
+                return self._respond(500, {"error": str(e)})
+        if self.path == "/board/command":
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+                if length <= 0 or length > 8 * 1024 * 1024:
+                    return self._respond(413, {"error": "empty or oversized command"})
+                cmd = json.loads(self.rfile.read(length))
+                if not isinstance(cmd, dict) or not isinstance(cmd.get("type"), str):
+                    return self._respond(400, {"error": "command needs a string 'type'"})
+                if cmd["type"] == "add_image":
+                    rel = str(cmd.get("url") or cmd.get("rel") or "")
+                    p = self._safe_path(rel.lstrip("/"))
+                    if not p or not os.path.isfile(p):
+                        return self._respond(404, {"error": "image not found in project"})
+                    cmd["url"] = "/" + os.path.relpath(p, PROJECT).replace(os.sep, "/")
+                with _BOARD_LOCK:
+                    if len(_BOARD_QUEUE) >= _BOARD_QUEUE_MAX:
+                        return self._respond(429, {"error": "board queue full (canvas not open?)"})
+                    _BOARD_QUEUE.append(cmd)
+                return self._respond(200, {"ok": True, "queued": True})
+            except (KeyError, ValueError, json.JSONDecodeError) as e:
+                return self._respond(400, {"error": "bad request: " + str(e)})
+            except Exception as e:
+                return self._respond(500, {"error": str(e)})
         if self.path == "/clear-quote":
             try:
                 open(os.path.expanduser("~/.claude/fig-last-quote.txt"), "w").close()
