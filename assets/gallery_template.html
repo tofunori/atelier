@@ -767,7 +767,17 @@ function sendToBoard(rel, el){
       if(el){ const t=el.textContent; el.textContent=j.ok?'✓':'✗'; setTimeout(()=>el.textContent=t,1200); }
     }).catch(()=>{ if(el){ el.textContent='✗'; setTimeout(()=>el.textContent='▦',1200); } });
 }
-document.getElementById('boardChip').onclick=()=>window.open('/.fig_thumbs/whiteboard/index.html','_blank');
+function boardOpen(){
+  // Open the whiteboard inside the lightbox iframe (same-page, like every other
+  // viewer) — window.open is unreliable inside embedded cmux browser surfaces.
+  const img=document.getElementById('lbImg'), pdf=document.getElementById('lbPdf'), vid=document.getElementById('lbVid');
+  if(vid.getAttribute('src')){vid.pause();vid.removeAttribute('src');vid.load();}
+  lbIdx=-1;
+  img.style.display='none'; vid.style.display='none'; pdf.style.display='';
+  pdf.src='/.fig_thumbs/whiteboard/index.html';
+  lb().classList.add('vw'); lb().classList.remove('annot'); lb().classList.add('show');
+}
+document.getElementById('boardChip').onclick=boardOpen;
 document.getElementById('collChip').onclick=e=>{ e.stopPropagation(); buildCollectionChip(); menuToggle(document.getElementById('collMenu'), e.currentTarget); };
 document.getElementById('workflowChip').onclick=e=>{ e.stopPropagation(); buildWorkflowChip(); menuToggle(document.getElementById('workflowMenu'), e.currentTarget); };
 document.getElementById('recentChip').onclick=e=>{ e.stopPropagation(); buildRecentChip(); menuToggle(document.getElementById('recentMenu'), e.currentTarget); };
