@@ -284,6 +284,40 @@ def find_tex_root(p):
     return p
 
 
+def find_muxy_claude_pane():
+    """Muxy fallback: pane id of a Claude Code session, preferring this project.
+
+    `muxy list-panes` lines: <id>\t<title>\t<cwd>\t<active>. Claude sessions
+    carry a status glyph (✳ running / ⠂ working) in the title. Prefer a pane
+    whose cwd is inside PROJECT (active one first), else any Claude pane."""
+    exe = shutil.which("muxy") or ("/usr/local/bin/muxy" if os.path.exists("/usr/local/bin/muxy") else None)
+    if not exe:
+        return None
+    try:
+        r = subprocess.run([exe, "list-panes"], capture_output=True, text=True, timeout=5)
+        if r.returncode != 0:
+            return None
+        root = os.path.realpath(PROJECT)
+        in_proj, anywhere = [], []
+        for line in r.stdout.splitlines():
+            parts = line.split("\t")
+            if len(parts) < 3:
+                continue
+            pane, title, cwd = parts[0], parts[1], parts[2]
+            active = len(parts) > 3 and parts[3].strip() == "true"
+            if not any(g in title for g in ("✳", "⠂", "Claude")):
+                continue
+            entry = (0 if active else 1, pane)
+            cw = os.path.realpath(cwd) if cwd else ""
+            (in_proj if cw == root or cw.startswith(root + os.sep) else anywhere).append(entry)
+        for pool in (in_proj, anywhere):
+            if pool:
+                return sorted(pool)[0][1]
+        return None
+    except Exception:
+        return None
+
+
 def find_claude_surface():
     """Target Claude Code panel surface.
 
@@ -1385,6 +1419,16 @@ class Handler(SimpleHTTPRequestHandler):
                         time.sleep(0.4)   # let the composer settle before submitting
                         subprocess.run(["cmux", "send-key", "--surface", ref, "enter"],
                                        capture_output=True, timeout=5)
+                if not sent:
+                    pane = find_muxy_claude_pane()
+                    if pane:
+                        r = subprocess.run(["muxy", "send", "--pane", pane, msg],
+                                           capture_output=True, timeout=5)
+                        sent = r.returncode == 0
+                        if sent and direct:
+                            time.sleep(0.4)
+                            subprocess.run(["muxy", "send-keys", "--pane", pane, "Enter"],
+                                           capture_output=True, timeout=5)
                 return self._respond(200, {"sentToClaude": sent, "clipboard": True,
                                            "submitted": sent and direct})
             except (KeyError, ValueError, json.JSONDecodeError) as e:
@@ -1420,7 +1464,7 @@ class Handler(SimpleHTTPRequestHandler):
             with open(os.path.expanduser("~/.claude/fig-last-quote.txt"), "w") as f:
                 f.write(msg)
 
-            # cmux (identify + list + send) in the background: the response returns immediately
+            # cmux/muxy push in the background: the response returns immediately
             def push():
                 try:
                     ref = find_claude_surface()
@@ -1430,6 +1474,15 @@ class Handler(SimpleHTTPRequestHandler):
                         if direct:
                             time.sleep(0.4)   # let the composer settle before submitting
                             subprocess.run(["cmux", "send-key", "--surface", ref, "enter"],
+                                           capture_output=True, timeout=5, start_new_session=True)
+                        return
+                    pane = find_muxy_claude_pane()
+                    if pane:
+                        subprocess.run(["muxy", "send", "--pane", pane, msg],
+                                       capture_output=True, timeout=5, start_new_session=True)
+                        if direct:
+                            time.sleep(0.4)
+                            subprocess.run(["muxy", "send-keys", "--pane", pane, "Enter"],
                                            capture_output=True, timeout=5, start_new_session=True)
                 except Exception:
                     pass
