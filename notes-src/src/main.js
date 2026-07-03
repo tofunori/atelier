@@ -1,6 +1,21 @@
 import { Crepe } from '@milkdown/crepe'
 import '@milkdown/crepe/theme/common/style.css'
 import '@milkdown/crepe/theme/nord-dark.css'
+import { editorViewCtx } from '@milkdown/kit/core'
+import { callCommand } from '@milkdown/kit/utils'
+import {
+  toggleStrongCommand,
+  toggleEmphasisCommand,
+  wrapInHeadingCommand,
+  turnIntoTextCommand,
+  wrapInBulletListCommand,
+  wrapInOrderedListCommand,
+  wrapInBlockquoteCommand,
+  createCodeBlockCommand,
+  insertHrCommand,
+  toggleLinkCommand,
+} from '@milkdown/kit/preset/commonmark'
+import { toggleStrikethroughCommand } from '@milkdown/kit/preset/gfm'
 
 const SAVE_DEBOUNCE_MS = 1000
 const indicator = document.getElementById('save-indicator')
@@ -25,6 +40,60 @@ async function main() {
     defaultValue: initial,
   })
   await crepe.create()
+
+  // ---- 1b. Top toolbar ----
+  const editor = crepe.editor
+  const run = (command, payload) => editor.action(callCommand(command.key, payload))
+
+  // Task list has no dedicated command in this Milkdown version: wrap the
+  // selection in a bullet list, then flag each list_item as a checkbox item
+  // (checked attr set -> GFM renders it as a task item).
+  const makeTaskList = () => {
+    editor.action((ctx) => {
+      callCommand(wrapInBulletListCommand.key)(ctx)
+      const view = ctx.get(editorViewCtx)
+      const { state } = view
+      const { from, to } = state.selection
+      const tr = state.tr
+      state.doc.nodesBetween(from, to, (node, pos) => {
+        if (node.type.name === 'list_item' && node.attrs.checked == null) {
+          tr.setNodeMarkup(pos, undefined, { ...node.attrs, checked: false })
+        }
+      })
+      if (tr.docChanged) view.dispatch(tr)
+    })
+  }
+
+  const actions = {
+    paragraph: () => run(turnIntoTextCommand),
+    h1: () => run(wrapInHeadingCommand, 1),
+    h2: () => run(wrapInHeadingCommand, 2),
+    h3: () => run(wrapInHeadingCommand, 3),
+    bold: () => run(toggleStrongCommand),
+    italic: () => run(toggleEmphasisCommand),
+    strike: () => run(toggleStrikethroughCommand),
+    bullet: () => run(wrapInBulletListCommand),
+    ordered: () => run(wrapInOrderedListCommand),
+    task: makeTaskList,
+    quote: () => run(wrapInBlockquoteCommand),
+    code: () => run(createCodeBlockCommand),
+    link: () => run(toggleLinkCommand),
+    hr: () => run(insertHrCommand),
+  }
+
+  const toolbar = document.getElementById('toolbar')
+  toolbar.addEventListener('mousedown', (e) => {
+    // never steal focus from the editor
+    if (e.target.closest('button')) e.preventDefault()
+  })
+  toolbar.addEventListener('click', (e) => {
+    const btn = e.target.closest('button')
+    if (!btn) return
+    const fn = actions[btn.dataset.cmd]
+    if (!fn) return
+    fn()
+    editor.action((ctx) => ctx.get(editorViewCtx).focus())
+  })
 
   // ---- 2. Autosave (debounced) ----
   let saveTimer = null
