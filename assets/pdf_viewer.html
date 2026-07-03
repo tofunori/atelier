@@ -31,21 +31,24 @@
   #selPill .x{width:28px;height:28px;border-radius:50%;background:transparent;
       border:1px solid #3a4150;color:var(--muted);font-size:13px;flex:none}
   #selPill .x:hover{border-color:#5b6575;color:#fff}
-  #selPill .go{width:32px;height:32px;border-radius:50%;background:#5b9dff;color:#fff;font-size:16px;flex:none}
-  #selPill .go:hover{background:#76adff}
-  #selCard{position:fixed;z-index:301;display:none;flex-direction:column;gap:10px;width:340px;
-      background:rgba(24,27,34,.97);border:1px solid #3a4150;border-radius:16px;padding:12px 14px;
-      box-shadow:0 14px 48px rgba(0,0,0,.55);color:var(--txt);font-size:13px}
-  #selCard textarea{background:rgba(255,255,255,.04);border:1px solid #3a4150;border-radius:10px;
-      outline:none;color:var(--txt);font-size:13px;line-height:1.45;padding:8px 10px;resize:none;
-      font-family:inherit;min-height:44px;width:100%;box-sizing:border-box}
-  #selCard textarea:focus{border-color:#5b9dff;box-shadow:0 0 0 2px rgba(91,157,255,.22)}
-  #selCard .b{display:flex;gap:8px;justify-content:flex-end}
-  #selCard button{padding:6px 14px;font-size:12.5px;border-radius:8px;cursor:pointer;
-      border:1px solid #3a4150;background:transparent;color:var(--txt)}
-  #selCard .cc:hover{border-color:#5b6575}
-  #selCard .sv{background:#e8eaed;border-color:#e8eaed;color:#111;font-weight:600}
-  #selCard .sv:hover{background:#fff}
+  #selPill .go{width:32px;height:32px;border-radius:50%;background:#c96442;color:#fff;font-size:16px;flex:none}
+  #selPill .go:hover{background:#e0714a}
+  #selCard{position:fixed;z-index:301;display:none;align-items:center;gap:10px;min-width:320px;max-width:460px;
+      background:#1d2026;border:1px solid #343842;border-radius:24px;padding:8px 8px 8px 16px;
+      box-shadow:0 12px 36px rgba(0,0,0,.45);color:var(--txt);font-size:13px}
+  #selCard .nb{font-size:14px;flex:none;line-height:1}
+  #selCard textarea{flex:1;background:transparent;border:none;outline:none;color:var(--txt);
+      font-size:13px;line-height:1.45;padding:0;resize:none;font-family:inherit;height:20px;max-height:120px}
+  #selCard textarea::placeholder{color:#6d7480}
+  #selCard .del{width:26px;height:26px;border-radius:50%;background:none;border:none;color:#6d7480;
+      cursor:pointer;display:flex;align-items:center;justify-content:center;flex:none;padding:0}
+  #selCard .del:hover{color:#ff7a76}
+  #selCard .del svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.6;
+      stroke-linecap:round;stroke-linejoin:round}
+  #selCard .anSave{width:30px;height:30px;border-radius:50%;background:#e8eaed;color:#15171b;border:none;
+      font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;
+      flex:none;font-family:inherit}
+  #selCard .anSave:hover{background:#fff}
   #annotBtn{margin-left:12px;background:var(--border);color:var(--txt);border:1px solid var(--border);
       border-radius:8px;padding:6px 12px;font-size:13px;cursor:pointer;white-space:nowrap}
   #annotBtn:hover{border-color:#5b6575}
@@ -65,8 +68,7 @@ function __ct(){try{return JSON.parse(localStorage.getItem('claudeTargetV1')||'n
 <div id="pages"></div>
 <button id="sendBtn">➜ Claude</button>
 <div id="selPill"><span class="n"></span><button class="cm2" title="Ajouter un commentaire puis envoyer">&#128172; Annoter</button><button class="x" title="Annuler la sélection (Esc)">&#10005;</button><button class="go" title="Envoyer la sélection à la session Claude">&#8593;</button></div>
-<div id="selCard"><textarea rows="2" placeholder="Ajouter une annotation&hellip;"></textarea>
-  <div class="b"><button class="cc">Annuler</button><button class="sv">Enregistrer</button></div></div>
+<div id="selCard"><span class="nb">&#128172;</span><textarea rows="1" placeholder="Ajouter une annotation&hellip;"></textarea><button class="del" title="Annuler (&Eacute;chap)"><svg viewBox="0 0 14 14"><path d="M2 3.5h10M5.5 3.5V2.2c0-.4.3-.7.7-.7h1.6c.4 0 .7.3.7.7v1.3M3.5 3.5l.6 8.1c0 .5.4.9.9.9h4c.5 0 .9-.4.9-.9l.6-8.1M5.8 6v4M8.2 6v4"/></svg></button><button class="anSave" title="Enregistrer (Entr&eacute;e)">&#10003;</button></div>
 <script>
 pdfjsLib.GlobalWorkerOptions.workerSrc = "/.fig_thumbs/pdfjs/pdf.worker.min.js";
 
@@ -297,17 +299,22 @@ selPill.querySelector(".cm2").onclick = () => {
   selCard.style.top = selPill.style.top;
   selCard.querySelector("textarea").focus();
 };
-selCard.querySelector(".cc").onclick = () => { selCard.style.display = "none"; selCard.querySelector("textarea").value = ""; };
-selCard.querySelector(".sv").onclick = () => {
+selCard.addEventListener("mousedown", e => { if(e.target.tagName !== "TEXTAREA") e.preventDefault(); });
+selCard.querySelector(".del").onclick = () => { selCard.style.display = "none"; selCard.querySelector("textarea").value = ""; };
+selCard.querySelector(".anSave").onclick = () => {
   const v = selCard.querySelector("textarea").value.trim();
   selCard.style.display = "none"; selCard.querySelector("textarea").value = "";
   selSend(v);
 };
-selCard.querySelector("textarea").addEventListener("keydown", e => {
-  e.stopPropagation();
-  if(e.key === "Enter" && !e.shiftKey){ e.preventDefault(); selCard.querySelector(".sv").click(); }
-  else if(e.key === "Escape"){ selCard.querySelector(".cc").click(); }
-});
+{
+  const _sta = selCard.querySelector("textarea");
+  _sta.addEventListener("input", () => { _sta.style.height = "20px"; _sta.style.height = Math.min(120, _sta.scrollHeight) + "px"; });
+  _sta.addEventListener("keydown", e => {
+    e.stopPropagation();
+    if(e.key === "Enter" && !e.shiftKey){ e.preventDefault(); selCard.querySelector(".anSave").click(); }
+    else if(e.key === "Escape"){ selCard.querySelector(".del").click(); }
+  });
+}
 document.addEventListener("keydown", e => { if(e.key === "Escape") selCancel(); });
 
 // --- drawn annotation (shared AnnotKit): one transparent overlay per page,

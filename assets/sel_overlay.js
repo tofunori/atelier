@@ -17,27 +17,30 @@ function __ct(){try{return JSON.parse(localStorage.getItem('claudeTargetV1')||'n
     +'font:13px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;user-select:none;-webkit-user-select:none}'
     +'#csel-pill .n{color:#9aa3b2;font-size:12px;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
     +'#csel-pill button{border:none;cursor:pointer;display:flex;align-items:center;justify-content:center}'
-    +'#csel-pill .go{width:32px;height:32px;border-radius:50%;background:#5b9dff;color:#fff;font-size:16px;flex:none}'
-    +'#csel-pill .go:hover{background:#76adff}'
+    +'#csel-pill .go{width:32px;height:32px;border-radius:50%;background:#c96442;color:#fff;font-size:16px;flex:none}'
+    +'#csel-pill .go:hover{background:#e0714a}'
     +'#csel-pill .cm{height:26px;padding:0 10px;border-radius:14px;background:transparent;'
     +'border:1px solid #3a4150;color:#e4e4e7;font-size:12px;flex:none}'
     +'#csel-pill .cm:hover{border-color:#5b6575}'
     +'#csel-pill .x{width:28px;height:28px;border-radius:50%;background:transparent;'
     +'border:1px solid #3a4150;color:#9aa3b2;font-size:13px;flex:none}'
     +'#csel-pill .x:hover{border-color:#5b6575;color:#fff}'
-    +'#csel-card{position:fixed;z-index:2147483001;display:none;flex-direction:column;gap:10px;width:340px;'
-    +'background:rgba(24,27,34,.97);border:1px solid #3a4150;border-radius:16px;padding:12px 14px;'
-    +'box-shadow:0 14px 48px rgba(0,0,0,.55);font:13px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#e4e4e7}'
-    +'#csel-card textarea{background:rgba(255,255,255,.04);border:1px solid #3a4150;border-radius:10px;'
-    +'outline:none;color:#e4e4e7;font-size:13px;line-height:1.45;padding:8px 10px;resize:none;'
-    +'font-family:inherit;min-height:44px;width:100%;box-sizing:border-box}'
-    +'#csel-card textarea:focus{border-color:#5b9dff;box-shadow:0 0 0 2px rgba(91,157,255,.22)}'
-    +'#csel-card .b{display:flex;gap:8px;justify-content:flex-end}'
-    +'#csel-card button{padding:6px 14px;font-size:12.5px;border-radius:8px;cursor:pointer;'
-    +'border:1px solid #3a4150;background:transparent;color:#e4e4e7}'
-    +'#csel-card .cc:hover{border-color:#5b6575}'
-    +'#csel-card .sv{background:#e8eaed;border-color:#e8eaed;color:#111;font-weight:600}'
-    +'#csel-card .sv:hover{background:#fff}';
+    +'#csel-card{position:fixed;z-index:2147483001;display:none;align-items:center;gap:10px;min-width:320px;max-width:460px;'
+    +'background:#1d2026;border:1px solid #343842;border-radius:24px;padding:8px 8px 8px 16px;'
+    +'box-shadow:0 12px 36px rgba(0,0,0,.45);font:13px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#e4e4e7}'
+    +'#csel-card .nb{font-size:14px;flex:none;line-height:1}'
+    +'#csel-card textarea{flex:1;background:transparent;border:none;outline:none;color:#e4e4e7;'
+    +'font-size:13px;line-height:1.45;padding:0;resize:none;font-family:inherit;height:20px;max-height:120px}'
+    +'#csel-card textarea::placeholder{color:#6d7480}'
+    +'#csel-card .del{width:26px;height:26px;border-radius:50%;background:none;border:none;color:#6d7480;'
+    +'cursor:pointer;display:flex;align-items:center;justify-content:center;flex:none;padding:0}'
+    +'#csel-card .del:hover{color:#ff7a76}'
+    +'#csel-card .del svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.6;'
+    +'stroke-linecap:round;stroke-linejoin:round}'
+    +'#csel-card .anSave{width:30px;height:30px;border-radius:50%;background:#e8eaed;color:#15171b;border:none;'
+    +'font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;'
+    +'flex:none;font-family:inherit}'
+    +'#csel-card .anSave:hover{background:#fff}';
   var st = document.createElement('style'); st.textContent = css;
   document.head.appendChild(st);
 
@@ -49,8 +52,12 @@ function __ct(){try{return JSON.parse(localStorage.getItem('claudeTargetV1')||'n
   document.body.appendChild(pill);
 
   var card = document.createElement('div'); card.id = 'csel-card';
-  card.innerHTML = '<textarea rows="2" placeholder="Ajouter une annotation…"></textarea>'
-    + '<div class="b"><button class="cc">Annuler</button><button class="sv">Enregistrer</button></div>';
+  card.innerHTML = '<span class="nb">\u{1F4AC}</span>'
+    + '<textarea rows="1" placeholder="Ajouter une annotation…"></textarea>'
+    + '<button class="del" title="Annuler (Échap)">'
+    + '<svg viewBox="0 0 14 14"><path d="M2 3.5h10M5.5 3.5V2.2c0-.4.3-.7.7-.7h1.6c.4 0 .7.3.7.7v1.3'
+    + 'M3.5 3.5l.6 8.1c0 .5.4.9.9.9h4c.5 0 .9-.4.9-.9l.6-8.1M5.8 6v4M8.2 6v4"/></svg></button>'
+    + '<button class="anSave" title="Enregistrer (Entrée)">✓</button>';
   document.body.appendChild(card);
 
   var selText = '', selRect = null, tmr = 0;
@@ -115,18 +122,21 @@ function __ct(){try{return JSON.parse(localStorage.getItem('claudeTargetV1')||'n
     place(card, selRect);
     card.querySelector('textarea').focus();
   });
-  card.querySelector('.cc').addEventListener('click', function(){
+  card.addEventListener('mousedown', function(e){ if (e.target.tagName !== 'TEXTAREA') e.preventDefault(); });
+  card.querySelector('.del').addEventListener('click', function(){
     card.style.display = 'none'; card.querySelector('textarea').value = '';
   });
-  card.querySelector('.sv').addEventListener('click', function(){
+  card.querySelector('.anSave').addEventListener('click', function(){
     var v = card.querySelector('textarea').value.trim();
     card.style.display = 'none'; card.querySelector('textarea').value = '';
     send(v);
   });
-  card.querySelector('textarea').addEventListener('keydown', function(e){
+  var cTa = card.querySelector('textarea');
+  cTa.addEventListener('input', function(){ cTa.style.height = '20px'; cTa.style.height = Math.min(120, cTa.scrollHeight) + 'px'; });
+  cTa.addEventListener('keydown', function(e){
     e.stopPropagation();
-    if (e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); card.querySelector('.sv').click(); }
-    else if (e.key === 'Escape'){ card.querySelector('.cc').click(); }
+    if (e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); card.querySelector('.anSave').click(); }
+    else if (e.key === 'Escape'){ card.querySelector('.del').click(); }
   });
   document.addEventListener('keydown', function(e){ if (e.key === 'Escape') cancel(); });
 
