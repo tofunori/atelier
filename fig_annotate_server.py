@@ -1519,16 +1519,20 @@ class Handler(SimpleHTTPRequestHandler):
                 if comment:
                     msg = msg.rstrip() + f"\nCommentaire : {comment}"
                 direct = bool(req.get("direct"))
+                # Composer line kept short: the full payload lives in
+                # ~/.claude/fig-last-quote.txt, which the annotation skill reads.
+                short = (f"✏️ Regarde mon annotation ({os.path.basename(req['rel'])}{loc}"
+                         + (", avec commentaire" if comment else "") + ") et agis en conséquence.")
                 subprocess.run("pbcopy", input=msg.encode(), timeout=5)
                 with open(os.path.expanduser("~/.claude/fig-last-quote.txt"), "w") as f:
                     f.write(msg)
                 sent = False
                 tgt = req.get("target")
                 if isinstance(tgt, dict):
-                    sent = send_to_target(tgt, msg, direct)
+                    sent = send_to_target(tgt, short, direct)
                 ref = None if sent else find_claude_surface()
                 if ref:
-                    r = subprocess.run(["cmux", "send", "--surface", ref, msg],
+                    r = subprocess.run(["cmux", "send", "--surface", ref, short],
                                        capture_output=True, timeout=5)
                     sent = r.returncode == 0
                     if sent and direct:
@@ -1538,7 +1542,7 @@ class Handler(SimpleHTTPRequestHandler):
                 if not sent:
                     pane = find_muxy_claude_pane()
                     if pane:
-                        r = subprocess.run(["muxy", "send", "--pane", pane, _oneline(msg)],
+                        r = subprocess.run(["muxy", "send", "--pane", pane, _oneline(short)],
                                            capture_output=True, timeout=5)
                         sent = r.returncode == 0
                         if sent and direct:
@@ -1548,7 +1552,7 @@ class Handler(SimpleHTTPRequestHandler):
                 if not sent:
                     term = find_orca_claude_terminal()
                     if term:
-                        args = ["orca", "terminal", "send", "--terminal", term, "--text", msg]
+                        args = ["orca", "terminal", "send", "--terminal", term, "--text", short]
                         if direct:
                             args.append("--enter")
                         r = subprocess.run(args, capture_output=True, timeout=5)
@@ -1587,18 +1591,24 @@ class Handler(SimpleHTTPRequestHandler):
             subprocess.run("pbcopy", input=msg.encode(), timeout=5)
             with open(os.path.expanduser("~/.claude/fig-last-quote.txt"), "w") as f:
                 f.write(msg)
+            # Composer line kept short: the full payload (path + numbered notes +
+            # instruction) lives in fig-last-quote.txt, which the annotation skill reads.
+            nb = len(notes)
+            short = (f"✏️ Regarde mon annotation ({os.path.basename(path)}, "
+                     f"{nb} note{'s' if nb > 1 else ''})"
+                     + (" et applique-la." if direct else "."))
 
             # cmux/muxy/orca push in the background: the response returns immediately
             tgt = req.get("target")
             def push():
                 try:
                     if isinstance(tgt, dict):
-                        ok = send_to_target(tgt, msg, direct)
+                        ok = send_to_target(tgt, short, direct)
                         if ok:
                             return
                     ref = find_claude_surface()
                     if ref:
-                        r = subprocess.run(["cmux", "send", "--surface", ref, msg + " "],
+                        r = subprocess.run(["cmux", "send", "--surface", ref, short + " "],
                                            capture_output=True, timeout=5, start_new_session=True)
                         if r.returncode == 0:                     # cmux may be dead even when the
                             if direct:                            # registry lists live Claude PIDs
@@ -1608,7 +1618,7 @@ class Handler(SimpleHTTPRequestHandler):
                             return
                     pane = find_muxy_claude_pane()
                     if pane:
-                        r = subprocess.run(["muxy", "send", "--pane", pane, _oneline(msg)],
+                        r = subprocess.run(["muxy", "send", "--pane", pane, short],
                                            capture_output=True, timeout=5, start_new_session=True)
                         if r.returncode == 0:
                             if direct:
@@ -1618,7 +1628,7 @@ class Handler(SimpleHTTPRequestHandler):
                             return
                     term = find_orca_claude_terminal()
                     if term:
-                        args = ["orca", "terminal", "send", "--terminal", term, "--text", msg]
+                        args = ["orca", "terminal", "send", "--terminal", term, "--text", short]
                         if direct:
                             args.append("--enter")
                         subprocess.run(args, capture_output=True, timeout=8, start_new_session=True)
