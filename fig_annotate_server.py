@@ -385,6 +385,11 @@ def list_claude_targets():
     return targets
 
 
+def _oneline(msg):
+    """muxy send truncates at the first newline — flatten the message."""
+    return "  ·  ".join(part for part in (p.strip() for p in msg.splitlines()) if part)
+
+
 def send_to_target(target, msg, direct):
     """Push msg to an explicit {app, id} target. Returns True on success."""
     try:
@@ -392,7 +397,7 @@ def send_to_target(target, msg, direct):
         if not tid:
             return False
         if app == "muxy":
-            r = subprocess.run(["muxy", "send", "--pane", tid, msg],
+            r = subprocess.run(["muxy", "send", "--pane", tid, _oneline(msg)],
                                capture_output=True, timeout=5)
             if r.returncode != 0:
                 return False
@@ -1533,7 +1538,7 @@ class Handler(SimpleHTTPRequestHandler):
                 if not sent:
                     pane = find_muxy_claude_pane()
                     if pane:
-                        r = subprocess.run(["muxy", "send", "--pane", pane, msg],
+                        r = subprocess.run(["muxy", "send", "--pane", pane, _oneline(msg)],
                                            capture_output=True, timeout=5)
                         sent = r.returncode == 0
                         if sent and direct:
@@ -1600,7 +1605,7 @@ class Handler(SimpleHTTPRequestHandler):
                         return
                     pane = find_muxy_claude_pane()
                     if pane:
-                        subprocess.run(["muxy", "send", "--pane", pane, msg],
+                        subprocess.run(["muxy", "send", "--pane", pane, _oneline(msg)],
                                        capture_output=True, timeout=5, start_new_session=True)
                         if direct:
                             time.sleep(0.4)

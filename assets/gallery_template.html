@@ -13,7 +13,7 @@
        background:var(--bg);color:var(--txt);font-size:14px}
   header{position:sticky;top:0;z-index:10;background:var(--card);background:color-mix(in srgb,var(--card) 92%,transparent);backdrop-filter:blur(8px);
          border-bottom:1px solid var(--border);padding:10px 16px 9px}
-  .brand{display:flex;align-items:baseline;gap:9px;margin-bottom:9px;flex-wrap:wrap}
+  .brand{display:flex;align-items:center;gap:9px;margin-bottom:9px;flex-wrap:wrap}
   .brand .logo{color:var(--txt);align-self:center;display:block}
   .brand .wm{font-size:15px;font-weight:600;letter-spacing:-.01em}
   .brand .proj{font-size:12px;color:var(--muted);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
@@ -236,6 +236,14 @@
     <span class="wm">__WORDMARK__</span>
     <span class="proj">__PROJECT__</span>
     <span class="stat">__COUNT__ files · __GEN__</span>
+    <div class="actions">
+      <span class="chip" id="boardChip" title="Open the project whiteboard (tldraw)">Board</span>
+      <span class="chip" id="notesChip" title="Open the project notes (markdown)">Notes</span>
+      <span class="chip" id="viewChip" title="Settings — server health, theme, archives, hidden, auto-hide rules">Settings &#9662;</span>
+      <div id="viewMenu" class="menu"></div>
+      <button id="quoteClear" style="display:none" title="Clear the annotation pending in the Claude statusline">Clear annotation</button>
+      <button id="rescan" title="Rescan — rebuild the gallery index and reload" aria-label="Rescan"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M13.6 8a5.6 5.6 0 1 1-1.64-3.96" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M12.2 1.6v2.8H9.4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    </div>
   </div>
   <div class="controls">
     <span class="chip" id="searchChip" title="Search by name or folder (press /)" tabindex="0"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.6"/><path d="M11 11l3.2 3.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> Search</span>
@@ -263,14 +271,6 @@
     <button id="collectSel" style="display:none" title="Add selected files to a collection">Collect (0)</button>
     <button id="exportSel" style="display:none" title="Export selected: folder / zip / contact sheet">Export (0) &#9662;</button>
     <div id="exportMenu" class="menu"></div>
-    <div class="actions">
-      <span class="chip" id="boardChip" title="Open the project whiteboard (tldraw)">Board</span>
-      <span class="chip" id="notesChip" title="Open the project notes (markdown)">Notes</span>
-      <span class="chip" id="viewChip" title="Settings — server health, theme, archives, hidden, auto-hide rules">Settings &#9662;</span>
-      <div id="viewMenu" class="menu"></div>
-      <button id="quoteClear" style="display:none" title="Clear the annotation pending in the Claude statusline">Clear annotation</button>
-      <button id="rescan" title="Rescan — rebuild the gallery index and reload" aria-label="Rescan"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M13.6 8a5.6 5.6 0 1 1-1.64-3.96" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M12.2 1.6v2.8H9.4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-    </div>
   </div>
 </header>
 <main id="grid"></main>
