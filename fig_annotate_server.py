@@ -823,6 +823,13 @@ class Handler(SimpleHTTPRequestHandler):
             try:
                 page = "whiteboard" if self.path.startswith("/board") else "notes"
                 url = f"http://127.0.0.1:{PORT}/.fig_thumbs/{page}/index.html"
+                host = ""                                           # optional hint from the gallery page
+                try:
+                    length = int(self.headers.get("Content-Length", 0) or 0)
+                    if 0 < length <= 4096:
+                        host = str(json.loads(self.rfile.read(length)).get("host", ""))
+                except Exception:
+                    pass
                 # Only ever open inside an embedded workspace browser (muxy/orca/cmux).
                 # No default-browser fallback: on failure the gallery falls back to
                 # its in-page lightbox viewer instead.
@@ -836,6 +843,9 @@ class Handler(SimpleHTTPRequestHandler):
                          if os.path.exists(p)), None),
                      ["browser", "open", url], "cmux"),
                 ]
+                # Both apps can run at once — the tab must open in the app hosting
+                # the gallery that was clicked, so its hint wins the order.
+                candidates.sort(key=lambda c: c[2] != host)
                 for exe, args, name in candidates:
                     if not exe:
                         continue
