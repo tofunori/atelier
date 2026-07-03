@@ -672,6 +672,15 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._respond(400, {"error": "bad request: " + str(e)})
             except Exception as e:
                 return self._respond(500, {"error": str(e)})
+        if self.path == "/notes/load":
+            try:
+                np_ = os.path.join(PROJECT, "notes.md")
+                if os.path.isfile(np_):
+                    with open(np_, encoding="utf-8", errors="replace") as f:
+                        return self._respond(200, {"markdown": f.read()})
+                return self._respond(200, {"markdown": ""})
+            except Exception as e:
+                return self._respond(500, {"error": str(e)})
         if self.path == "/board/load":
             try:
                 bp = os.path.join(PROJECT, ".fig_thumbs", "board.tldr.json")
@@ -808,11 +817,12 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._respond(400, {"ok": False, "error": "bad request: " + str(e)})
             except Exception as e:
                 return self._respond(500, {"ok": False, "error": str(e)})
-        if self.path == "/board/open-surface":
-            # Open the whiteboard as a new cmux browser surface (window.open is
-            # swallowed inside embedded surfaces, so the page asks us to do it).
+        if self.path in ("/board/open-surface", "/notes/open-surface"):
+            # Open the whiteboard/notes as a new embedded-browser tab (window.open
+            # is swallowed inside embedded surfaces, so the page asks us to do it).
             try:
-                url = f"http://127.0.0.1:{PORT}/.fig_thumbs/whiteboard/index.html"
+                page = "whiteboard" if self.path.startswith("/board") else "notes"
+                url = f"http://127.0.0.1:{PORT}/.fig_thumbs/{page}/index.html"
                 # Only ever open inside an embedded workspace browser (muxy/orca/cmux).
                 # No default-browser fallback: on failure the gallery falls back to
                 # its in-page lightbox viewer instead.
@@ -833,6 +843,24 @@ class Handler(SimpleHTTPRequestHandler):
                     if r.returncode == 0:
                         return self._respond(200, {"ok": True, "via": name})
                 return self._respond(502, {"error": "no embedded browser available (muxy/orca/cmux)"})
+            except Exception as e:
+                return self._respond(500, {"error": str(e)})
+        if self.path == "/notes/save":
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+                if length <= 0 or length > 16 * 1024 * 1024:        # 16 MB cap
+                    return self._respond(413, {"error": "empty or oversized notes"})
+                req = json.loads(self.rfile.read(length))
+                md = req.get("markdown")
+                if not isinstance(md, str):
+                    return self._respond(400, {"error": "markdown must be a string"})
+                fd, tmp = tempfile.mkstemp(dir=PROJECT, prefix=".notes.", suffix=".tmp")
+                with os.fdopen(fd, "w", encoding="utf-8") as f:
+                    f.write(md)
+                os.replace(tmp, os.path.join(PROJECT, "notes.md"))   # atomic
+                return self._respond(200, {"ok": True})
+            except (KeyError, ValueError, json.JSONDecodeError) as e:
+                return self._respond(400, {"error": "bad request: " + str(e)})
             except Exception as e:
                 return self._respond(500, {"error": str(e)})
         if self.path == "/board/save":

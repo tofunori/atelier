@@ -238,6 +238,7 @@
     <span class="chip" id="collChip" title="Collections and shortlists">&#9638; Collections &#9662;</span>
     <div id="collMenu" class="menu"></div>
     <span class="chip" id="boardChip" title="Open the project whiteboard (tldraw)">&#9635; Board</span>
+    <span class="chip" id="notesChip" title="Open the project notes (markdown)">&#9998; Notes</span>
     <span class="chip" id="viewChip" title="Settings — server health, theme, archives, hidden, auto-hide rules">&#9881; Settings &#9662;</span>
     <div id="viewMenu" class="menu"></div>
     <span id="rateFilter" style="display:none"></span>
@@ -707,21 +708,24 @@ function sendToBoard(rel, el){
       if(el){ const t=el.textContent; el.textContent=j.ok?'✓':'✗'; setTimeout(()=>el.textContent=t,1200); }
     }).catch(()=>{ if(el){ el.textContent='✗'; setTimeout(()=>el.textContent='▦',1200); } });
 }
-function boardOpen(){
-  // Open the whiteboard inside the lightbox iframe (same-page, like every other
-  // viewer) — window.open is unreliable inside embedded cmux browser surfaces.
+function toolOpenLightbox(page){
+  // Open a bundled tool (whiteboard/notes) inside the lightbox iframe (same-page,
+  // like every other viewer) — window.open is unreliable inside embedded surfaces.
   const img=document.getElementById('lbImg'), pdf=document.getElementById('lbPdf'), vid=document.getElementById('lbVid');
   if(vid.getAttribute('src')){vid.pause();vid.removeAttribute('src');vid.load();}
   lbIdx=-1;
   img.style.display='none'; vid.style.display='none'; pdf.style.display='';
-  pdf.src='/.fig_thumbs/whiteboard/index.html';
+  pdf.src='/.fig_thumbs/'+page+'/index.html';
   lb().classList.add('vw'); lb().classList.remove('annot'); lb().classList.add('show');
 }
-document.getElementById('boardChip').onclick=()=>{
-  // New cmux surface via the server (popups are blocked in embedded surfaces);
+function toolOpenTab(endpoint, page){
+  // New embedded-browser tab via the server (popups are blocked in surfaces);
   // fall back to the in-page lightbox viewer if that fails.
-  fetch('/board/open-surface',{method:'POST'}).then(r=>{ if(!r.ok) boardOpen(); }).catch(boardOpen);
-};
+  const fb=()=>toolOpenLightbox(page);
+  fetch(endpoint,{method:'POST'}).then(r=>{ if(!r.ok) fb(); }).catch(fb);
+}
+document.getElementById('boardChip').onclick=()=>toolOpenTab('/board/open-surface','whiteboard');
+document.getElementById('notesChip').onclick=()=>toolOpenTab('/notes/open-surface','notes');
 document.getElementById('collChip').onclick=e=>{ e.stopPropagation(); buildCollectionChip(); menuToggle(document.getElementById('collMenu'), e.currentTarget); };
 document.getElementById('viewChip').onclick=e=>{ e.stopPropagation(); buildViewMenu(); menuToggle(document.getElementById('viewMenu'), e.currentTarget); };
 document.getElementById('exportSel').onclick=e=>{ e.stopPropagation(); buildExportMenu(); menuToggle(document.getElementById('exportMenu'), e.currentTarget); };

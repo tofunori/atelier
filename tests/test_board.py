@@ -97,5 +97,23 @@ class BoardEndpointTests(unittest.TestCase):
         self.assertEqual(j["commands"][0]["url"], "/fig.png")
 
 
+    def test_notes_load_empty_then_save_roundtrip(self):
+        code, j = _req(self.port, "/notes/load")
+        self.assertEqual(code, 200)
+        self.assertEqual(j["markdown"], "")
+        md = "# Idées\n\n- albédo\n- feu\n"
+        code, j = _req(self.port, "/notes/save", {"markdown": md})
+        self.assertEqual(code, 200)
+        self.assertTrue(j["ok"])
+        code, j = _req(self.port, "/notes/load")
+        self.assertEqual(j["markdown"], md)
+        with open(os.path.join(self.tmp.name, "notes.md"), encoding="utf-8") as f:
+            self.assertEqual(f.read(), md)
+
+    def test_notes_save_rejects_non_string(self):
+        code, _ = _req(self.port, "/notes/save", {"markdown": {"nope": 1}})
+        self.assertEqual(code, 400)
+
+
 if __name__ == "__main__":
     unittest.main()
