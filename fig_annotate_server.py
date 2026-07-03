@@ -672,6 +672,52 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._respond(400, {"error": "bad request: " + str(e)})
             except Exception as e:
                 return self._respond(500, {"error": str(e)})
+        if self.path.startswith("/rasterize?"):
+            # Full-page PNG of a project .html/.md-rendered file, for the drawn-
+            # annotation kit (the client sends its document size). Chrome-rendered,
+            # same safety net as /thumb (semaphore + killpg via _chrome_html_screenshot).
+            try:
+                q = parse_qs(urlparse(self.path).query)
+                src = self._safe_path(q.get("path", [""])[0])
+                if not src or not os.path.isfile(src):
+                    return self._respond(404, {"error": "not found"})
+                w = max(320, min(2400, int(q.get("w", ["1000"])[0])))
+                h = max(200, min(20000, int(q.get("h", ["750"])[0])))
+                key = hashlib.md5((os.path.realpath(src) + ":" + str(int(os.path.getmtime(src)))
+                                   + f":rast:{w}x{h}").encode()).hexdigest()
+                td = os.path.join(PROJECT, ".fig_thumbs")
+                os.makedirs(td, exist_ok=True)
+                out = os.path.join(td, "rast_" + key + ".png")
+                if not os.path.isfile(out):
+                    chrome = next((c for c in (
+                        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+                        "/Applications/Chromium.app/Contents/MacOS/Chromium") if os.path.exists(c)), None)
+                    if not chrome:
+                        return self._respond(501, {"error": "no chrome available"})
+                    shot = out + ".tmp.png"
+                    with _CHROME_SEM:
+                        proc = None
+                        try:
+                            proc = subprocess.Popen(
+                                [chrome, "--headless=new", "--hide-scrollbars",
+                                 "--screenshot=" + shot, f"--window-size={w},{h}",
+                                 "--virtual-time-budget=6000", "file://" + src],
+                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                start_new_session=True)
+                            proc.communicate(timeout=30)
+                        except subprocess.TimeoutExpired:
+                            _kill_pg(proc)
+                        except Exception:
+                            _kill_pg(proc)
+                    if os.path.isfile(shot):
+                        os.replace(shot, out)
+                    else:
+                        return self._respond(500, {"error": "render failed"})
+                return self._serve_file(out)
+            except (KeyError, ValueError) as e:
+                return self._respond(400, {"error": "bad request: " + str(e)})
+            except Exception as e:
+                return self._respond(500, {"error": str(e)})
         if self.path == "/notes/load":
             try:
                 np_ = os.path.join(PROJECT, "notes.md")
