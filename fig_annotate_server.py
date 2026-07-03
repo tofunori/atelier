@@ -1596,22 +1596,24 @@ class Handler(SimpleHTTPRequestHandler):
                         return
                     ref = find_claude_surface()
                     if ref:
-                        subprocess.run(["cmux", "send", "--surface", ref, msg + " "],
-                                       capture_output=True, timeout=5, start_new_session=True)
-                        if direct:
-                            time.sleep(0.4)   # let the composer settle before submitting
-                            subprocess.run(["cmux", "send-key", "--surface", ref, "enter"],
+                        r = subprocess.run(["cmux", "send", "--surface", ref, msg + " "],
                                            capture_output=True, timeout=5, start_new_session=True)
-                        return
+                        if r.returncode == 0:                     # cmux may be dead even when the
+                            if direct:                            # registry lists live Claude PIDs
+                                time.sleep(0.4)   # let the composer settle before submitting
+                                subprocess.run(["cmux", "send-key", "--surface", ref, "enter"],
+                                               capture_output=True, timeout=5, start_new_session=True)
+                            return
                     pane = find_muxy_claude_pane()
                     if pane:
-                        subprocess.run(["muxy", "send", "--pane", pane, _oneline(msg)],
-                                       capture_output=True, timeout=5, start_new_session=True)
-                        if direct:
-                            time.sleep(0.4)
-                            subprocess.run(["muxy", "send-keys", "--pane", pane, "Enter"],
+                        r = subprocess.run(["muxy", "send", "--pane", pane, _oneline(msg)],
                                            capture_output=True, timeout=5, start_new_session=True)
-                        return
+                        if r.returncode == 0:
+                            if direct:
+                                time.sleep(0.4)
+                                subprocess.run(["muxy", "send-keys", "--pane", pane, "Enter"],
+                                               capture_output=True, timeout=5, start_new_session=True)
+                            return
                     term = find_orca_claude_terminal()
                     if term:
                         args = ["orca", "terminal", "send", "--terminal", term, "--text", msg]
