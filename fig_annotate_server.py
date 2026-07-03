@@ -318,6 +318,28 @@ def find_muxy_claude_pane():
         return None
 
 
+def find_orca_claude_terminal():
+    """Orca fallback: handle of a live Claude terminal in this project's worktree."""
+    exe = shutil.which("orca") or ("/usr/local/bin/orca" if os.path.exists("/usr/local/bin/orca") else None)
+    if not exe:
+        return None
+    try:
+        r = subprocess.run([exe, "terminal", "list", "--worktree",
+                            "path:" + os.path.realpath(PROJECT), "--json"],
+                           capture_output=True, text=True, timeout=5)
+        if r.returncode != 0:
+            return None
+        data = json.loads(r.stdout or "null")
+        terms = data.get("terminals") if isinstance(data, dict) else data
+        for t in terms or []:
+            blob = json.dumps(t).lower()
+            if "claude" in blob:
+                return t.get("handle") or t.get("id")
+        return None
+    except Exception:
+        return None
+
+
 def find_claude_surface():
     """Target Claude Code panel surface.
 
@@ -1429,6 +1451,14 @@ class Handler(SimpleHTTPRequestHandler):
                             time.sleep(0.4)
                             subprocess.run(["muxy", "send-keys", "--pane", pane, "Enter"],
                                            capture_output=True, timeout=5)
+                if not sent:
+                    term = find_orca_claude_terminal()
+                    if term:
+                        args = ["orca", "terminal", "send", "--terminal", term, "--text", msg]
+                        if direct:
+                            args.append("--enter")
+                        r = subprocess.run(args, capture_output=True, timeout=5)
+                        sent = r.returncode == 0
                 return self._respond(200, {"sentToClaude": sent, "clipboard": True,
                                            "submitted": sent and direct})
             except (KeyError, ValueError, json.JSONDecodeError) as e:
@@ -1484,6 +1514,13 @@ class Handler(SimpleHTTPRequestHandler):
                             time.sleep(0.4)
                             subprocess.run(["muxy", "send-keys", "--pane", pane, "Enter"],
                                            capture_output=True, timeout=5, start_new_session=True)
+                        return
+                    term = find_orca_claude_terminal()
+                    if term:
+                        args = ["orca", "terminal", "send", "--terminal", term, "--text", msg]
+                        if direct:
+                            args.append("--enter")
+                        subprocess.run(args, capture_output=True, timeout=8, start_new_session=True)
                 except Exception:
                     pass
             threading.Thread(target=push, daemon=True).start()
