@@ -385,15 +385,6 @@ def list_claude_targets():
     return targets
 
 
-def _plog(*parts):
-    """Temporary diagnostics for the annotation push chain."""
-    try:
-        with open(os.path.join(PROJECT, ".fig_thumbs", "annot-push.log"), "a") as f:
-            f.write(time.strftime("%H:%M:%S ") + " ".join(str(p) for p in parts) + "\n")
-    except Exception:
-        pass
-
-
 def _oneline(msg):
     """muxy send truncates at the first newline — flatten the message."""
     return "  ·  ".join(part for part in (p.strip() for p in msg.splitlines()) if part)
@@ -1601,14 +1592,11 @@ class Handler(SimpleHTTPRequestHandler):
             tgt = req.get("target")
             def push():
                 try:
-                    _plog("push start; direct=", direct, "target=", tgt)
                     if isinstance(tgt, dict):
                         ok = send_to_target(tgt, msg, direct)
-                        _plog("send_to_target ->", ok)
                         if ok:
                             return
                     ref = find_claude_surface()
-                    _plog("cmux ref:", ref)
                     if ref:
                         r = subprocess.run(["cmux", "send", "--surface", ref, msg + " "],
                                            capture_output=True, timeout=5, start_new_session=True)
@@ -1619,11 +1607,9 @@ class Handler(SimpleHTTPRequestHandler):
                                                capture_output=True, timeout=5, start_new_session=True)
                             return
                     pane = find_muxy_claude_pane()
-                    _plog("muxy pane:", pane)
                     if pane:
                         r = subprocess.run(["muxy", "send", "--pane", pane, _oneline(msg)],
                                            capture_output=True, timeout=5, start_new_session=True)
-                        _plog("muxy send rc:", r.returncode, (r.stderr or b"")[:200])
                         if r.returncode == 0:
                             if direct:
                                 time.sleep(0.4)
@@ -1631,15 +1617,13 @@ class Handler(SimpleHTTPRequestHandler):
                                                capture_output=True, timeout=5, start_new_session=True)
                             return
                     term = find_orca_claude_terminal()
-                    _plog("orca term:", term)
                     if term:
                         args = ["orca", "terminal", "send", "--terminal", term, "--text", msg]
                         if direct:
                             args.append("--enter")
-                        r = subprocess.run(args, capture_output=True, timeout=8, start_new_session=True)
-                        _plog("orca send rc:", r.returncode)
-                except Exception as e:
-                    _plog("push EXC:", repr(e))
+                        subprocess.run(args, capture_output=True, timeout=8, start_new_session=True)
+                except Exception:
+                    pass
             threading.Thread(target=push, daemon=True).start()
 
             self._respond(200, {"path": path, "sentToClaude": True,
