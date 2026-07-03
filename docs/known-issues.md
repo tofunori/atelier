@@ -7,3 +7,4 @@ fuient dans l'onglet actif (Notes, Whiteboard). Confirmé : la loupe apparaît a
 positions des vignettes de la galerie et disparaît quand l'onglet galerie est
 fermé. Bug côté Muxy — rien à corriger dans cmux-gallery. Contournement : ouvrir
 Notes/Board via le fallback lightbox, ou fermer l'onglet galerie.
+Signalé : https://github.com/muxy-app/muxy/issues/857
