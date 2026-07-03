@@ -813,23 +813,26 @@ class Handler(SimpleHTTPRequestHandler):
             # swallowed inside embedded surfaces, so the page asks us to do it).
             try:
                 url = f"http://127.0.0.1:{PORT}/.fig_thumbs/whiteboard/index.html"
-                orca = shutil.which("orca") or ("/usr/local/bin/orca" if os.path.exists("/usr/local/bin/orca") else None)
-                if orca:                                            # Orca: new tab in the embedded browser
-                    r = subprocess.run([orca, "tab", "create", "--url", url],
-                                       capture_output=True, text=True, timeout=10)
+                # Only ever open inside an embedded workspace browser (muxy/orca/cmux).
+                # No default-browser fallback: on failure the gallery falls back to
+                # its in-page lightbox viewer instead.
+                candidates = [
+                    (shutil.which("muxy"), ["browser", "open", url], "muxy"),
+                    (shutil.which("orca") or ("/usr/local/bin/orca" if os.path.exists("/usr/local/bin/orca") else None),
+                     ["tab", "create", "--url", url], "orca"),
+                    (shutil.which("cmux") or next(
+                        (p for p in ("/Applications/cmux.app/Contents/Resources/bin/cmux",
+                                     os.path.expanduser("~/.local/bin/cmux"))
+                         if os.path.exists(p)), None),
+                     ["browser", "open", url], "cmux"),
+                ]
+                for exe, args, name in candidates:
+                    if not exe:
+                        continue
+                    r = subprocess.run([exe] + args, capture_output=True, text=True, timeout=10)
                     if r.returncode == 0:
-                        return self._respond(200, {"ok": True, "via": "orca"})
-                cmux = shutil.which("cmux") or next(
-                    (p for p in ("/Applications/cmux.app/Contents/Resources/bin/cmux",
-                                 os.path.expanduser("~/.local/bin/cmux"))
-                     if os.path.exists(p)), None)
-                if cmux:
-                    r = subprocess.run([cmux, "browser", "open", url],
-                                       capture_output=True, text=True, timeout=10)
-                    if r.returncode == 0:
-                        return self._respond(200, {"ok": True, "via": "cmux"})
-                subprocess.run(["open", url], timeout=10)          # default browser fallback
-                return self._respond(200, {"ok": True, "via": "open"})
+                        return self._respond(200, {"ok": True, "via": name})
+                return self._respond(502, {"error": "no embedded browser available (muxy/orca/cmux)"})
             except Exception as e:
                 return self._respond(500, {"error": str(e)})
         if self.path == "/board/save":
