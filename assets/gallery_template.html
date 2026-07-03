@@ -35,7 +35,7 @@
         font-size:12px;font-weight:500;height:30px}
   .chip:hover{border-color:var(--border-strong)}
   .chip.off{opacity:.45}
-  .actions{display:flex;gap:6px;align-items:center;margin-left:auto}
+  #sort,#folder{flex:0 1 auto;min-width:90px}
   #rescan{width:32px;padding:0;display:inline-flex;align-items:center;justify-content:center;
         background:var(--accent);border-color:var(--accent);color:#10151d}
   #rescan:hover{filter:brightness(1.08)}
@@ -236,14 +236,6 @@
     <span class="wm">__WORDMARK__</span>
     <span class="proj">__PROJECT__</span>
     <span class="stat">__COUNT__ files · __GEN__</span>
-    <div class="actions">
-      <span class="chip" id="boardChip" title="Open the project whiteboard (tldraw)">Board</span>
-      <span class="chip" id="notesChip" title="Open the project notes (markdown)">Notes</span>
-      <span class="chip" id="viewChip" title="Settings — server health, theme, archives, hidden, auto-hide rules">Settings &#9662;</span>
-      <div id="viewMenu" class="menu"></div>
-      <button id="quoteClear" style="display:none" title="Clear the annotation pending in the Claude statusline">Clear annotation</button>
-      <button id="rescan" title="Rescan — rebuild the gallery index and reload" aria-label="Rescan"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M13.6 8a5.6 5.6 0 1 1-1.64-3.96" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M12.2 1.6v2.8H9.4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-    </div>
   </div>
   <div class="controls">
     <span class="chip" id="searchChip" title="Search by name or folder (press /)" tabindex="0"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.6"/><path d="M11 11l3.2 3.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> Search</span>
@@ -263,6 +255,12 @@
     <span class="chip off" id="favChip">&#9733; Favorites</span>
     <span class="chip" id="collChip" title="Collections and shortlists">Collections &#9662;</span>
     <div id="collMenu" class="menu"></div>
+    <span class="chip" id="boardChip" title="Open the project whiteboard (tldraw)">Board</span>
+    <span class="chip" id="notesChip" title="Open the project notes (markdown)">Notes</span>
+    <span class="chip" id="viewChip" title="Settings — server health, theme, archives, hidden, auto-hide rules">Settings &#9662;</span>
+    <div id="viewMenu" class="menu"></div>
+    <button id="quoteClear" style="display:none" title="Clear the annotation pending in the Claude statusline">Clear annotation</button>
+    <button id="rescan" title="Rescan — rebuild the gallery index and reload" aria-label="Rescan"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M13.6 8a5.6 5.6 0 1 1-1.64-3.96" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M12.2 1.6v2.8H9.4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
     <span id="rateFilter" style="display:none"></span>
     <button id="cmpSel" style="display:none" title="Show the selected images stacked, to compare">Compare (0)</button>
     <button id="hideSel" style="display:none" title="Hide the selected files from the gallery (reversible)">Hide (0)</button>
