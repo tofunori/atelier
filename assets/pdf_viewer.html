@@ -18,6 +18,33 @@
   #sendBtn{position:fixed;display:none;z-index:100;background:var(--border);color:var(--txt);border:1px solid var(--border);
            border-radius:8px;padding:8px 14px;font-size:13px;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.5)}
   .muted{color:var(--muted)}
+  /* selection pill + annotation card (same language as the gallery/HTML overlay) */
+  #selPill{position:fixed;z-index:300;display:none;align-items:center;gap:8px;
+      background:rgba(24,27,34,.97);border:1px solid #3a4150;border-radius:22px;padding:5px 6px 5px 12px;
+      box-shadow:0 10px 36px rgba(0,0,0,.45);color:var(--txt);font-size:13px;user-select:none;-webkit-user-select:none}
+  #selPill .n{color:var(--muted);font-size:12px;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #selPill button{border:none;cursor:pointer;display:flex;align-items:center;justify-content:center}
+  #selPill .cm2{height:26px;padding:0 10px;border-radius:14px;background:transparent;
+      border:1px solid #3a4150;color:var(--txt);font-size:12px;flex:none}
+  #selPill .cm2:hover{border-color:#5b6575}
+  #selPill .x{width:28px;height:28px;border-radius:50%;background:transparent;
+      border:1px solid #3a4150;color:var(--muted);font-size:13px;flex:none}
+  #selPill .x:hover{border-color:#5b6575;color:#fff}
+  #selPill .go{width:32px;height:32px;border-radius:50%;background:#5b9dff;color:#fff;font-size:16px;flex:none}
+  #selPill .go:hover{background:#76adff}
+  #selCard{position:fixed;z-index:301;display:none;flex-direction:column;gap:10px;width:340px;
+      background:rgba(24,27,34,.97);border:1px solid #3a4150;border-radius:16px;padding:12px 14px;
+      box-shadow:0 14px 48px rgba(0,0,0,.55);color:var(--txt);font-size:13px}
+  #selCard textarea{background:rgba(255,255,255,.04);border:1px solid #3a4150;border-radius:10px;
+      outline:none;color:var(--txt);font-size:13px;line-height:1.45;padding:8px 10px;resize:none;
+      font-family:inherit;min-height:44px;width:100%;box-sizing:border-box}
+  #selCard textarea:focus{border-color:#5b9dff;box-shadow:0 0 0 2px rgba(91,157,255,.22)}
+  #selCard .b{display:flex;gap:8px;justify-content:flex-end}
+  #selCard button{padding:6px 14px;font-size:12.5px;border-radius:8px;cursor:pointer;
+      border:1px solid #3a4150;background:transparent;color:var(--txt)}
+  #selCard .cc:hover{border-color:#5b6575}
+  #selCard .sv{background:#e8eaed;border-color:#e8eaed;color:#111;font-weight:600}
+  #selCard .sv:hover{background:#fff}
 </style>
 <script>(function(){var T={'Default':{bg:'#202024',card:'#27272a',card2:'#1f1f23',txt:'#e4e4e7',muted:'#a1a1aa',accent:'#5b9dff',border:'#3f3f46'},'Codex One':{bg:'#202024',card:'#2f343f',card2:'#21252b',txt:'#abb2bf',muted:'#7f848e',accent:'#4d78cc',border:'#3e4451'},'Dracula':{bg:'#282a36',card:'#343746',card2:'#21222c',txt:'#f8f8f2',muted:'#9aa0b3',accent:'#bd93f9',border:'#44475a'},'Nord':{bg:'#2e3440',card:'#3b4252',card2:'#272c36',txt:'#e5e9f0',muted:'#9aa3b2',accent:'#88c0d0',border:'#434c5e'}};var t;try{t=T[localStorage.getItem('figTheme')];}catch(e){}t=t||T['Default'];var r=document.documentElement.style;for(var k in t)r.setProperty('--'+k,t[k]);})();</script>
 </head>
@@ -30,6 +57,9 @@
 </header>
 <div id="pages"></div>
 <button id="sendBtn">➜ Claude</button>
+<div id="selPill"><span class="n"></span><button class="cm2" title="Ajouter un commentaire puis envoyer">&#128172; Annoter</button><button class="x" title="Annuler la sélection (Esc)">&#10005;</button><button class="go" title="Envoyer la sélection à la session Claude">&#8593;</button></div>
+<div id="selCard"><textarea rows="2" placeholder="Ajouter une annotation&hellip;"></textarea>
+  <div class="b"><button class="cc">Annuler</button><button class="sv">Enregistrer</button></div></div>
 <script>
 pdfjsLib.GlobalWorkerOptions.workerSrc = "/.fig_thumbs/pdfjs/pdf.worker.min.js";
 
@@ -162,8 +192,10 @@ function spanAt(tl, x, y){
   return best;
 }
 document.addEventListener("pointerdown", e => {
+  if(e.target.closest("#selPill") || e.target.closest("#selCard")) return;  // pill/card: keep selection
   const tl = e.target.closest(".textLayer");
   btn.style.display = "none";
+  selHide();
   clearHl();
   if(!tl) return;
   dragLayer = tl;
@@ -190,6 +222,8 @@ document.addEventListener("pointerup", e => {
   const pg = dragLayer.closest(".pg");
   if(pg) selPage = pg.dataset.page;
   dragLayer = null;
+  layerSpansLast = layerSpans;
+  selPillShow(hls);
 });
 function hlText(){
   const spans = layerSpansLast.filter(s => s.classList.contains("hl"));
@@ -212,6 +246,62 @@ btn.onclick = async () => {
   btn.textContent = "➜ Claude"; btn.style.display = "none";
   setTimeout(()=>document.getElementById("status").textContent="", 3000);
 };
+
+// --- selection pill: annotate + send directly to the Claude session (same flow
+//     as the LaTeX studio pill and the HTML report overlay; /quote with direct:true) ---
+const selPill = document.getElementById("selPill"), selCard = document.getElementById("selCard");
+function selPillShow(hls){
+  const text = hlText();
+  if(!text){ selHide(); return; }
+  selPill.querySelector(".n").textContent = text.length > 48 ? text.slice(0,45).replace(/\s+\S*$/,"") + "…" : text;
+  // union rect of the highlighted spans (viewport coords)
+  let l = Infinity, r = -Infinity, top = Infinity, bot = -Infinity;
+  hls.forEach(s => { const b = s.getBoundingClientRect();
+    l = Math.min(l, b.left); r = Math.max(r, b.right); top = Math.min(top, b.top); bot = Math.max(bot, b.bottom); });
+  selPill.style.display = "flex";
+  const w = selPill.offsetWidth, h = selPill.offsetHeight;
+  let x = Math.min(Math.max(8, (l + r)/2 - w/2), innerWidth - w - 8);
+  let y = bot + 10;
+  if(y + h > innerHeight - 8) y = top - h - 10;
+  selPill.style.left = x + "px"; selPill.style.top = Math.max(8, y) + "px";
+}
+function selHide(){ selPill.style.display = "none"; selCard.style.display = "none"; }
+function selCancel(){ selHide(); clearHl();
+  fetch("/selinfo", {method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({lines:0, words:0})}).catch(()=>{});
+}
+function selSend(comment){
+  const text = hlText();
+  if(!text) return;
+  const go = selPill.querySelector(".go");
+  go.textContent = "⏳";
+  fetch("/quote", {method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({rel, page: selPage, text, comment: comment || "", direct: true})})
+    .then(r => r.json())
+    .then(() => { go.textContent = "✓"; setTimeout(() => { go.textContent = "↑"; selHide(); }, 1200); })
+    .catch(() => { go.textContent = "!"; setTimeout(() => { go.textContent = "↑"; }, 1600); });
+}
+selPill.addEventListener("mousedown", e => e.preventDefault());
+selPill.querySelector(".go").onclick = () => selSend("");
+selPill.querySelector(".x").onclick = e => { e.stopPropagation(); selCancel(); };
+selPill.querySelector(".cm2").onclick = () => {
+  selCard.style.display = "flex";
+  selCard.style.left = Math.min(parseFloat(selPill.style.left) || 8, innerWidth - 356) + "px";
+  selCard.style.top = selPill.style.top;
+  selCard.querySelector("textarea").focus();
+};
+selCard.querySelector(".cc").onclick = () => { selCard.style.display = "none"; selCard.querySelector("textarea").value = ""; };
+selCard.querySelector(".sv").onclick = () => {
+  const v = selCard.querySelector("textarea").value.trim();
+  selCard.style.display = "none"; selCard.querySelector("textarea").value = "";
+  selSend(v);
+};
+selCard.querySelector("textarea").addEventListener("keydown", e => {
+  e.stopPropagation();
+  if(e.key === "Enter" && !e.shiftKey){ e.preventDefault(); selCard.querySelector(".sv").click(); }
+  else if(e.key === "Escape"){ selCard.querySelector(".cc").click(); }
+});
+document.addEventListener("keydown", e => { if(e.key === "Escape") selCancel(); });
 
 if(rel) main();
 </script>

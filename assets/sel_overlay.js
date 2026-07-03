@@ -16,8 +16,8 @@
     +'font:13px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;user-select:none;-webkit-user-select:none}'
     +'#csel-pill .n{color:#9aa3b2;font-size:12px;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
     +'#csel-pill button{border:none;cursor:pointer;display:flex;align-items:center;justify-content:center}'
-    +'#csel-pill .go{width:32px;height:32px;border-radius:50%;background:#c96442;color:#fff;font-size:16px;flex:none}'
-    +'#csel-pill .go:hover{background:#e0714a}'
+    +'#csel-pill .go{width:32px;height:32px;border-radius:50%;background:#5b9dff;color:#fff;font-size:16px;flex:none}'
+    +'#csel-pill .go:hover{background:#76adff}'
     +'#csel-pill .cm{height:26px;padding:0 10px;border-radius:14px;background:transparent;'
     +'border:1px solid #3a4150;color:#e4e4e7;font-size:12px;flex:none}'
     +'#csel-pill .cm:hover{border-color:#5b6575}'
@@ -49,7 +49,7 @@
 
   var card = document.createElement('div'); card.id = 'csel-card';
   card.innerHTML = '<textarea rows="2" placeholder="Ajouter une annotation…"></textarea>'
-    + '<div class="b"><button class="cc">Annuler</button><button class="sv">Envoyer</button></div>';
+    + '<div class="b"><button class="cc">Annuler</button><button class="sv">Enregistrer</button></div>';
   document.body.appendChild(card);
 
   var selText = '', selRect = null, tmr = 0;

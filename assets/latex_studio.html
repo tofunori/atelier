@@ -79,8 +79,8 @@
   #selPill .x{width:28px;height:28px;border-radius:50%;background:transparent;
       border:1px solid #3a4150;color:var(--muted);font-size:13px;flex:none}
   #selPill .x:hover{border-color:#5b6575;color:#fff}
-  #selPill .go{width:32px;height:32px;border-radius:50%;background:#c96442;color:#fff;font-size:16px;flex:none}
-  #selPill .go:hover{background:#e0714a}
+  #selPill .go{width:32px;height:32px;border-radius:50%;background:#5b9dff;color:#fff;font-size:16px;flex:none}
+  #selPill .go:hover{background:#76adff}
   #selCard{position:fixed;z-index:301;display:none;flex-direction:column;gap:10px;width:340px;
       background:rgba(24,27,34,.97);border:1px solid #3a4150;border-radius:16px;padding:12px 14px;
       box-shadow:0 14px 48px rgba(0,0,0,.55);color:var(--txt);font-size:13px}
@@ -149,7 +149,7 @@
 </div></div>
 <div id="selPill"><span class="n"></span><button class="cm2" title="Ajouter un commentaire puis envoyer">&#128172; Annoter</button><button class="x" title="Annuler la sélection (Esc)">&#10005;</button><button class="go" title="Envoyer la sélection à la session Claude">&#8593;</button></div>
 <div id="selCard"><textarea rows="2" placeholder="Ajouter une annotation&hellip;"></textarea>
-  <div class="b"><button class="cc">Annuler</button><button class="sv">Envoyer</button></div></div>
+  <div class="b"><button class="cc">Annuler</button><button class="sv">Enregistrer</button></div></div>
 <script>
 pdfjsLib.GlobalWorkerOptions.workerSrc = "/.fig_thumbs/pdfjs/pdf.worker.min.js";
 const path = new URLSearchParams(location.search).get("path");
