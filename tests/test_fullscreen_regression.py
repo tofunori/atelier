@@ -24,6 +24,10 @@ sys.path.insert(0, str(ROOT))
 import cmux_gallery
 
 
+def gallery_template():
+    return (ROOT / "assets" / "gallery_template.html").read_text()
+
+
 class FullscreenRegressionTests(unittest.TestCase):
     def test_server_has_orca_fullscreen_exit_route(self):
         server = (ROOT / "fig_annotate_server.py").read_text()
@@ -38,7 +42,7 @@ class FullscreenRegressionTests(unittest.TestCase):
         self.assertNotIn('"terminal", "switch"', server)
 
     def test_gallery_skips_native_fullscreen_in_embedded_shells(self):
-        gallery = (ROOT / "build_gallery.py").read_text()
+        gallery = gallery_template()
 
         self.assertIn("function lbNativeFsAllowed()", gallery)
         self.assertIn("function lbOrcaFsExitAllowed()", gallery)
@@ -91,7 +95,7 @@ class FullscreenRegressionTests(unittest.TestCase):
             )
 
     def test_gallery_defaults_to_css_fullscreen_without_native_flag(self):
-        gallery = (ROOT / "build_gallery.py").read_text()
+        gallery = gallery_template()
         self.assertIn("return false;", gallery.split("function lbNativeFsAllowed()")[1])
 
     def test_orca_native_viewer_uses_notch_safe_image_area(self):
@@ -116,13 +120,13 @@ class FullscreenRegressionTests(unittest.TestCase):
         # The fullscreen image must fill the viewport (width/height:100vw/vh) so
         # it takes the whole screen in true fullscreen (cmux) and fills the pane
         # in CSS pane-fill (Orca). object-fit:contain keeps the aspect ratio.
-        gallery = (ROOT / "build_gallery.py").read_text()
+        gallery = gallery_template()
         fs_img = gallery.split("#lb.fs img{")[1].split("}")[0]
         self.assertIn("width:100vw;height:100vh", fs_img)
         self.assertIn("object-fit:contain", fs_img)
 
     def test_gallery_has_workflow_shortlist_health_recent_compare_tools(self):
-        gallery = (ROOT / "build_gallery.py").read_text()
+        gallery = gallery_template()
         server = (ROOT / "fig_annotate_server.py").read_text()
 
         self.assertIn("let collections = JSON.parse(localStorage.getItem('figCollections')", gallery)

@@ -5,6 +5,11 @@ project_gallery.html
 .project_gallery_thumbs/
 annotations/
 
+# Node / Playwright test artifacts
+node_modules/
+test-results/
+playwright-report/
+
 # test fixture
 example/
 
