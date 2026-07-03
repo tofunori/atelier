@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <title>PDF — select and send to Claude</title>
 <script src="/.fig_thumbs/pdfjs/pdf.min.js"></script>
+<script src="annot_kit.js"></script>
 <style>
   :root{--bg:#202024;--card:#27272a;--card2:#1f1f23;--txt:#e4e4e7;--muted:#a1a1aa;--accent:#5b9dff;--border:#3f3f46}
   body{margin:0;background:var(--bg);color:var(--txt);font-family:-apple-system,sans-serif}
@@ -45,6 +46,10 @@
   #selCard .cc:hover{border-color:#5b6575}
   #selCard .sv{background:#e8eaed;border-color:#e8eaed;color:#111;font-weight:600}
   #selCard .sv:hover{background:#fff}
+  #annotBtn{margin-left:12px;background:var(--border);color:var(--txt);border:1px solid var(--border);
+      border-radius:8px;padding:6px 12px;font-size:13px;cursor:pointer;white-space:nowrap}
+  #annotBtn:hover{border-color:#5b6575}
+  #annotBtn.on{background:#c96442;border-color:#c96442;color:#fff}
 </style>
 <script>(function(){var T={'Default':{bg:'#202024',card:'#27272a',card2:'#1f1f23',txt:'#e4e4e7',muted:'#a1a1aa',accent:'#5b9dff',border:'#3f3f46'},'Codex One':{bg:'#202024',card:'#2f343f',card2:'#21252b',txt:'#abb2bf',muted:'#7f848e',accent:'#4d78cc',border:'#3e4451'},'Dracula':{bg:'#282a36',card:'#343746',card2:'#21222c',txt:'#f8f8f2',muted:'#9aa0b3',accent:'#bd93f9',border:'#44475a'},'Nord':{bg:'#2e3440',card:'#3b4252',card2:'#272c36',txt:'#e5e9f0',muted:'#9aa3b2',accent:'#88c0d0',border:'#434c5e'}};var t;try{t=T[localStorage.getItem('figTheme')];}catch(e){}t=t||T['Default'];var r=document.documentElement.style;for(var k in t)r.setProperty('--'+k,t[k]);})();</script>
 </head>
@@ -52,6 +57,7 @@
 <header>
   <b id="fname">PDF</b>
   <span class="muted">Highlight a passage — Claude can access it automatically ("my selection")</span>
+  <button id="annotBtn" title="Annoter la page courante (dessiner + envoyer à Claude)">&#9998; Annoter</button>
   <span id="selinfo" style="margin-left:auto;color:#ffd54a"></span>
   <span class="muted" id="status"></span>
 </header>
@@ -302,6 +308,53 @@ selCard.querySelector("textarea").addEventListener("keydown", e => {
   else if(e.key === "Escape"){ selCard.querySelector(".cc").click(); }
 });
 document.addEventListener("keydown", e => { if(e.key === "Escape") selCancel(); });
+
+// --- drawn annotation (shared AnnotKit): one transparent overlay per page,
+//     activated on the page most visible in the viewport ---
+const annotBtn = document.getElementById("annotBtn");
+const annotKits = new Map();   // page number (string) -> {overlay, api, cv}
+let annotOn = false;
+function visiblePage(){
+  let best = null, bestVis = -1;
+  const vh = window.innerHeight;
+  for(const pg of document.querySelectorAll(".pg")){
+    const r = pg.getBoundingClientRect();
+    const vis = Math.max(0, Math.min(r.bottom, vh) - Math.max(r.top, 0));
+    if(vis > bestVis){ bestVis = vis; best = pg; }
+  }
+  return best;
+}
+function kitFor(pg){
+  const n = pg.dataset.page;
+  if(annotKits.has(n)) return annotKits.get(n);
+  const cv = pg.querySelector("canvas");
+  const overlay = document.createElement("canvas");
+  overlay.width = cv.width; overlay.height = cv.height;   // device-pixel space, matches the pdf.js canvas
+  overlay.style.cssText = "position:absolute;left:0;top:0;touch-action:none;pointer-events:none;"
+    + "width:" + cv.style.width + ";height:" + cv.style.height;
+  pg.appendChild(overlay);
+  const api = AnnotKit.create({
+    overlay: overlay,
+    exportBase: function(){ return {src: cv, w: cv.width, h: cv.height}; },
+    name: function(){ return (rel ? rel.split("/").pop() : "pdf") + "-p" + n; }
+  });
+  const rec = {overlay: overlay, api: api, cv: cv};
+  annotKits.set(n, rec);
+  return rec;
+}
+function setAnnot(on){
+  if(on){
+    const pg = visiblePage();
+    if(!pg) return;
+    for(const rec of annotKits.values()) rec.api.disable();   // one active page at a time
+    kitFor(pg).api.enable();
+    annotOn = true; annotBtn.classList.add("on");
+  } else {
+    for(const rec of annotKits.values()) rec.api.disable();
+    annotOn = false; annotBtn.classList.remove("on");
+  }
+}
+annotBtn.onclick = () => setAnnot(!annotOn);
 
 if(rel) main();
 </script>

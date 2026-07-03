@@ -677,6 +677,7 @@ class Handler(SimpleHTTPRequestHandler):
             # annotation kit (the client sends its document size). Chrome-rendered,
             # same safety net as /thumb (semaphore + killpg via _chrome_html_screenshot).
             try:
+                from urllib.parse import parse_qs, urlparse   # local imports elsewhere in do_GET make these function-locals
                 q = parse_qs(urlparse(self.path).query)
                 src = self._safe_path(q.get("path", [""])[0])
                 if not src or not os.path.isfile(src):

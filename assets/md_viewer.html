@@ -42,7 +42,7 @@
   .CodeMirror-focused .CodeMirror-selected{background:transparent !important}
   .CodeMirror-selectedtext{background:rgba(91,157,255,.45) !important;border-radius:2px}
   .cm-clsel{background:rgba(255,213,74,.16);box-shadow:0 1px 0 rgba(255,213,74,.4)}
-  #prevPane{flex:1;min-width:0;overflow-y:auto;display:none}
+  #prevPane{flex:1;min-width:0;overflow-y:auto;display:none;position:relative}
   #prevPane.show{display:block}
   #wrap{max-width:860px;margin:0 auto;padding:24px 36px 60px}
   h1,h2,h3{line-height:1.3;border-bottom:1px solid var(--border);padding-bottom:6px}
@@ -57,6 +57,12 @@
   img{max-width:100%}
   hr{border:none;border-top:1px solid var(--border)}
   #err{color:#ff6b6b;padding:40px;text-align:center}
+  #annotBtn{background:transparent;border:1px solid var(--border);color:var(--muted);
+            border-radius:6px;height:24px;padding:0 10px;font-size:11.5px;cursor:pointer;
+            flex-shrink:0;transition:background .12s,color .12s}
+  #annotBtn:hover{color:var(--txt);border-color:var(--accent)}
+  #annotBtn.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  #annotOverlay{position:absolute;left:0;top:0;z-index:5;pointer-events:none;background:transparent}
 </style>
 <script>(function(){var T={'Default':{bg:'#202024',card:'#27272a',card2:'#1f1f23',txt:'#e4e4e7',muted:'#a1a1aa',accent:'#5b9dff',border:'#3f3f46'},'Codex One':{bg:'#202024',card:'#2f343f',card2:'#21252b',txt:'#abb2bf',muted:'#7f848e',accent:'#4d78cc',border:'#3e4451'},'Dracula':{bg:'#282a36',card:'#343746',card2:'#21222c',txt:'#f8f8f2',muted:'#9aa0b3',accent:'#bd93f9',border:'#44475a'},'Nord':{bg:'#2e3440',card:'#3b4252',card2:'#272c36',txt:'#e5e9f0',muted:'#9aa3b2',accent:'#88c0d0',border:'#434c5e'}};var t;try{t=T[localStorage.getItem('figTheme')];}catch(e){}t=t||T['Default'];var r=document.documentElement.style;for(var k in t)r.setProperty('--'+k,t[k]);})();</script>
 </head>
@@ -68,6 +74,7 @@
     <button id="mSplit">Side by side</button>
     <button id="mEdit">Edit</button>
   </div>
+  <button id="annotBtn" title="Dessiner des annotations sur le document rendu">✎ Annoter</button>
   <span id="state"></span>
   <span id="hint">Cmd+S: save · selection visible to Claude</span>
   <button id="clearSel" title="Clear the selection (Esc)">✕ clear</button>
@@ -241,6 +248,94 @@ function pushPreviewSel(){
 prevPane.addEventListener("mouseup", pushPreviewSel);
 prevPane.addEventListener("keyup", pushPreviewSel);
 document.addEventListener("selectionchange", pushPreviewSel);
+
+// --- drawn annotations over the rendered markdown (shared AnnotKit) ---------
+// /rasterize would render the RAW .md text, so instead we compose the rendered
+// DOM into the export canvas via an SVG <foreignObject> data URL. Chrome taints
+// a canvas as soon as a foreignObject is drawn onto it (security), so the
+// realistic path is the clean fallback: a canvas filled with the page bg + a
+// header line, carrying the strokes + numbered notes (whose text holds content).
+const annotBtn = document.getElementById("annotBtn");
+const relPath = file || path || fname;          // project-relative value, per ?file=
+let annotOverlay = null, annotKit = null;
+
+function cssVar(name, dflt){
+  const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return v || dflt;
+}
+function ensureOverlay(){
+  if(!annotOverlay){
+    annotOverlay = document.createElement("canvas");
+    annotOverlay.id = "annotOverlay";
+    prevPane.appendChild(annotOverlay);          // absolute child scrolls with content
+  }
+  const w = Math.max(prevPane.scrollWidth, prevPane.clientWidth);
+  const h = Math.min(20000, Math.max(prevPane.scrollHeight, prevPane.clientHeight));
+  annotOverlay.width = w; annotOverlay.height = h;             // pixel space = CSS size (1:1)
+  annotOverlay.style.width = w + "px"; annotOverlay.style.height = h + "px";
+  if(annotKit && annotKit.enabled) annotKit.redraw();
+}
+function loadOutSvg(w, h){
+  return new Promise((res, rej) => {
+    let styles = "";
+    document.querySelectorAll("style").forEach(s => { styles += s.textContent + "\n"; });
+    const bg = cssVar("--bg", "#202024"), txt = cssVar("--txt", "#e4e4e7");
+    const inner = '<div xmlns="http://www.w3.org/1999/xhtml" style="width:' + w
+      + 'px;background:' + bg + ';color:' + txt + '"><style>' + styles + '</style>'
+      + wrap.outerHTML + '</div>';
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h + '">'
+      + '<foreignObject width="100%" height="100%">' + inner + '</foreignObject></svg>';
+    const img = new Image();
+    img.onload = () => res(img);
+    img.onerror = () => rej(new Error("svg compose failed"));
+    img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+  });
+}
+function annotHost(){
+  return {
+    overlay: annotOverlay,
+    name: () => fname + "-annot",
+    exportBase: async () => {
+      const w = annotOverlay.width, h = annotOverlay.height;
+      const bg = cssVar("--bg", "#202024"), txt = cssVar("--txt", "#e4e4e7");
+      const comp = document.createElement("canvas"); comp.width = w; comp.height = h;
+      const cx = comp.getContext("2d");
+      cx.fillStyle = bg; cx.fillRect(0, 0, w, h);
+      try{
+        const img = await loadOutSvg(w, h);
+        cx.drawImage(img, 0, 0, w, h);
+        comp.toDataURL();                          // taint probe: throws if foreignObject tainted it
+        return { src: comp, w, h };
+      }catch(e){                                    // clean fallback: bg + header line, no composed DOM
+        const fb = document.createElement("canvas"); fb.width = w; fb.height = h;
+        const fx = fb.getContext("2d");
+        fx.fillStyle = bg; fx.fillRect(0, 0, w, h);
+        fx.fillStyle = txt; fx.font = "600 16px -apple-system,system-ui,sans-serif";
+        fx.fillText("annotations sur " + fname, 20, 30);
+        return { src: fb, w, h };
+      }
+    }
+  };
+}
+function loadAnnotKit(){
+  return new Promise((res, rej) => {
+    if(window.AnnotKit) return res();
+    const s = document.createElement("script");
+    s.src = "/.fig_thumbs/annot_kit.js";
+    s.onload = () => res(); s.onerror = () => rej(new Error("annot_kit load failed"));
+    document.head.appendChild(s);
+  });
+}
+annotBtn.addEventListener("click", () => {
+  setMode("prev");                                 // annotate against the rendered preview
+  loadAnnotKit().then(() => {
+    if(!annotKit){ ensureOverlay(); annotKit = window.AnnotKit.create(annotHost()); }
+    else ensureOverlay();
+    const on = annotKit.toggle();
+    annotBtn.classList.toggle("on", on);
+  }).catch(() => { annotBtn.textContent = "✎ !"; setTimeout(() => annotBtn.textContent = "✎ Annoter", 1600); });
+});
+window.addEventListener("resize", () => { if(annotKit && annotKit.enabled) ensureOverlay(); });
 
 load();
 </script>

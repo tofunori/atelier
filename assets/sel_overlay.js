@@ -128,4 +128,83 @@
     else if (e.key === 'Escape'){ card.querySelector('.cc').click(); }
   });
   document.addEventListener('keydown', function(e){ if (e.key === 'Escape') cancel(); });
+
+  /* ---- drawn-annotation mode (shared AnnotKit over the whole document) ---- */
+  var akBtnCss = '#csel-annot-btn{position:fixed;right:16px;bottom:16px;z-index:901;width:40px;height:40px;'
+    +'border-radius:50%;border:1px solid #3a4150;background:rgba(24,27,34,.97);color:#e4e4e7;'
+    +'font-size:18px;line-height:1;cursor:pointer;box-shadow:0 8px 28px rgba(0,0,0,.45);'
+    +'display:flex;align-items:center;justify-content:center;user-select:none;-webkit-user-select:none}'
+    +'#csel-annot-btn:hover{border-color:#5b6575}'
+    +'#csel-annot-btn.on{background:#5b9dff;color:#fff;border-color:#5b9dff}'
+    +'#csel-annot-overlay{position:absolute;left:0;top:0;z-index:900;pointer-events:none;background:transparent}';
+  var akSt = document.createElement('style'); akSt.textContent = akBtnCss;
+  document.head.appendChild(akSt);
+
+  var akBtn = document.createElement('button');
+  akBtn.id = 'csel-annot-btn';
+  akBtn.title = 'Dessiner des annotations sur ce document';
+  akBtn.textContent = '✎';                 // ✎
+  document.body.appendChild(akBtn);
+
+  var akOverlay = document.createElement('canvas');
+  akOverlay.id = 'csel-annot-overlay';
+  document.body.appendChild(akOverlay);
+
+  var annot = null;                             // AnnotKit api (lazy)
+
+  function docSize(){
+    var de = document.documentElement, b = document.body;
+    var w = Math.max(de.scrollWidth, b ? b.scrollWidth : 0, de.clientWidth);
+    var h = Math.min(20000, Math.max(de.scrollHeight, b ? b.scrollHeight : 0, de.clientHeight));
+    return { w: w, h: h };
+  }
+  function sizeOverlay(){
+    var d = docSize();
+    akOverlay.width = d.w; akOverlay.height = d.h;      // pixel space = CSS size (1:1)
+    akOverlay.style.width = d.w + 'px'; akOverlay.style.height = d.h + 'px';
+    if (annot && annot.enabled) annot.redraw();
+  }
+
+  function makeHost(){
+    return {
+      overlay: akOverlay,
+      name: function(){ return NAME + '-annot'; },
+      exportBase: function(){
+        var d = docSize();
+        return fetch('/rasterize?path=' + encodeURIComponent(REL) + '&w=' + d.w + '&h=' + d.h)
+          .then(function(r){ if (!r.ok) throw new Error('rasterize ' + r.status); return r.blob(); })
+          .then(function(blob){ return new Promise(function(res, rej){
+            var img = new Image();
+            img.onload = function(){ res({ src: img, w: img.naturalWidth, h: img.naturalHeight }); };
+            img.onerror = rej;
+            img.src = URL.createObjectURL(blob);
+          }); });
+      }
+    };
+  }
+
+  function loadKit(){
+    return new Promise(function(res, rej){
+      if (window.AnnotKit) return res();
+      var s = document.createElement('script');
+      s.src = '/.fig_thumbs/annot_kit.js';       // absolute: reports live anywhere in the tree
+      s.onload = function(){ res(); };
+      s.onerror = function(){ rej(new Error('annot_kit load failed')); };
+      document.head.appendChild(s);
+    });
+  }
+
+  akBtn.addEventListener('click', function(){
+    loadKit().then(function(){
+      if (!annot){
+        sizeOverlay();
+        annot = window.AnnotKit.create(makeHost());
+      }
+      var on = annot.toggle();
+      akBtn.classList.toggle('on', on);
+      if (on){ hideAll(); sizeOverlay(); }         // don't fight the text-selection pill
+    }).catch(function(){ akBtn.textContent = '!'; setTimeout(function(){ akBtn.textContent = '✎'; }, 1600); });
+  });
+
+  window.addEventListener('resize', function(){ if (annot && annot.enabled) sizeOverlay(); });
 })();
