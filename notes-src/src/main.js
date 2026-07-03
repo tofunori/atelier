@@ -35,21 +35,31 @@ async function main() {
     console.warn('notes/load failed', e)
   }
 
-  const crepe = new Crepe({
-    root: document.getElementById('app'),
-    defaultValue: initial,
-  })
-  await crepe.create()
+  const appEl = document.getElementById('app')
+  const sourceEl = document.getElementById('source')
+  const toolbar = document.getElementById('toolbar')
+
+  // Crepe instance is recreated when switching back from source mode with
+  // changed content, so keep it mutable and factor creation into a function.
+  let crepe = null
+  const createCrepe = async (content) => {
+    crepe = new Crepe({ root: appEl, defaultValue: content })
+    await crepe.create()
+    crepe.on((api) => {
+      api.markdownUpdated(() => scheduleSave())
+    })
+  }
+  await createCrepe(initial)
 
   // ---- 1b. Top toolbar ----
-  const editor = crepe.editor
-  const run = (command, payload) => editor.action(callCommand(command.key, payload))
+  const run = (command, payload) =>
+    crepe.editor.action(callCommand(command.key, payload))
 
   // Task list has no dedicated command in this Milkdown version: wrap the
   // selection in a bullet list, then flag each list_item as a checkbox item
   // (checked attr set -> GFM renders it as a task item).
   const makeTaskList = () => {
-    editor.action((ctx) => {
+    crepe.editor.action((ctx) => {
       callCommand(wrapInBulletListCommand.key)(ctx)
       const view = ctx.get(editorViewCtx)
       const { state } = view
@@ -81,7 +91,6 @@ async function main() {
     hr: () => run(insertHrCommand),
   }
 
-  const toolbar = document.getElementById('toolbar')
   toolbar.addEventListener('mousedown', (e) => {
     // never steal focus from the editor
     if (e.target.closest('button')) e.preventDefault()
@@ -89,17 +98,58 @@ async function main() {
   toolbar.addEventListener('click', (e) => {
     const btn = e.target.closest('button')
     if (!btn) return
+    if (btn.dataset.mode) {
+      setMode(btn.dataset.mode)
+      return
+    }
+    if (mode === 'source') return // formatting inert in source mode
     const fn = actions[btn.dataset.cmd]
     if (!fn) return
     fn()
-    editor.action((ctx) => ctx.get(editorViewCtx).focus())
+    crepe.editor.action((ctx) => ctx.get(editorViewCtx).focus())
   })
+
+  // ---- 1c. Source ↔ WYSIWYG toggle ----
+  let mode = 'rich'
+  const modeBtns = {
+    rich: toolbar.querySelector('button[data-mode="rich"]'),
+    source: toolbar.querySelector('button[data-mode="source"]'),
+  }
+  const currentMarkdown = () =>
+    mode === 'source' ? sourceEl.value : crepe.getMarkdown()
+
+  const setMode = async (next) => {
+    if (next === mode) return
+    if (next === 'source') {
+      sourceEl.value = crepe.getMarkdown()
+      mode = 'source'
+      document.body.classList.add('source-mode')
+      toolbar.classList.add('source-mode')
+      sourceEl.focus()
+    } else {
+      // back to rich: rebuild only if the source text changed
+      const changed = sourceEl.value !== crepe.getMarkdown()
+      if (changed) {
+        await crepe.destroy()
+        await createCrepe(sourceEl.value)
+        scheduleSave()
+      }
+      mode = 'rich'
+      document.body.classList.remove('source-mode')
+      toolbar.classList.remove('source-mode')
+    }
+    modeBtns.rich.classList.toggle('active', mode === 'rich')
+    modeBtns.source.classList.toggle('active', mode === 'source')
+  }
+
+  // Textarea edits participate in the same debounced autosave
+  sourceEl.addEventListener('input', () => scheduleSave())
 
   // ---- 2. Autosave (debounced) ----
   let saveTimer = null
   const doSave = () => {
     saveTimer = null
-    const markdown = crepe.getMarkdown()
+    const markdown = currentMarkdown()
     fetch('/notes/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -114,20 +164,17 @@ async function main() {
         showSaveFailed(true)
       })
   }
-
-  crepe.on((api) => {
-    api.markdownUpdated(() => {
-      if (saveTimer) clearTimeout(saveTimer)
-      saveTimer = setTimeout(doSave, SAVE_DEBOUNCE_MS)
-    })
-  })
+  const scheduleSave = () => {
+    if (saveTimer) clearTimeout(saveTimer)
+    saveTimer = setTimeout(doSave, SAVE_DEBOUNCE_MS)
+  }
 
   // ---- 3. Flush pending save on hide via sendBeacon ----
   const flushOnHide = () => {
     if (!saveTimer) return
     clearTimeout(saveTimer)
     saveTimer = null
-    const body = JSON.stringify({ markdown: crepe.getMarkdown() })
+    const body = JSON.stringify({ markdown: currentMarkdown() })
     navigator.sendBeacon('/notes/save', new Blob([body], { type: 'application/json' }))
   }
   window.addEventListener('pagehide', flushOnHide)
