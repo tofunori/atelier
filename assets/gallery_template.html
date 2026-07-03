@@ -85,10 +85,6 @@
   .tag{padding:2px 7px;border-radius:5px;background:var(--card2);font-size:10px;text-transform:uppercase}
   .tag.archive{background:var(--arch);color:#d9a441}
   .tag.hid{background:#3a3a44;color:#aab}
-  .tag.workflow{background:#24334a;color:#b9d4ff}
-  .tag.workflow.final{background:#173d2d;color:#8ff0bd}
-  .tag.workflow.rejected{background:#442225;color:#ffaaa9}
-  .tag.workflow.candidate{background:#3b321d;color:#ffd978}
   .card.hid{opacity:.5}
   .card.hid:hover{opacity:1}
   .hov{position:absolute;top:6px;right:6px;z-index:4;display:none;gap:4px}
@@ -241,10 +237,6 @@
     <span class="chip off" id="favChip">&#9733; Favorites</span>
     <span class="chip" id="collChip" title="Collections and shortlists">&#9638; Collections &#9662;</span>
     <div id="collMenu" class="menu"></div>
-    <span class="chip" id="workflowChip" title="Filter by figure status">&#9673; Status &#9662;</span>
-    <div id="workflowMenu" class="menu"></div>
-    <span class="chip" id="recentChip" title="Recently opened files">&#8634; Recent &#9662;</span>
-    <div id="recentMenu" class="menu"></div>
     <span class="chip" id="boardChip" title="Open the project whiteboard (tldraw)">&#9635; Board</span>
     <span class="chip" id="viewChip" title="Settings — server health, theme, archives, hidden, auto-hide rules">&#9881; Settings &#9662;</span>
     <div id="viewMenu" class="menu"></div>
@@ -355,7 +347,7 @@ function pushState(){
   clearTimeout(stateTimer);
   stateTimer=setTimeout(()=>{
     fetch('/state',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({favs:[...favs],ratings,hidden:[...hidden],tags,hideRules,collections,workflow})}).catch(()=>{});
+      body:JSON.stringify({favs:[...favs],ratings,hidden:[...hidden],tags,hideRules,collections})}).catch(()=>{});
   },400);
 }
 const saveRatings = ()=>{localStorage.setItem('figRatings', JSON.stringify(ratings));pushState();};
@@ -363,9 +355,6 @@ const saveRatings = ()=>{localStorage.setItem('figRatings', JSON.stringify(ratin
 let tags = JSON.parse(localStorage.getItem('figTags')||'{}');            // {rel:[tag,...]}
 let collections = JSON.parse(localStorage.getItem('figCollections')||'{}'); // {name:[rel,...]}
 let activeCollection = '';
-let workflow = JSON.parse(localStorage.getItem('figWorkflow')||'{}');       // {rel:status}
-let workflowFilter = '';
-let recents = JSON.parse(localStorage.getItem('figRecent')||'[]');
 let hideRules = JSON.parse(localStorage.getItem('figHideRules')||'[]');  // glob strings
 const _ruleRe = {};
 function ruleToRe(g){                                  // gitignore-ish glob -> RegExp
@@ -389,7 +378,6 @@ fetch('/state').then(r=>r.json()).then(st=>{
   if(st.tags) tags = st.tags;
   if(st.hideRules) hideRules = st.hideRules;
   if(st.collections) collections = st.collections;
-  if(st.workflow) workflow = st.workflow;
   for(const k in _ruleRe) delete _ruleRe[k];
   localStorage.setItem('figFavs', JSON.stringify([...favs]));
   localStorage.setItem('figRatings', JSON.stringify(ratings));
@@ -397,9 +385,8 @@ fetch('/state').then(r=>r.json()).then(st=>{
   localStorage.setItem('figTags', JSON.stringify(tags));
   localStorage.setItem('figHideRules', JSON.stringify(hideRules));
   localStorage.setItem('figCollections', JSON.stringify(collections));
-  localStorage.setItem('figWorkflow', JSON.stringify(workflow));
   document.getElementById('favChip').textContent='★ Favorites ('+favs.size+')';
-  updateHideChip(); buildCollectionChip(); buildWorkflowChip(); buildRecentChip(); buildViewMenu();
+  updateHideChip(); buildCollectionChip(); buildViewMenu();
   render();
 }).catch(()=>{}).finally(()=>{
   stateLoaded=true;                                 // disk state is merged in now; saves are safe
@@ -547,7 +534,6 @@ document.getElementById('hideSel').onclick = function(){
   saveHidden(); updateHideChip(); updateDelBtn(); render();
 };
 // ============ collections, smart-hide rules, export, figure -> script ============
-const WORKFLOW_STATUSES = [['draft','Draft'],['candidate','Candidate'],['final','Final'],['rejected','Rejected']];
 const allCollections = ()=>Object.keys(collections).sort((a,b)=>a.localeCompare(b));
 function cleanCollection(){
   const known = new Set(FILES.map(f=>f.rel));
@@ -556,12 +542,6 @@ function cleanCollection(){
   }
 }
 function saveCollections(){ cleanCollection(); localStorage.setItem('figCollections', JSON.stringify(collections)); pushState(); }
-function saveWorkflow(){ localStorage.setItem('figWorkflow', JSON.stringify(workflow)); pushState(); }
-function saveRecent(){ localStorage.setItem('figRecent', JSON.stringify(recents.slice(0,30))); }
-function addRecent(rel){
-  recents = [rel].concat(recents.filter(r=>r!==rel)).filter(r=>FILES.some(f=>f.rel===r)).slice(0,30);
-  saveRecent(); buildRecentChip();
-}
 function applyCollectionToSel(name){
   name=(name||'').trim(); if(!name) return;
   const cur = new Set(collections[name]||[]);
@@ -577,14 +557,6 @@ function removeCollection(name){
 function setActiveCollection(name){
   activeCollection = activeCollection===name ? '' : name;
   buildCollectionChip(); render();
-}
-function setWorkflow(rel, status){
-  if(status) workflow[rel]=status; else delete workflow[rel];
-  saveWorkflow(); buildWorkflowChip(); render();
-}
-function setWorkflowFilter(status){
-  workflowFilter = workflowFilter===status ? '' : status;
-  buildWorkflowChip(); render();
 }
 function buildCollectionChip(){
   cleanCollection();
@@ -607,34 +579,6 @@ function buildCollectionChip(){
   const inp=menu.querySelector('#collQuick'), btn=menu.querySelector('#collQuickAdd');
   if(btn) btn.onclick=()=>{ applyCollectionToSel(inp.value); inp.value=''; buildCollectionChip(); };
   if(inp) inp.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); applyCollectionToSel(inp.value); inp.value=''; buildCollectionChip(); } };
-}
-function buildWorkflowChip(){
-  const chip=document.getElementById('workflowChip'), menu=document.getElementById('workflowMenu');
-  if(!chip||!menu) return;
-  chip.classList.toggle('on', !!workflowFilter);
-  const label = WORKFLOW_STATUSES.find(x=>x[0]===workflowFilter);
-  chip.innerHTML='◎ '+(label?('Status: '+label[1]):'Status')+' ▾';
-  const counts = {};
-  Object.values(workflow).forEach(s=>counts[s]=(counts[s]||0)+1);
-  menu.innerHTML=(workflowFilter?'<div class="mi clr" data-clear="1">Clear filter</div>':'')+
-    WORKFLOW_STATUSES.map(([s,l])=>`<div class="mi${workflowFilter===s?' on':''}"><span class="lbl" data-wf="${s}">${l} <span class="ct">${counts[s]||0}</span></span></div>`).join('');
-  menu.onclick=e=>e.stopPropagation();
-  menu.querySelectorAll('[data-wf]').forEach(el=>el.onclick=()=>{ setWorkflowFilter(el.dataset.wf); menu.style.display='none'; });
-  const c=menu.querySelector('[data-clear]'); if(c) c.onclick=()=>{ workflowFilter=''; buildWorkflowChip(); render(); menu.style.display='none'; };
-}
-function buildRecentChip(){
-  const chip=document.getElementById('recentChip'), menu=document.getElementById('recentMenu');
-  if(!chip||!menu) return;
-  recents = recents.filter(r=>FILES.some(f=>f.rel===r)).slice(0,30);
-  saveRecent();
-  chip.innerHTML='↺ Recent'+(recents.length?' ('+recents.length+')':'')+' ▾';
-  menu.innerHTML=recents.length ? recents.slice(0,15).map(rel=>{
-    const f=FILES.find(x=>x.rel===rel);
-    return `<div class="mi"><span class="lbl" data-open="${escA(rel)}">${esc((f&&f.name)||rel)}</span><span class="ct">${esc((f&&f.folder)||'')}</span></div>`;
-  }).join('')+'<div class="mi clr" data-clear-recent="1">Clear recent</div>' : '<div class="mi muted">No recent files yet.</div>';
-  menu.onclick=e=>e.stopPropagation();
-  menu.querySelectorAll('[data-open]').forEach(el=>el.onclick=()=>{ lbOpenAny(el.dataset.open); menu.style.display='none'; });
-  const c=menu.querySelector('[data-clear-recent]'); if(c)c.onclick=()=>{ recents=[]; saveRecent(); buildRecentChip(); menu.style.display='none'; };
 }
 let healthStatus = null;
 function healthRows(data){
@@ -712,20 +656,16 @@ function collectSelMenu(anchor){
 function cardMenu(anchor, rel){
   closeFloat();
   const f=FILES.find(x=>x.rel===rel); if(!f) return;
-  const isHid=hidden.has(rel), wf=workflow[rel]||'';
+  const isHid=hidden.has(rel);
   const m=document.createElement('div'); m.className='menu'; m.id='floatMenu';
   m.innerHTML='<div class="mhd">'+esc(f.name)+'</div>'
     +'<div class="mi" style="cursor:default">'+rateRow(rel)+'</div>'
-    +'<div class="mhd sep">Status</div>'
-    +'<div class="mi'+(wf===''?' on':'')+'"><span class="lbl" data-wfset="">none</span></div>'
-    +WORKFLOW_STATUSES.map(([s,l])=>'<div class="mi'+(wf===s?' on':'')+'"><span class="lbl" data-wfset="'+escA(s)+'">'+esc(l)+'</span></div>').join('')
     +'<div class="mhd sep"></div>'
     +'<div class="mi"><span class="lbl" data-cact="hide">'+(isHid?'Unhide':'Hide')+'</span></div>'
     +'<div class="mi clr"><span class="lbl" data-cact="del">Move to Trash</span></div>';
   m.addEventListener('click',e=>e.stopPropagation());
   placeMenu(m, anchor);
   m.querySelectorAll('[data-act="rate"]').forEach(sp=>{ sp.onclick=ev=>{ setRate(rel, +sp.dataset.n, ev); closeFloat(); }; });
-  m.querySelectorAll('[data-wfset]').forEach(el=>el.onclick=()=>{ setWorkflow(rel, el.dataset.wfset); closeFloat(); });
   m.querySelector('[data-cact="hide"]').onclick=()=>{ closeFloat(); toggleHide(rel); };
   m.querySelector('[data-cact="del"]').onclick=()=>{ closeFloat(); delOne(rel); };
 }
@@ -779,8 +719,6 @@ function boardOpen(){
 }
 document.getElementById('boardChip').onclick=boardOpen;
 document.getElementById('collChip').onclick=e=>{ e.stopPropagation(); buildCollectionChip(); menuToggle(document.getElementById('collMenu'), e.currentTarget); };
-document.getElementById('workflowChip').onclick=e=>{ e.stopPropagation(); buildWorkflowChip(); menuToggle(document.getElementById('workflowMenu'), e.currentTarget); };
-document.getElementById('recentChip').onclick=e=>{ e.stopPropagation(); buildRecentChip(); menuToggle(document.getElementById('recentMenu'), e.currentTarget); };
 document.getElementById('viewChip').onclick=e=>{ e.stopPropagation(); buildViewMenu(); menuToggle(document.getElementById('viewMenu'), e.currentTarget); };
 document.getElementById('exportSel').onclick=e=>{ e.stopPropagation(); buildExportMenu(); menuToggle(document.getElementById('exportMenu'), e.currentTarget); };
 document.getElementById('collectSel').onclick=e=>{ e.stopPropagation(); collectSelMenu(e.currentTarget); };
@@ -804,7 +742,6 @@ async function lbShow(i){
   if(lbIdx>=0 && i!==lbIdx && !(await annotGuard())) return;
   if(i<0||i>=lbList.length) return;
   lbIdx=i; const f=lbList[i]; lb().classList.remove('annot');
-  addRecent(f.rel);
   const isTex=f.ext==='tex', isPdf=f.ext==='pdf', isMd=f.ext==='md', isCode=codeExt(f.ext), isSvg=f.ext==='svg', isVid=videoExt(f.ext);
   const img=document.getElementById('lbImg'), pdf=document.getElementById('lbPdf'), vid=document.getElementById('lbVid');
   const vw=isPdf||isMd||isCode||isSvg;
@@ -1049,7 +986,6 @@ function render(){
     if(!showArch && f.archive) return false;
     if(!showHidden && (hidden.has(f.rel) || matchesRule(f.rel))) return false;
     if(activeCollection && !(collections[activeCollection]||[]).includes(f.rel)) return false;
-    if(workflowFilter && workflow[f.rel]!==workflowFilter) return false;
     if(onlyFavs && !favs.has(f.rel)) return false;
     if(onlyFavs && rateMin && (ratings[f.rel]||0)!==rateMin) return false;
     if(fld && f.folder!==fld) return false;
@@ -1091,8 +1027,6 @@ function render(){
     const isFav = favs.has(f.rel);
     const isHid = hidden.has(f.rel);
     const hidTag = isHid?`<span class="tag hid">hidden</span>`:'';
-    const wf = workflow[f.rel]||'';
-    const wfTag = wf?`<span class="tag workflow ${escA(wf)}">${esc(WORKFLOW_STATUSES.find(x=>x[0]===wf)?.[1]||wf)}</span>`:'';
     const rt = ratings[f.rel]||0;
     return `<div class="card ${f.archive?'arch':''} ${isHid?'hid':''}">
       <span class="selbox ${selSet.has(f.rel)?'on':''}" data-act="sel" data-rel="${escA(f.rel)}" title="Select — Shift-click to select a range">${selSet.has(f.rel)?'■':'▢'}</span>
@@ -1103,11 +1037,11 @@ function render(){
         ${(imgExt(f.ext)||f.ext==='pdf')?`<button data-act="src" data-rel="${escA(f.rel)}" title="Open the script that generated this figure">&lt;/&gt;</button>`:''}
         ${imgExt(f.ext)?`<button data-act="board" data-rel="${escA(f.rel)}" title="Send this figure to the whiteboard">▦</button>`:''}
         <button data-act="fav" data-rel="${escA(f.rel)}" class="${isFav?'on':''}" title="${isFav?'Remove favorite':'Add favorite'}">${isFav?'★':'☆'}</button>
-        <button data-act="more" data-rel="${escA(f.rel)}" title="Status, rating, hide, delete">⋯</button>
+        <button data-act="more" data-rel="${escA(f.rel)}" title="Rating, hide, delete">⋯</button>
       </div>
       <div class="meta">
         <div class="nm" title="${escA(f.name)}">${esc(f.name)}</div>
-        <div class="row2">${isFav?'<span class="fv">★</span>':''}${rt?`<span class="rt">★${rt}</span>`:''}${wfTag}${arch}${hidTag}<span class="mf" title="${escA(f.folder)}">${esc(f.folder)}</span><span class="md" title="created ${escA(f.bdate)} · modified ${escA(f.mdate)}">${sort.startsWith('btime')?esc(f.bdate):esc(f.mdate)}</span><span class="md">${fmtSize(f.size)}</span></div>
+        <div class="row2">${isFav?'<span class="fv">★</span>':''}${rt?`<span class="rt">★${rt}</span>`:''}${arch}${hidTag}<span class="mf" title="${escA(f.folder)}">${esc(f.folder)}</span><span class="md" title="created ${escA(f.bdate)} · modified ${escA(f.mdate)}">${sort.startsWith('btime')?esc(f.bdate):esc(f.mdate)}</span><span class="md">${fmtSize(f.size)}</span></div>
       </div>
     </div>`;
   }).join('') + (list.length>MAX?`<div class="empty">… and ${list.length-MAX} more. Refine your search to see them.</div>`:'');
