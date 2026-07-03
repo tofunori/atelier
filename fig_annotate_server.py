@@ -340,6 +340,87 @@ def find_orca_claude_terminal():
         return None
 
 
+def list_claude_targets():
+    """Every live Claude session across muxy/orca (+cmux registry), for the picker.
+    Project-scoped entries first, active ones first within each group."""
+    targets = []
+    root = os.path.realpath(PROJECT)
+    exe = shutil.which("muxy") or ("/usr/local/bin/muxy" if os.path.exists("/usr/local/bin/muxy") else None)
+    if exe:
+        try:
+            r = subprocess.run([exe, "list-panes"], capture_output=True, text=True, timeout=5)
+            for line in (r.stdout or "").splitlines():
+                parts = line.split("\t")
+                if len(parts) < 3 or not any(g in parts[1] for g in ("✳", "⠂", "Claude")):
+                    continue
+                cw = os.path.realpath(parts[2]) if parts[2] else ""
+                targets.append({"app": "muxy", "id": parts[0],
+                                "title": parts[1].lstrip("✳⠂ ").strip()[:80],
+                                "cwd": parts[2],
+                                "inProject": cw == root or cw.startswith(root + os.sep),
+                                "active": len(parts) > 3 and parts[3].strip() == "true"})
+        except Exception:
+            pass
+    exe = shutil.which("orca") or ("/usr/local/bin/orca" if os.path.exists("/usr/local/bin/orca") else None)
+    if exe:
+        try:
+            r = subprocess.run([exe, "terminal", "list", "--json"],
+                               capture_output=True, text=True, timeout=5)
+            data = json.loads(r.stdout or "null")
+            terms = data.get("terminals") if isinstance(data, dict) else data
+            for t in terms or []:
+                blob = json.dumps(t).lower()
+                if "claude" not in blob:
+                    continue
+                cw = str(t.get("cwd") or t.get("path") or "")
+                cwr = os.path.realpath(cw) if cw else ""
+                targets.append({"app": "orca", "id": t.get("handle") or t.get("id"),
+                                "title": str(t.get("title") or t.get("name") or "Claude")[:80],
+                                "cwd": cw,
+                                "inProject": bool(cwr) and (cwr == root or cwr.startswith(root + os.sep)),
+                                "active": bool(t.get("focused") or t.get("active"))})
+        except Exception:
+            pass
+    targets.sort(key=lambda t: (not t["inProject"], not t["active"]))
+    return targets
+
+
+def send_to_target(target, msg, direct):
+    """Push msg to an explicit {app, id} target. Returns True on success."""
+    try:
+        app, tid = target.get("app"), target.get("id")
+        if not tid:
+            return False
+        if app == "muxy":
+            r = subprocess.run(["muxy", "send", "--pane", tid, msg],
+                               capture_output=True, timeout=5)
+            if r.returncode != 0:
+                return False
+            if direct:
+                time.sleep(0.4)
+                subprocess.run(["muxy", "send-keys", "--pane", tid, "Enter"],
+                               capture_output=True, timeout=5)
+            return True
+        if app == "orca":
+            args = ["orca", "terminal", "send", "--terminal", tid, "--text", msg]
+            if direct:
+                args.append("--enter")
+            return subprocess.run(args, capture_output=True, timeout=8).returncode == 0
+        if app == "cmux":
+            r = subprocess.run(["cmux", "send", "--surface", tid, msg],
+                               capture_output=True, timeout=5)
+            if r.returncode != 0:
+                return False
+            if direct:
+                time.sleep(0.4)
+                subprocess.run(["cmux", "send-key", "--surface", tid, "enter"],
+                               capture_output=True, timeout=5)
+            return True
+    except Exception:
+        pass
+    return False
+
+
 def find_claude_surface():
     """Target Claude Code panel surface.
 
@@ -782,6 +863,11 @@ class Handler(SimpleHTTPRequestHandler):
                     with open(np_, encoding="utf-8", errors="replace") as f:
                         return self._respond(200, {"markdown": f.read()})
                 return self._respond(200, {"markdown": ""})
+            except Exception as e:
+                return self._respond(500, {"error": str(e)})
+        if self.path == "/claude-targets":
+            try:
+                return self._respond(200, {"targets": list_claude_targets()})
             except Exception as e:
                 return self._respond(500, {"error": str(e)})
         if self.path == "/board/load":
@@ -1432,7 +1518,10 @@ class Handler(SimpleHTTPRequestHandler):
                 with open(os.path.expanduser("~/.claude/fig-last-quote.txt"), "w") as f:
                     f.write(msg)
                 sent = False
-                ref = find_claude_surface()
+                tgt = req.get("target")
+                if isinstance(tgt, dict):
+                    sent = send_to_target(tgt, msg, direct)
+                ref = None if sent else find_claude_surface()
                 if ref:
                     r = subprocess.run(["cmux", "send", "--surface", ref, msg],
                                        capture_output=True, timeout=5)
@@ -1494,9 +1583,12 @@ class Handler(SimpleHTTPRequestHandler):
             with open(os.path.expanduser("~/.claude/fig-last-quote.txt"), "w") as f:
                 f.write(msg)
 
-            # cmux/muxy push in the background: the response returns immediately
+            # cmux/muxy/orca push in the background: the response returns immediately
+            tgt = req.get("target")
             def push():
                 try:
+                    if isinstance(tgt, dict) and send_to_target(tgt, msg, direct):
+                        return
                     ref = find_claude_surface()
                     if ref:
                         subprocess.run(["cmux", "send", "--surface", ref, msg + " "],
