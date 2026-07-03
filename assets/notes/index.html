@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Notes</title>
+    <style>
+      html, body, #app { margin: 0; padding: 0; width: 100%; height: 100%; }
+      html, body { overflow: hidden; background: #1b1d1e; }
+      #app { position: fixed; inset: 0; overflow: auto; }
+      /* Crepe only paints its own content height — stretch it to fill the page */
+      #app .milkdown, #app .milkdown > div { min-height: 100vh; }
+      #save-indicator {
+        position: fixed; top: 10px; right: 14px; z-index: 1000;
+        font: 12px/1.4 -apple-system, system-ui, sans-serif;
+        color: #fff; background: #c0392b; padding: 4px 10px;
+        border-radius: 6px; box-shadow: 0 1px 4px rgba(0,0,0,.4);
+        display: none;
+      }
+      #save-indicator.show { display: block; }
+    </style>
+    <script type="module" crossorigin src="./assets/index-CUY2te1t.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-bu9bMUcL.css">
+  </head>
+  <body>
+    <div id="app"></div>
+    <div id="save-indicator">save failed</div>
+  </body>
+</html>
