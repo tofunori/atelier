@@ -144,25 +144,24 @@
   #annotBar input[type=color]{width:30px;height:28px;border:none;background:none;cursor:pointer;padding:0}
   #lbWrap{position:relative;cursor:default}
   #annotCv{position:absolute;inset:0;display:none;touch-action:none}
-  #annotNote{position:fixed;z-index:103;display:none;flex-direction:column;gap:10px;width:340px;
-      background:rgba(24,27,34,.97);border:1px solid #3a4150;border-radius:16px;padding:12px 14px;
-      box-shadow:0 14px 48px rgba(0,0,0,.55)}
-  #annotNote .anRow{display:flex;gap:10px;align-items:flex-start}
-  #annotNote textarea{flex:1;background:rgba(255,255,255,.04);border:1px solid #3a4150;border-radius:10px;
-      outline:none;color:var(--txt);font-size:13px;line-height:1.45;padding:8px 10px;resize:none;
-      font-family:inherit;min-height:44px}
-  #annotNote textarea:focus{border-color:#5b9dff;box-shadow:0 0 0 2px rgba(91,157,255,.22)}
-  #annotNote .anBtns{display:flex;gap:8px;align-items:center}
-  #annotNote .anBtns .sp{flex:1}
-  #annotNote .anBtns button{padding:6px 14px;font-size:12.5px;border-radius:8px;cursor:pointer;
-      border:1px solid #3a4150;background:transparent;color:var(--txt)}
-  #annotNote .anBtns .anCancel:hover{border-color:#5b6575}
-  #annotNote .anBtns .anSave{background:#e8eaed;border-color:#e8eaed;color:#111;font-weight:600}
-  #annotNote .anBtns .anSave:hover{background:#fff}
-  #annotNote .del{cursor:pointer;color:#9aa3b2;font-size:15px;padding:2px}
-  #annotNote .del:hover{color:#ff6b6b}
-  #annotNote .nb{background:var(--accent);color:#fff;border-radius:50%;width:22px;height:22px;
-      display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex:none;margin-top:6px}
+  /* Note card, "message bar" style: numéro · champ · icône supprimer · ✓ rond.
+     (Échap annule, Entrée enregistre — pas de boutons texte.) */
+  #annotNote{position:fixed;z-index:103;display:none;align-items:center;gap:10px;min-width:320px;max-width:460px;
+      background:#1d2026;border:1px solid #343842;border-radius:24px;padding:8px 8px 8px 16px;
+      box-shadow:0 12px 36px rgba(0,0,0,.45)}
+  #annotNote .nb{color:#8ab4ff;font-size:12px;font-weight:700;flex:none}
+  #annotNote textarea{flex:1;background:transparent;border:none;outline:none;color:var(--txt);
+      font-size:13px;line-height:1.45;padding:0;resize:none;font-family:inherit;height:20px;max-height:120px}
+  #annotNote textarea::placeholder{color:#6d7480}
+  #annotNote .del{width:26px;height:26px;border-radius:50%;background:none;border:none;color:#6d7480;
+      cursor:pointer;display:flex;align-items:center;justify-content:center;flex:none;padding:0}
+  #annotNote .del:hover{color:#ff7a76}
+  #annotNote .del svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.6;
+      stroke-linecap:round;stroke-linejoin:round}
+  #annotNote .anSave{width:30px;height:30px;border-radius:50%;background:#e8eaed;color:#15171b;border:none;
+      font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;
+      flex:none;font-family:inherit}
+  #annotNote .anSave:hover{background:#fff}
   #annotPill{position:fixed;bottom:26px;left:50%;transform:translateX(-50%);z-index:102;display:none;
       align-items:center;gap:12px;background:rgba(24,27,34,.97);border:1px solid #3a4150;border-radius:28px;
       padding:7px 7px 7px 18px;box-shadow:0 10px 36px rgba(0,0,0,.5);color:var(--txt);font-size:13.5px}
@@ -270,8 +269,10 @@
   </div>
   <div id="lbWrap"><img id="lbImg" src="" alt=""><canvas id="annotCv"></canvas></div>
   <div id="annotNote">
-    <div class="anRow"><span class="nb">1</span><textarea rows="2" placeholder="Ajouter une annotation&hellip;"></textarea></div>
-    <div class="anBtns"><span class="del" title="Supprimer cette annotation">&#128465;</span><span class="sp"></span><button class="anCancel">Annuler</button><button class="anSave">Enregistrer</button></div>
+    <span class="nb">1</span>
+    <textarea rows="1" placeholder="Ajouter une annotation&hellip;"></textarea>
+    <button class="del" title="Supprimer cette annotation (&Eacute;chap : annuler)"><svg viewBox="0 0 14 14"><path d="M2 3.5h10M5.5 3.5V2.2c0-.4.3-.7.7-.7h1.6c.4 0 .7.3.7.7v1.3M3.5 3.5l.6 8.1c0 .5.4.9.9.9h4c.5 0 .9-.4.9-.9l.6-8.1M5.8 6v4M8.2 6v4"/></svg></button>
+    <button class="anSave" title="Enregistrer (Entr&eacute;e)">&#10003;</button>
   </div>
   <div id="annotPill"><span class="ic">&#128172;</span><span id="annotPillN"></span><button class="x" id="annotPillCancel" title="Annuler : supprimer les commentaires sans envoyer">&#10005;</button><button id="annotPillSend" title="Envoyer directement dans la session Claude (avec soumission)">&#8593;</button></div>
   <iframe id="lbPdf" style="display:none;width:94vw;height:86vh;border:none;border-radius:6px;background:#fff"></iframe>
@@ -920,7 +921,7 @@ document.addEventListener('keydown',e=>{
     if(e.key==='Escape'){
       if(annotCur){annotCur=null;annotRedraw();return;}
       const box=document.getElementById('annotNote');
-      if(box.style.display==='flex'){box.querySelector('.anCancel').click();return;}
+      if(box.style.display==='flex'){box.querySelector('textarea').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}));return;}
       annotToggle(); return;
     }
   }
@@ -1210,8 +1211,8 @@ function annotAskNote(stroke, clientX, clientY){
   if(!stroke.n) stroke.n=annotStrokes.filter(s=>s.n).length+1;
   box.querySelector('.nb').textContent=stroke.n;
   box.style.display='flex';
-  box.style.left=Math.min(clientX, window.innerWidth-364)+'px';
-  box.style.top=Math.min(clientY+14, window.innerHeight-170)+'px';
+  box.style.left=Math.min(clientX, window.innerWidth-480)+'px';
+  box.style.top=Math.min(clientY+14, window.innerHeight-70)+'px';
   inp.value=stroke.note||''; inp.focus(); inp.select();
   annotRedraw();
   const close=()=>{box.style.display='none'; annotRedraw();};
@@ -1236,7 +1237,8 @@ function annotAskNote(stroke, clientX, clientY){
     annotRenumber(); annotSent=false; close();
   };
   box.querySelector('.anSave').onclick=e=>{e.stopPropagation();save();};
-  box.querySelector('.anCancel').onclick=e=>{e.stopPropagation();cancel();};
+  inp.oninput=()=>{inp.style.height='20px';inp.style.height=Math.min(120,inp.scrollHeight)+'px';};
+  inp.oninput();
   inp.onkeydown=e=>{
     e.stopPropagation();
     if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();save();}

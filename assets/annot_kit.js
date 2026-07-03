@@ -28,25 +28,22 @@
     +'.akBar button:hover{border-color:#5b6575}'
     +'.akBar button.sel{background:#3f3f46;color:#fff;border-color:#3f3f46}'
     +'.akBar input[type=color]{width:30px;height:28px;border:none;background:none;cursor:pointer;padding:0}'
-    +'.akNote{position:fixed;z-index:903;display:none;flex-direction:column;gap:10px;width:340px;'
-    +'background:rgba(24,27,34,.97);border:1px solid #3a4150;border-radius:16px;padding:12px 14px;'
-    +'box-shadow:0 14px 48px rgba(0,0,0,.55);font:13px -apple-system,system-ui,sans-serif;color:#e4e4e7}'
-    +'.akNote .anRow{display:flex;gap:10px;align-items:flex-start}'
-    +'.akNote textarea{flex:1;background:rgba(255,255,255,.04);border:1px solid #3a4150;border-radius:10px;'
-    +'outline:none;color:#e4e4e7;font-size:13px;line-height:1.45;padding:8px 10px;resize:none;'
-    +'font-family:inherit;min-height:44px}'
-    +'.akNote textarea:focus{border-color:#5b9dff;box-shadow:0 0 0 2px rgba(91,157,255,.22)}'
-    +'.akNote .anBtns{display:flex;gap:8px;align-items:center}'
-    +'.akNote .anBtns .sp{flex:1}'
-    +'.akNote .anBtns button{padding:6px 14px;font-size:12.5px;border-radius:8px;cursor:pointer;'
-    +'border:1px solid #3a4150;background:transparent;color:#e4e4e7;font-family:inherit}'
-    +'.akNote .anBtns .anCancel:hover{border-color:#5b6575}'
-    +'.akNote .anBtns .anSave{background:#e8eaed;border-color:#e8eaed;color:#111;font-weight:600}'
-    +'.akNote .anBtns .anSave:hover{background:#fff}'
-    +'.akNote .del{cursor:pointer;color:#9aa3b2;font-size:15px;padding:2px}'
-    +'.akNote .del:hover{color:#ff6b6b}'
-    +'.akNote .nb{background:#5b9dff;color:#fff;border-radius:50%;width:22px;height:22px;'
-    +'display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex:none;margin-top:6px}'
+    +'.akNote{position:fixed;z-index:903;display:none;align-items:center;gap:10px;min-width:320px;max-width:460px;'
+    +'background:#1d2026;border:1px solid #343842;border-radius:24px;padding:8px 8px 8px 16px;'
+    +'box-shadow:0 12px 36px rgba(0,0,0,.45);font:13px -apple-system,system-ui,sans-serif;color:#e6e7ea}'
+    +'.akNote .nb{color:#8ab4ff;font-size:12px;font-weight:700;flex:none}'
+    +'.akNote textarea{flex:1;background:transparent;border:none;outline:none;color:#e6e7ea;'
+    +'font-size:13px;line-height:1.45;padding:0;resize:none;font-family:inherit;height:20px;max-height:120px}'
+    +'.akNote textarea::placeholder{color:#6d7480}'
+    +'.akNote .del{width:26px;height:26px;border-radius:50%;background:none;border:none;color:#6d7480;'
+    +'cursor:pointer;display:flex;align-items:center;justify-content:center;flex:none;padding:0}'
+    +'.akNote .del:hover{color:#ff7a76}'
+    +'.akNote .del svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.6;'
+    +'stroke-linecap:round;stroke-linejoin:round}'
+    +'.akNote .anSave{width:30px;height:30px;border-radius:50%;background:#e8eaed;color:#15171b;border:none;'
+    +'font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;'
+    +'flex:none;font-family:inherit}'
+    +'.akNote .anSave:hover{background:#fff}'
     +'.akPill{position:fixed;bottom:26px;left:50%;transform:translateX(-50%);z-index:902;display:none;'
     +'align-items:center;gap:12px;background:rgba(24,27,34,.97);border:1px solid #3a4150;border-radius:28px;'
     +'padding:7px 7px 7px 18px;box-shadow:0 10px 36px rgba(0,0,0,.5);color:#e4e4e7;font:13.5px -apple-system,system-ui,sans-serif}'
@@ -80,9 +77,12 @@
       +'<button class="akClear" title="Tout effacer">&#10006;</button>'
       +'</div>');
     var note = el('<div class="akNote">'
-      +'<div class="anRow"><span class="nb">1</span><textarea rows="2" placeholder="Ajouter une annotation&hellip;"></textarea></div>'
-      +'<div class="anBtns"><span class="del" title="Supprimer cette annotation">&#128465;</span><span class="sp"></span>'
-      +'<button class="anCancel">Annuler</button><button class="anSave">Enregistrer</button></div></div>');
+      +'<span class="nb">1</span>'
+      +'<textarea rows="1" placeholder="Ajouter une annotation&hellip;"></textarea>'
+      +'<button class="del" title="Supprimer cette annotation (Échap : annuler)">'
+      +'<svg viewBox="0 0 14 14"><path d="M2 3.5h10M5.5 3.5V2.2c0-.4.3-.7.7-.7h1.6c.4 0 .7.3.7.7v1.3'
+      +'M3.5 3.5l.6 8.1c0 .5.4.9.9.9h4c.5 0 .9-.4.9-.9l.6-8.1M5.8 6v4M8.2 6v4"/></svg></button>'
+      +'<button class="anSave" title="Enregistrer (Entrée)">&#10003;</button></div>');
     var pill = el('<div class="akPill"><span>&#128172;</span><span class="n"></span>'
       +'<button class="x" title="Supprimer les commentaires sans envoyer">&#10005;</button>'
       +'<button class="go" title="Envoyer à la session Claude">&#8593;</button></div>');
@@ -163,8 +163,8 @@
       if (!stroke.n) stroke.n = strokes.filter(function(s){ return s.n; }).length + 1;
       note.querySelector('.nb').textContent = stroke.n;
       note.style.display = 'flex';
-      note.style.left = Math.min(cx, window.innerWidth - 364) + 'px';
-      note.style.top = Math.min(cy + 14, window.innerHeight - 170) + 'px';
+      note.style.left = Math.min(cx, window.innerWidth - 480) + 'px';
+      note.style.top = Math.min(cy + 14, window.innerHeight - 70) + 'px';
       inp.value = stroke.note || ''; inp.focus(); inp.select();
       redraw();
       var close = function(){ note.style.display = 'none'; redraw(); };
@@ -187,7 +187,8 @@
         renumber(); close();
       };
       note.querySelector('.anSave').onclick = function(e){ e.stopPropagation(); save(); };
-      note.querySelector('.anCancel').onclick = function(e){ e.stopPropagation(); cancel(); };
+      inp.oninput = function(){ inp.style.height = '20px'; inp.style.height = Math.min(120, inp.scrollHeight) + 'px'; };
+      inp.oninput();
       inp.onkeydown = function(e){
         e.stopPropagation();
         if (e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); save(); }
