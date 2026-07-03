@@ -52,7 +52,20 @@
     +'.akPill .x{width:28px;height:28px;border-radius:50%;background:transparent;color:#9aa3b2;'
     +'border:1px solid #3a4150;font-size:13px}'
     +'.akPill .x:hover{border-color:#5b6575;color:#fff}'
-    +'.akPill .go{width:32px;height:32px;border-radius:50%;background:#5b9dff;color:#fff;font-size:16px}';
+    +'.akPill .go{width:32px;height:32px;border-radius:50%;background:#5b9dff;color:#fff;font-size:16px}'
+    +'.akPill .tg{width:28px;height:28px;border-radius:50%;background:transparent;color:#9aa3b2;'
+    +'border:1px solid #3a4150;font-size:13px}'
+    +'.akPill .tg:hover,.akPill .tg.set{border-color:#5b9dff;color:#5b9dff}'
+    +'.akTgMenu{position:fixed;z-index:904;display:none;flex-direction:column;min-width:260px;max-width:420px;'
+    +'background:rgba(24,27,34,.98);border:1px solid #3a4150;border-radius:12px;padding:6px;'
+    +'box-shadow:0 14px 48px rgba(0,0,0,.55);font:12.5px -apple-system,system-ui,sans-serif;color:#e4e4e7}'
+    +'.akTgMenu .it{display:flex;gap:8px;align-items:center;padding:7px 9px;border-radius:8px;cursor:pointer}'
+    +'.akTgMenu .it:hover{background:rgba(255,255,255,.06)}'
+    +'.akTgMenu .it .app{flex:none;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;'
+    +'color:#8ab4ff;border:1px solid #33415e;border-radius:5px;padding:1px 5px}'
+    +'.akTgMenu .it .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
+    +'.akTgMenu .it.on .t{color:#8ab4ff}'
+    +'.akTgMenu .hd{font-size:10.5px;color:#9aa3b2;text-transform:uppercase;letter-spacing:.05em;padding:5px 9px 3px}';
 
   var styleDone = false;
   function ensureStyle(){
@@ -84,9 +97,12 @@
       +'M3.5 3.5l.6 8.1c0 .5.4.9.9.9h4c.5 0 .9-.4.9-.9l.6-8.1M5.8 6v4M8.2 6v4"/></svg></button>'
       +'<button class="anSave" title="Enregistrer (Entrée)">&#10003;</button></div>');
     var pill = el('<div class="akPill"><span>&#128172;</span><span class="n"></span>'
+      +'<button class="tg" title="Choisir la session Claude cible">&#9678;</button>'
       +'<button class="x" title="Supprimer les commentaires sans envoyer">&#10005;</button>'
       +'<button class="go" title="Envoyer à la session Claude">&#8593;</button></div>');
-    document.body.appendChild(bar); document.body.appendChild(note); document.body.appendChild(pill);
+    var tgMenu = el('<div class="akTgMenu"></div>');
+    document.body.appendChild(bar); document.body.appendChild(note);
+    document.body.appendChild(pill); document.body.appendChild(tgMenu);
 
     function getPos(e){
       if (host.getPos) return host.getPos(e);
@@ -229,6 +245,46 @@
     bar.querySelector('.akUndo').onclick = function(){ strokes.pop(); renumber(); note.style.display = 'none'; redraw(); };
     bar.querySelector('.akClear').onclick = function(){ strokes = []; note.style.display = 'none'; redraw(); };
 
+    // --- explicit Claude-session target (shared across viewers via localStorage) ---
+    function getTarget(){
+      try{ return JSON.parse(localStorage.getItem('claudeTargetV1') || 'null'); }catch(e){ return null; }
+    }
+    function markTg(){ pill.querySelector('.tg').classList.toggle('set', !!getTarget()); }
+    markTg();
+    pill.querySelector('.tg').onclick = async function(e){
+      e.stopPropagation();
+      var cur = getTarget();
+      var items = '<div class="hd">Envoyer vers</div>'
+        + '<div class="it' + (cur ? '' : ' on') + '" data-i="-1"><span class="app">auto</span>'
+        + '<span class="t">Session du projet (auto)</span></div>';
+      try{
+        var j = await (await fetch('/claude-targets')).json();
+        (j.targets || []).forEach(function(t, i){
+          var on = cur && cur.app === t.app && cur.id === t.id;
+          items += '<div class="it' + (on ? ' on' : '') + '" data-i="' + i + '">'
+            + '<span class="app">' + t.app + '</span><span class="t">'
+            + String(t.title || t.id).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; })
+            + (t.inProject ? '' : ' — ' + String(t.cwd || '').split('/').pop()) + '</span></div>';
+        });
+        tgMenu.innerHTML = items;
+        var r = pill.getBoundingClientRect();
+        tgMenu.style.display = 'flex';
+        tgMenu.style.left = Math.max(8, r.left) + 'px';
+        tgMenu.style.top = Math.max(8, r.top - tgMenu.offsetHeight - 8) + 'px';
+        tgMenu.querySelectorAll('.it').forEach(function(it){
+          it.onclick = function(ev){
+            ev.stopPropagation();
+            var i = +it.dataset.i;
+            if (i < 0) localStorage.removeItem('claudeTargetV1');
+            else localStorage.setItem('claudeTargetV1', JSON.stringify(
+              {app: j.targets[i].app, id: j.targets[i].id, title: j.targets[i].title}));
+            markTg(); tgMenu.style.display = 'none';
+          };
+        });
+        document.addEventListener('click', function h(){ tgMenu.style.display = 'none'; document.removeEventListener('click', h); });
+      }catch(err){ console.warn('claude-targets failed', err); }
+    };
+
     async function send(direct){
       var base = await host.exportBase();
       var out = document.createElement('canvas');
@@ -238,6 +294,7 @@
       redraw(x, base.w / overlay.width);
       var r = await fetch('/save', {method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({name: host.name(), dataURL: out.toDataURL('image/png'), direct: !!direct,
+          target: getTarget(),
           notes: strokes.filter(function(s){ return s.note; }).map(function(s){ return {n: s.n, text: s.note}; })})});
       return await r.json();
     }

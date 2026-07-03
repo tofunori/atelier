@@ -35,7 +35,7 @@
         font-size:12px;font-weight:500;height:30px}
   .chip:hover{border-color:var(--border-strong)}
   .chip.off{opacity:.45}
-  #boardChip{margin-left:auto}
+  .actions{display:flex;gap:6px;align-items:center;margin-left:auto}
   #rescan{width:32px;padding:0;display:inline-flex;align-items:center;justify-content:center;
         background:var(--accent);border-color:var(--accent);color:#10151d}
   #rescan:hover{filter:brightness(1.08)}
@@ -182,6 +182,16 @@
   #annotPill button.x{width:34px;height:34px;background:transparent;border:1px solid #3a4150;
       color:#9aa3b2;font-size:14px}
   #annotPill button.x:hover{background:transparent;border-color:#5b6575;color:#fff}
+  #annotPill button#annotPillTarget{width:34px;height:34px;background:transparent;border:1px solid #3a4150;
+      color:#9aa3b2;font-size:14px}
+  #annotPill button#annotPillTarget:hover,#annotPill button#annotPillTarget.set{background:transparent;border-color:#5b9dff;color:#5b9dff}
+  #tgMenu .it{display:flex;gap:8px;align-items:center;padding:7px 9px;border-radius:8px;cursor:pointer}
+  #tgMenu .it:hover{background:rgba(255,255,255,.06)}
+  #tgMenu .it .app{flex:none;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+      color:#8ab4ff;border:1px solid #33415e;border-radius:5px;padding:1px 5px}
+  #tgMenu .it .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #tgMenu .it.on .t{color:#8ab4ff}
+  #tgMenu .hd{font-size:10.5px;color:#9aa3b2;text-transform:uppercase;letter-spacing:.05em;padding:5px 9px 3px}
   #lb.annot #annotCv{display:block;cursor:crosshair}
   #lbClose{position:fixed;top:10px;right:14px;width:34px;height:34px;display:flex;align-items:center;justify-content:center;font-size:24px;color:var(--muted);cursor:pointer;z-index:101}
   #cmp{position:fixed;inset:0;z-index:120;background:#0b0b0d;display:none;flex-direction:column}
@@ -245,13 +255,7 @@
     <span class="chip off" id="favChip">&#9733; Favorites</span>
     <span class="chip" id="collChip" title="Collections and shortlists">Collections &#9662;</span>
     <div id="collMenu" class="menu"></div>
-    <span class="chip" id="boardChip" title="Open the project whiteboard (tldraw)">Board</span>
-    <span class="chip" id="notesChip" title="Open the project notes (markdown)">Notes</span>
-    <span class="chip" id="viewChip" title="Settings — server health, theme, archives, hidden, auto-hide rules">Settings &#9662;</span>
-    <div id="viewMenu" class="menu"></div>
     <span id="rateFilter" style="display:none"></span>
-    <button id="quoteClear" style="display:none" title="Clear the annotation pending in the Claude statusline">Clear annotation</button>
-    <button id="rescan" title="Rescan — rebuild the gallery index and reload" aria-label="Rescan"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M13.6 8a5.6 5.6 0 1 1-1.64-3.96" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M12.2 1.6v2.8H9.4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
     <button id="cmpSel" style="display:none" title="Show the selected images stacked, to compare">Compare (0)</button>
     <button id="hideSel" style="display:none" title="Hide the selected files from the gallery (reversible)">Hide (0)</button>
     <button id="delSel" style="display:none;background:#5c1f1f;border-color:#7a2a2a">Delete (0)</button>
@@ -259,6 +263,14 @@
     <button id="collectSel" style="display:none" title="Add selected files to a collection">Collect (0)</button>
     <button id="exportSel" style="display:none" title="Export selected: folder / zip / contact sheet">Export (0) &#9662;</button>
     <div id="exportMenu" class="menu"></div>
+    <div class="actions">
+      <span class="chip" id="boardChip" title="Open the project whiteboard (tldraw)">Board</span>
+      <span class="chip" id="notesChip" title="Open the project notes (markdown)">Notes</span>
+      <span class="chip" id="viewChip" title="Settings — server health, theme, archives, hidden, auto-hide rules">Settings &#9662;</span>
+      <div id="viewMenu" class="menu"></div>
+      <button id="quoteClear" style="display:none" title="Clear the annotation pending in the Claude statusline">Clear annotation</button>
+      <button id="rescan" title="Rescan — rebuild the gallery index and reload" aria-label="Rescan"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M13.6 8a5.6 5.6 0 1 1-1.64-3.96" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M12.2 1.6v2.8H9.4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    </div>
   </div>
 </header>
 <main id="grid"></main>
@@ -283,7 +295,8 @@
     <button class="del" title="Supprimer cette annotation (&Eacute;chap : annuler)"><svg viewBox="0 0 14 14"><path d="M2 3.5h10M5.5 3.5V2.2c0-.4.3-.7.7-.7h1.6c.4 0 .7.3.7.7v1.3M3.5 3.5l.6 8.1c0 .5.4.9.9.9h4c.5 0 .9-.4.9-.9l.6-8.1M5.8 6v4M8.2 6v4"/></svg></button>
     <button class="anSave" title="Enregistrer (Entr&eacute;e)">&#10003;</button>
   </div>
-  <div id="annotPill"><span class="ic">&#128172;</span><span id="annotPillN"></span><button class="x" id="annotPillCancel" title="Annuler : supprimer les commentaires sans envoyer">&#10005;</button><button id="annotPillSend" title="Envoyer directement dans la session Claude (avec soumission)">&#8593;</button></div>
+  <div id="annotPill"><span class="ic">&#128172;</span><span id="annotPillN"></span><button id="annotPillTarget" title="Choisir la session Claude cible">&#9678;</button><button class="x" id="annotPillCancel" title="Annuler : supprimer les commentaires sans envoyer">&#10005;</button><button id="annotPillSend" title="Envoyer directement dans la session Claude (avec soumission)">&#8593;</button></div>
+  <div id="tgMenu" style="position:fixed;z-index:104;display:none;flex-direction:column;min-width:260px;max-width:420px;background:rgba(24,27,34,.98);border:1px solid #3a4150;border-radius:12px;padding:6px;box-shadow:0 14px 48px rgba(0,0,0,.55);font-size:12.5px"></div>
   <iframe id="lbPdf" style="display:none;width:94vw;height:86vh;border:none;border-radius:6px;background:#fff"></iframe>
   <video id="lbVid" controls playsinline style="display:none;max-width:94vw;max-height:86vh;border-radius:6px;background:#000"></video>
   <div id="lbCap"></div>
@@ -1297,6 +1310,7 @@ function annotInit(){
     const r=await fetch('/save',{method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({name:f.name,dataURL:out.toDataURL('image/png'),direct:!!direct,
+        target:claudeTarget(),
         notes:annotStrokes.filter(s=>s.note).map(s=>({n:s.n,text:s.note}))})});
     return await r.json();
   }
@@ -1318,6 +1332,43 @@ function annotInit(){
     document.getElementById('annotNote').style.display='none';
     annotRedraw();
   };
+  function claudeTarget(){
+    try{ return JSON.parse(localStorage.getItem('claudeTargetV1')||'null'); }catch(e){ return null; }
+  }
+  (function(){
+    const btn=document.getElementById('annotPillTarget'), menu=document.getElementById('tgMenu');
+    const mark=()=>btn.classList.toggle('set', !!claudeTarget());
+    mark();
+    btn.onclick=async e=>{
+      e.stopPropagation();
+      const cur=claudeTarget();
+      let html='<div class="hd">Envoyer vers</div>'
+        +'<div class="it'+(cur?'':' on')+'" data-i="-1"><span class="app">auto</span><span class="t">Session du projet (auto)</span></div>';
+      try{
+        const j=await (await fetch('/claude-targets')).json();
+        (j.targets||[]).forEach((t,i)=>{
+          const on=cur&&cur.app===t.app&&cur.id===t.id;
+          html+='<div class="it'+(on?' on':'')+'" data-i="'+i+'"><span class="app">'+t.app+'</span><span class="t">'
+            +esc(t.title||t.id)+(t.inProject?'':' — '+esc(String(t.cwd||'').split('/').pop()))+'</span></div>';
+        });
+        menu.innerHTML=html;
+        const r=btn.getBoundingClientRect();
+        menu.style.display='flex';
+        menu.style.left=Math.max(8, r.left-120)+'px';
+        menu.style.top=Math.max(8, r.top-menu.offsetHeight-10)+'px';
+        menu.querySelectorAll('.it').forEach(it=>{
+          it.onclick=ev=>{
+            ev.stopPropagation();
+            const i=+it.dataset.i;
+            if(i<0) localStorage.removeItem('claudeTargetV1');
+            else localStorage.setItem('claudeTargetV1', JSON.stringify({app:j.targets[i].app,id:j.targets[i].id,title:j.targets[i].title}));
+            mark(); menu.style.display='none';
+          };
+        });
+        document.addEventListener('click',function h(){menu.style.display='none';document.removeEventListener('click',h);});
+      }catch(err){ console.warn('claude-targets failed', err); }
+    };
+  })();
   document.getElementById('annotPillSend').onclick=async function(){
     const lbl=document.getElementById('annotPillN');
     this.textContent='⏳';

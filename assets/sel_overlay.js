@@ -1,3 +1,4 @@
+function __ct(){try{return JSON.parse(localStorage.getItem('claudeTargetV1')||'null')}catch(e){return null}}
 /* sel_overlay.js — select text in a project HTML report → annotate → send to Claude.
    Injected by fig_annotate_server into project .html files (never the gallery index
    or the /.fig_thumbs viewers, which have their own selection systems).
@@ -95,7 +96,7 @@
     var go = pill.querySelector('.go');
     go.textContent = '⏳';
     fetch('/quote', {method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({rel: REL, page: '', text: selText, comment: comment || '', direct: true})})
+      body: JSON.stringify({rel: REL, page: '', text: selText, comment: comment || '', direct: true, target: __ct()})})
       .then(function(r){ return r.json(); })
       .then(function(){ go.textContent = '✓'; setTimeout(function(){ go.textContent = '↑'; hideAll(); }, 1200); })
       .catch(function(){ go.textContent = '!'; setTimeout(function(){ go.textContent = '↑'; }, 1600); });
