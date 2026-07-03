@@ -808,6 +808,30 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._respond(400, {"ok": False, "error": "bad request: " + str(e)})
             except Exception as e:
                 return self._respond(500, {"ok": False, "error": str(e)})
+        if self.path == "/board/open-surface":
+            # Open the whiteboard as a new cmux browser surface (window.open is
+            # swallowed inside embedded surfaces, so the page asks us to do it).
+            try:
+                url = f"http://127.0.0.1:{PORT}/.fig_thumbs/whiteboard/index.html"
+                orca = shutil.which("orca") or ("/usr/local/bin/orca" if os.path.exists("/usr/local/bin/orca") else None)
+                if orca:                                            # Orca: new tab in the embedded browser
+                    r = subprocess.run([orca, "tab", "create", "--url", url],
+                                       capture_output=True, text=True, timeout=10)
+                    if r.returncode == 0:
+                        return self._respond(200, {"ok": True, "via": "orca"})
+                cmux = shutil.which("cmux") or next(
+                    (p for p in ("/Applications/cmux.app/Contents/Resources/bin/cmux",
+                                 os.path.expanduser("~/.local/bin/cmux"))
+                     if os.path.exists(p)), None)
+                if cmux:
+                    r = subprocess.run([cmux, "browser", "open", url],
+                                       capture_output=True, text=True, timeout=10)
+                    if r.returncode == 0:
+                        return self._respond(200, {"ok": True, "via": "cmux"})
+                subprocess.run(["open", url], timeout=10)          # default browser fallback
+                return self._respond(200, {"ok": True, "via": "open"})
+            except Exception as e:
+                return self._respond(500, {"error": str(e)})
         if self.path == "/board/save":
             try:
                 length = int(self.headers.get("Content-Length", 0))

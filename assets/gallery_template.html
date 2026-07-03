@@ -717,7 +717,11 @@ function boardOpen(){
   pdf.src='/.fig_thumbs/whiteboard/index.html';
   lb().classList.add('vw'); lb().classList.remove('annot'); lb().classList.add('show');
 }
-document.getElementById('boardChip').onclick=boardOpen;
+document.getElementById('boardChip').onclick=()=>{
+  // New cmux surface via the server (popups are blocked in embedded surfaces);
+  // fall back to the in-page lightbox viewer if that fails.
+  fetch('/board/open-surface',{method:'POST'}).then(r=>{ if(!r.ok) boardOpen(); }).catch(boardOpen);
+};
 document.getElementById('collChip').onclick=e=>{ e.stopPropagation(); buildCollectionChip(); menuToggle(document.getElementById('collMenu'), e.currentTarget); };
 document.getElementById('viewChip').onclick=e=>{ e.stopPropagation(); buildViewMenu(); menuToggle(document.getElementById('viewMenu'), e.currentTarget); };
 document.getElementById('exportSel').onclick=e=>{ e.stopPropagation(); buildExportMenu(); menuToggle(document.getElementById('exportMenu'), e.currentTarget); };
