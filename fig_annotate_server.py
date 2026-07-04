@@ -1006,6 +1006,17 @@ class Handler(SimpleHTTPRequestHandler):
             with _BOARD_LOCK:
                 cmds, _BOARD_QUEUE[:] = _BOARD_QUEUE[:], []
             return self._respond(200, {"commands": cmds})
+        if self.path.startswith("/pdfannot"):
+            from urllib.parse import urlparse, parse_qs
+            q = parse_qs(urlparse(self.path).query)
+            rel = (q.get("rel") or [""])[0]
+            store_path = os.path.join(PROJECT, ".fig_thumbs", "pdf_annots.json")
+            try:
+                with open(store_path) as f:
+                    store = json.load(f)
+            except Exception:
+                store = {}
+            return self._respond(200, {"annots": store.get(rel, [])})
         if self.path == "/ping":
             return self._respond(200, {"ok": True, "service": "fig-annotate",
                                        "project": os.path.realpath(PROJECT)})
@@ -1105,6 +1116,19 @@ class Handler(SimpleHTTPRequestHandler):
         super().do_HEAD()
 
     def do_POST(self):
+        if self.path == "/pdfannot":
+            req = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            store_path = os.path.join(PROJECT, ".fig_thumbs", "pdf_annots.json")
+            try:
+                with open(store_path) as f:
+                    store = json.load(f)
+            except Exception:
+                store = {}
+            store[req.get("rel") or ""] = req.get("annots") or []
+            os.makedirs(os.path.dirname(store_path), exist_ok=True)
+            with open(store_path, "w") as f:
+                json.dump(store, f)
+            return self._respond(200, {"ok": True})
         if not self._local_only():
             return self._respond(403, {"error": "cross-origin blocked"})
         if self.path == "/orca-fullscreen-exit":
