@@ -1,4 +1,4 @@
-<svg width="1280" height="300" viewBox="0 0 1280 300" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="cmux-gallery">
+<svg width="1280" height="300" viewBox="0 0 1280 300" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="atelier">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#1c1c20"/>
@@ -24,9 +24,9 @@
   </g>
 
   <!-- wordmark + tagline -->
-  <text class="wm" x="212" y="150" font-size="62" font-weight="700" fill="#f4f4f5">cmux<tspan fill="#5b9dff">-</tspan>gallery</text>
-  <text class="wm" x="214" y="192" font-size="23" fill="#a1a1aa">A portable artifact gallery + annotation tool for cmux</text>
-  <text class="mono" x="214" y="232" font-size="15" fill="#6b7280">figures · videos · PDFs · code &#160;·&#160; tag · annotate · export</text>
+  <text class="wm" x="212" y="150" font-size="62" font-weight="700" fill="#f4f4f5">atelier<tspan fill="#5b9dff">.</tspan></text>
+  <text class="wm" x="214" y="192" font-size="23" fill="#a1a1aa">Artifact gallery · whiteboard · notes · annotations</text>
+  <text class="mono" x="214" y="232" font-size="15" fill="#6b7280">for cmux · Muxy · Orca &#160;·&#160; figures · PDFs · code · annotate · export</text>
 
   <!-- thumbnail-grid motif (a little gallery of mini plots) -->
   <g transform="translate(872,70)">
