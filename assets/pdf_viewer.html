@@ -506,6 +506,16 @@ document.addEventListener("click", (e) => {
   if(!annotPop.contains(e.target) && !e.target.classList.contains("pdfhl"))
     annotPop.style.display = "none";
 });
+
+// mode Studio : en-tête sobre (le message d'aide et le jaune n'ont pas leur place)
+if(window.self !== window.top){
+  const m = document.querySelector("header .muted");
+  if(m) m.style.display = "none";
+  const si = document.getElementById("selinfo");
+  if(si) si.style.color = "#8a919e";
+  const hd = document.querySelector("header");
+  if(hd){ hd.style.background = "#1a1d22"; hd.style.borderBottom = "1px solid #333a45"; }
+}
 </script>
 </body>
 </html>
