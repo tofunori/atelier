@@ -1325,6 +1325,19 @@ function annotInit(){
   document.getElementById('annotUndo').onclick=()=>{annotStrokes.pop();annotRenumber();if(!annotStrokes.length)annotSent=true;document.getElementById('annotNote').style.display='none';annotRedraw();};
   document.getElementById('annotClear').onclick=()=>{annotStrokes=[];annotSent=true;document.getElementById('annotNote').style.display='none';annotRedraw();};
   const ANNOT_EMBEDDED=(function(){try{return window.self!==window.top;}catch(e){return true;}})();
+  if(ANNOT_EMBEDDED){
+    // fichiers html : ouvrir en onglet Studio (target=_blank ne marche pas en iframe)
+    document.addEventListener('click', function(e){
+      const a = e.target.closest('a[target="_blank"]');
+      if(!a) return;
+      const href = a.getAttribute('href') || '';
+      if(/\.html?(\?|$)/i.test(href)){
+        e.preventDefault();
+        window.top.postMessage({type:'atelier-open-tab', url:'/'+href.replace(/^\//,''),
+          title:(href.split('/').pop()||'page').split('?')[0]}, '*');
+      }
+    }, true);
+  }
   if(ANNOT_EMBEDDED){const st=document.createElement('style');st.textContent='.embOnly{display:inline-block !important} .embHide{display:none !important}';document.head.appendChild(st);}
   async function annotPost(direct){
     const f=lbList[lbIdx], img=document.getElementById('lbImg');

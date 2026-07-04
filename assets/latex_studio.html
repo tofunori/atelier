@@ -186,8 +186,10 @@ if(!IS_TEX){
     // split éditeur | aperçu rendu (comme tex|PDF)
     const r = document.getElementById("right");
     if(r){
-      r.innerHTML = '<div id="mdprev" style="max-width:820px;margin:0 auto;padding:28px 32px;'
-        + 'font-family:var(--ui-font,-apple-system,sans-serif);font-size:14.5px;line-height:1.65;color:#d6dae0"></div>';
+      // ne PAS écraser #right (le #marker qu'il contient est référencé plus bas)
+      r.insertAdjacentHTML("beforeend",
+        '<div id="mdprev" style="max-width:820px;margin:0 auto;padding:28px 32px;'
+        + 'font-family:var(--ui-font,-apple-system,sans-serif);font-size:14.5px;line-height:1.65;color:#d6dae0"></div>');
       const prev = document.getElementById("mdprev");
       const render = () => {
         try{ prev.innerHTML = DOMPurify.sanitize(marked.parse(cm.getValue())); }catch(e){}
