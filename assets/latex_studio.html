@@ -235,7 +235,11 @@ async function load(){
   // paragraphe courant (ou la sélection) à 80 colonnes — chaque ligne visible
   // redevient une vraie ligne numérotée.
   function rewrapPar(){
-    const col = 80;
+    // colonne = largeur visible du panneau (moins gutter/marge), bornée 40-120 :
+    // après rewrap, chaque ligne rentre dans le panneau → un numéro par ligne
+    const gutter = cm.getGutterElement().offsetWidth;
+    const col = Math.max(40, Math.min(120,
+      Math.floor((cm.getWrapperElement().clientWidth - gutter - 16) / cm.defaultCharWidth())));
     let from, to;
     if(cm.somethingSelected()){
       from = cm.getCursor("from").line; to = cm.getCursor("to").line;
