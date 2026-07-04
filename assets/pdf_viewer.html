@@ -507,14 +507,22 @@ document.addEventListener("click", (e) => {
     annotPop.style.display = "none";
 });
 
-// mode Studio : en-tête sobre (le message d'aide et le jaune n'ont pas leur place)
+// mode Studio : barre d'outils compacte et sobre
 if(window.self !== window.top){
-  const m = document.querySelector("header .muted");
-  if(m) m.style.display = "none";
-  const si = document.getElementById("selinfo");
-  if(si) si.style.color = "#8a919e";
-  const hd = document.querySelector("header");
-  if(hd){ hd.style.background = "#1a1d22"; hd.style.borderBottom = "1px solid #333a45"; }
+  const st = document.createElement("style");
+  st.textContent = `
+    header{background:#1a1d22 !important;border-bottom:1px solid #333a45 !important;
+      padding:4px 10px !important;min-height:0 !important;gap:10px}
+    header #fname{font-weight:500;font-size:12.5px;color:#cfd4dc}
+    header .muted{display:none}
+    header #selinfo{color:#8a919e !important;font-size:11.5px}
+    header #status{font-size:11.5px}
+    header button{background:transparent !important;border:none !important;
+      color:#8a919e !important;font-size:12.5px !important;padding:3px 8px !important;
+      border-radius:6px !important;cursor:pointer;box-shadow:none !important}
+    header button:hover{background:#2c313a !important;color:#e8eaed !important}
+  `;
+  document.head.appendChild(st);
 }
 </script>
 </body>
