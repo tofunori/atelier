@@ -1095,7 +1095,7 @@ class Handler(SimpleHTTPRequestHandler):
                 try:
                     with open(p, "rb") as f:
                         body = f.read()
-                    tag = b'<script defer src="/.fig_thumbs/sel_overlay.js?v=2"></script>'
+                    tag = b'<script defer src="/.fig_thumbs/sel_overlay.js?v=3"></script>'
                     i = body.lower().rfind(b"</body>")
                     body = body[:i] + tag + body[i:] if i != -1 else body + tag
                     self.send_response(200)
