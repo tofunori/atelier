@@ -413,12 +413,19 @@ async function load(){
     }
     const lines=[]; for(let i=from;i<=to;i++) lines.push(cm.getLine(i));
     const indent=(lines[0].match(/^\s*/)||[""])[0];
-    const words=lines.map(l=>l.trim()).join(" ").split(/\s+/).filter(Boolean);
+    // préserver un préfixe de commentaire commun (% latex, # py/r/jl, // js)
+    const cm0=(lines[0].match(/^\s*([%#]+|\/\/)\s?/)||[])[1] || "";
+    const allComment = cm0 && lines.every(l => !l.trim() || l.trim().startsWith(cm0));
+    const prefix = allComment ? indent + cm0 + " " : indent;
+    const strip = (l) => allComment
+      ? l.replace(new RegExp("^\\s*" + cm0.replace(/[%/]/g, "\\$&") + "\\s?"), "").trim()
+      : l.trim();
+    const words=lines.map(strip).join(" ").split(/\s+/).filter(Boolean);
     const out=[]; let curL="";
     for(const w of words){
-      if(!curL) curL=indent+w;
+      if(!curL) curL=prefix+w;
       else if((curL+" "+w).length<=col) curL+=" "+w;
-      else { out.push(curL); curL=indent+w; }
+      else { out.push(curL); curL=prefix+w; }
     }
     if(curL) out.push(curL);
     cm.replaceRange(out.join("\n"), {line:from,ch:0}, {line:to,ch:cm.getLine(to).length});
