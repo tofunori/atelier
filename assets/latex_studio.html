@@ -239,8 +239,35 @@ if(!IS_TEX){
         pillBtn.addEventListener("mousedown", (e) => {
           e.preventDefault(); e.stopPropagation();
           if(!selTxt) return;
+          // retrouver les lignes source : le rendu enlève la syntaxe md, on
+          // cherche les premiers/derniers mots de la sélection dans la source
+          let page = "";
+          try{
+            const src = cm ? cm.getValue() : "";
+            const words = selTxt.split(/\s+/).filter(Boolean);
+            const head = words.slice(0, 4).join(" ");
+            const tail = words.slice(-4).join(" ");
+            const flat = (x) => x.replace(/[#*_`>\[\]()!-]/g, "").replace(/\s+/g, " ");
+            const srcFlat = flat(src);
+            const i0 = srcFlat.indexOf(flat(head));
+            const i1 = srcFlat.indexOf(flat(tail), Math.max(0, i0));
+            if(i0 >= 0){
+              // reconvertir les index aplatis en numéros de ligne approximatifs
+              const lineOf = (idx) => {
+                let seen = 0, line = 1;
+                for(const ln of src.split("\n")){
+                  seen += flat(ln).length + 1;
+                  if(seen > idx) return line;
+                  line++;
+                }
+                return line;
+              };
+              const a = lineOf(i0), b = i1 >= 0 ? lineOf(i1) : a;
+              page = "L" + a + (b > a ? "-" + b : "");
+            }
+          }catch(err){}
           fetch("/quote", {method:"POST", headers:{"Content-Type":"application/json"},
-            body: JSON.stringify({rel: path, page: "", text: selTxt, comment: "", direct: true, embed: true})})
+            body: JSON.stringify({rel: path, page: page, text: selTxt, comment: "", direct: true, embed: true})})
             .then(r => r.json())
             .then(j => { if(j && j.message) window.top.postMessage({type:"atelier-add-to-chat", text:j.message}, "*"); })
             .catch(() => {});
