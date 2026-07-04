@@ -192,9 +192,13 @@ if(!IS_TEX){
       const render = () => {
         try{ prev.innerHTML = DOMPurify.sanitize(marked.parse(cm.getValue())); }catch(e){}
       };
-      let mdT=null;
-      cm.on("change", () => { clearTimeout(mdT); mdT = setTimeout(render, 300); });
-      render();
+      // cm est créé après le fetch du fichier : attendre qu'il existe
+      (function initMd(){
+        if(!cm){ setTimeout(initMd, 100); return; }
+        let mdT=null;
+        cm.on("change", () => { clearTimeout(mdT); mdT = setTimeout(render, 300); });
+        render();
+      })();
     }
   } else {
     // pas d'aperçu pour les autres : l'éditeur prend toute la largeur
