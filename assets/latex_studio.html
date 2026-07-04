@@ -522,7 +522,14 @@ new ResizeObserver(() => {
 }).observe(rightEl);
 document.getElementById("popPdf").onclick = () => {
   // synctex-aware PDF tab (same studio in mode=pdf; BroadcastChannel links the two)
-  window.open("/.fig_thumbs/latex_studio.html?path=" + encodeURIComponent(path) + "&mode=pdf", "_blank");
+  const __pdfUrl = "/.fig_thumbs/latex_studio.html?path=" + encodeURIComponent(path) + "&mode=pdf";
+  if(window.self !== window.top){
+    // embarqué dans Atelier Studio : ouvrir dans un onglet du panneau
+    window.top.postMessage({type:'atelier-open-tab', url: __pdfUrl,
+      title: (path.split("/").pop() || "PDF") + " — PDF"}, '*');
+  } else {
+    window.open(__pdfUrl, "_blank");
+  }
   applyPdfVisible(false);
 };
 if(!isPdfMode && localStorage.getItem("texPdfVisible") === "0") applyPdfVisible(false);
