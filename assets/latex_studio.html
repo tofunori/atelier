@@ -179,6 +179,10 @@ if(!IS_TEX){
   ["build","togglePdf","popPdf","reloadPdf"].forEach(id => {
     const el = document.getElementById(id); if(el) el.style.display = "none";
   });
+  // pas de PDF pour les non-tex : l'éditeur prend toute la largeur
+  const r = document.getElementById("right"); if(r) r.style.display = "none";
+  const l = document.getElementById("left");
+  if(l){ l.style.width = "100%"; l.style.borderRight = "none"; }
   document.title = (path || "").split("/").pop();
 }
 const _base = path ? path.split("/").pop() : "(no file)";
