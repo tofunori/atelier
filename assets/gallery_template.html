@@ -150,12 +150,17 @@
   .lbBtn:hover{color:#fff}
   #lbPrev{left:6px} #lbNext{right:6px}
   #annotBar{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:102;display:none;
-            gap:6px;align-items:center;background:rgba(20,23,30,.95);border:1px solid var(--border);
-            border-radius:10px;padding:6px 10px}
+            gap:2px;align-items:center;background:rgba(26,29,34,.92);backdrop-filter:blur(10px);
+            border:1px solid #333a45;border-radius:10px;padding:4px 6px}
   #lb.annot #annotBar{display:flex}
-  #annotBar button{padding:5px 9px;font-size:13px}
-  #annotBar button.sel{background:var(--border);color:#fff;border-color:var(--border)}
-  #annotBar input[type=color]{width:30px;height:28px;border:none;background:none;cursor:pointer;padding:0}
+  #annotBar button{padding:0;width:26px;height:24px;font-size:12px;background:transparent;
+      border:none;border-radius:6px;color:#8a919e;display:inline-flex;align-items:center;justify-content:center}
+  #annotBar button:hover{background:#2c313a;color:#e8eaed;border:none}
+  #annotBar button.sel{background:#2c313a;color:#e8eaed;border:none}
+  #annotBar input[type=color]{width:15px;height:15px;border:1px solid rgba(255,255,255,.18);
+      border-radius:5px;background:none;cursor:pointer;padding:0;-webkit-appearance:none}
+  #annotBar input[type=color]::-webkit-color-swatch-wrapper{padding:0}
+  #annotBar input[type=color]::-webkit-color-swatch{border:none;border-radius:4px}
   #lbWrap{position:relative;cursor:default}
   #annotCv{position:absolute;inset:0;display:none;touch-action:none}
   /* Note card, "message bar" style: numéro · champ · icône supprimer · ✓ rond.
