@@ -137,6 +137,11 @@
   #lb.vw #lbCap,#lb.vw .lbBtn,#lb.vw #lbFs{display:none}
   #lbFs{position:fixed;top:10px;right:58px;width:34px;height:34px;display:flex;align-items:center;justify-content:center;font-size:20px;color:var(--muted);cursor:pointer;z-index:101}
   #lbFs:hover{color:#fff}
+  #lbAnnot{position:fixed;top:10px;right:102px;width:34px;height:34px;display:none;align-items:center;justify-content:center;font-size:17px;color:var(--muted);cursor:pointer;z-index:101}
+  #lbAnnot:hover{color:#fff}
+  #lb.annot #lbAnnot{color:#e0714a}
+  #lb.fs #lbAnnot{display:none!important}
+  #lb.vw #lbAnnot{display:none!important}
   #lbCap{color:var(--txt);font-size:13px;margin-top:10px;display:flex;gap:14px;align-items:center;flex-wrap:wrap;justify-content:center;max-width:94vw;text-align:center}
   #lbCap span{word-break:break-all}
   #lbCap a{color:var(--accent)}
@@ -275,6 +280,7 @@
 <div id="lb">
   <span id="lbClose">&#10005;</span>
   <span id="lbFs" title="Plein écran (f ou double-clic)">&#9974;</span>
+  <span id="lbAnnot" title="Annoter (a)">&#9998;</span>
   <span class="lbBtn" id="lbPrev">&#8249;</span>
   <span class="lbBtn" id="lbNext">&#8250;</span>
   <div id="annotBar">
@@ -284,7 +290,6 @@
     <input type="color" id="annotColor" value="#33415e" title="Couleur">
     <button id="annotUndo" title="Undo">&#8630;</button>
     <button id="annotClear" title="Clear all">&#10006;</button>
-    <button id="annotSend" title="Save the annotated PNG and paste the path into Claude Code" style="background:var(--border);color:var(--txt)">&#10148; Claude</button>
   </div>
   <div id="lbWrap"><img id="lbImg" src="" alt=""><canvas id="annotCv"></canvas></div>
   <div id="annotNote">
@@ -792,8 +797,8 @@ async function lbShow(i){
   else{img.src=f.rel+'?v='+f.mtime;pdf.src='';}
   document.getElementById('lbCap').innerHTML=
     `<b>${esc(f.name)}</b><span>${esc(f.folder)}</span><span>${esc(f.mdate)}</span><a href="${escA(f.rel)}" target="_blank">open original</a>`+
-    (imgExt(f.ext)&&!isSvg?` <button onclick="annotToggle()" style="margin-left:8px">&#9998; Annotate</button>`:'')+
     (isSvg?` <span style="margin-left:8px;color:#5b9dff;font-size:12px">&#9672; click elements in the plot to select them</span>`:'');
+  document.getElementById('lbAnnot').style.display=(imgExt(f.ext)&&!isSvg)?'flex':'none';
   lb().classList.add('show');
 }
 async function lbClose(){
@@ -1312,17 +1317,6 @@ function annotInit(){
         notes:annotStrokes.filter(s=>s.note).map(s=>({n:s.n,text:s.note}))})});
     return await r.json();
   }
-  document.getElementById('annotSend').onclick=async function(){
-    this.textContent='⏳...';
-    try{
-      const j=await annotPost(false);
-      annotSent=true;
-      this.textContent=j.sentToClaude?'Pasted to Claude ✓':'Saved (path copied) ✓';
-    }catch(e){
-      this.textContent='Server off — start the server';
-    }
-    setTimeout(()=>this.textContent='➜ Claude',2500);
-  };
   document.getElementById('annotPillCancel').onclick=async function(){
     const n=annotStrokes.filter(s=>s.note).length;
     if(!(await confirmDialog(n>1?`Supprimer les ${n} commentaires ?`:'Supprimer le commentaire ?','Supprimer')))return;
@@ -1385,6 +1379,7 @@ function annotInit(){
 annotInit();
 function lbOpen(rel){const i=lbList.findIndex(f=>f.rel===rel);if(i>=0)lbShow(i);}
 document.getElementById('lbClose').onclick=lbClose;
+document.getElementById('lbAnnot').onclick=e=>{e.stopPropagation();annotToggle();};
 document.getElementById('lbPrev').onclick=e=>{e.stopPropagation();lbShow(lbIdx-1);};
 document.getElementById('lbNext').onclick=e=>{e.stopPropagation();lbShow(lbIdx+1);};
 lb().onclick=e=>{if(e.target.id==='lb')lbClose();};
