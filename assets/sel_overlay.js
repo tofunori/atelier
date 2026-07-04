@@ -25,6 +25,20 @@ function __ct(){try{return JSON.parse(localStorage.getItem('claudeTargetV1')||'n
     +'#csel-pill .x{width:28px;height:28px;border-radius:50%;background:transparent;'
     +'border:1px solid #3a4150;color:#9aa3b2;font-size:13px;flex:none}'
     +'#csel-pill .x:hover{border-color:#5b6575;color:#fff}'
+    +'#csel-pill .tgt{width:28px;height:28px;border-radius:50%;background:transparent;'
+    +'border:1px solid #3a4150;color:#9aa3b2;font-size:14px;flex:none}'
+    +'#csel-pill .tgt:hover,#csel-pill .tgt.set{border-color:#5b9dff;color:#5b9dff}'
+    +'#csel-tgmenu{position:fixed;z-index:2147483002;display:none;flex-direction:column;min-width:240px;max-width:400px;'
+    +'background:rgba(24,27,34,.98);border:1px solid #3a4150;border-radius:12px;padding:6px;'
+    +'box-shadow:0 14px 48px rgba(0,0,0,.55);color:#e4e4e7;'
+    +'font:12.5px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}'
+    +'#csel-tgmenu .hd{font-size:10.5px;color:#9aa3b2;text-transform:uppercase;letter-spacing:.05em;padding:5px 9px 3px}'
+    +'#csel-tgmenu .it{display:flex;gap:8px;align-items:center;padding:7px 9px;border-radius:8px;cursor:pointer}'
+    +'#csel-tgmenu .it:hover{background:rgba(255,255,255,.06)}'
+    +'#csel-tgmenu .it .app{flex:none;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;'
+    +'color:#8ab4ff;border:1px solid #33415e;border-radius:5px;padding:1px 5px}'
+    +'#csel-tgmenu .it .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
+    +'#csel-tgmenu .it.on .t{color:#8ab4ff}'
     +'#csel-card{position:fixed;z-index:2147483001;display:none;align-items:center;gap:10px;min-width:320px;max-width:460px;'
     +'background:#1d2026;border:1px solid #343842;border-radius:24px;padding:8px 8px 8px 16px;'
     +'box-shadow:0 12px 36px rgba(0,0,0,.45);font:13px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#e4e4e7}'
@@ -47,9 +61,13 @@ function __ct(){try{return JSON.parse(localStorage.getItem('claudeTargetV1')||'n
   var pill = document.createElement('div'); pill.id = 'csel-pill';
   pill.innerHTML = '<span class="n"></span>'
     + '<button class="cm" title="Ajouter un commentaire puis envoyer">\u{1F4AC} Annoter</button>'
+    + '<button class="tgt" title="Choisir la session Claude cible">◎</button>'
     + '<button class="x" title="Annuler : désélectionner sans envoyer (Esc)">✕</button>'
     + '<button class="go" title="Envoyer la sélection à la session Claude">↑</button>';
   document.body.appendChild(pill);
+
+  var tgMenu = document.createElement('div'); tgMenu.id = 'csel-tgmenu';
+  document.body.appendChild(tgMenu);
 
   var card = document.createElement('div'); card.id = 'csel-card';
   card.innerHTML = '<span class="nb">\u{1F4AC}</span>'
@@ -118,6 +136,47 @@ function __ct(){try{return JSON.parse(localStorage.getItem('claudeTargetV1')||'n
 
   pill.querySelector('.go').addEventListener('click', function(){ send(''); });
   pill.querySelector('.x').addEventListener('click', function(e){ e.stopPropagation(); cancel(); });
+
+  /* ---- Claude-session target picker (stores localStorage 'claudeTargetV1') ---- */
+  (function(){
+    function esc(s){ return String(s).replace(/[&<>"]/g, function(c){
+      return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]; }); }
+    var tgtBtn = pill.querySelector('.tgt');
+    function markTgt(){ tgtBtn.classList.toggle('set', !!__ct()); }
+    markTgt();
+    tgMenu.addEventListener('mousedown', function(e){ e.preventDefault(); });   // keep selection
+    tgtBtn.addEventListener('click', function(e){
+      e.stopPropagation();
+      var cur = __ct();
+      var html = '<div class="hd">Envoyer vers</div>'
+        + '<div class="it' + (cur ? '' : ' on') + '" data-i="-1"><span class="app">auto</span>'
+        + '<span class="t">Session du projet (auto)</span></div>';
+      fetch('/claude-targets').then(function(r){ return r.json(); }).then(function(j){
+        (j.targets || []).forEach(function(t, i){
+          var on = cur && cur.app === t.app && cur.id === t.id;
+          html += '<div class="it' + (on ? ' on' : '') + '" data-i="' + i + '"><span class="app">'
+            + esc(t.app) + '</span><span class="t">' + esc(t.title || t.id)
+            + (t.inProject ? '' : ' — ' + esc(String(t.cwd || '').split('/').pop())) + '</span></div>';
+        });
+        tgMenu.innerHTML = html;
+        tgMenu.style.display = 'flex';
+        var r = tgtBtn.getBoundingClientRect();
+        tgMenu.style.left = Math.max(8, Math.min(r.left - 120, innerWidth - tgMenu.offsetWidth - 8)) + 'px';
+        tgMenu.style.top = Math.max(8, r.top - tgMenu.offsetHeight - 10) + 'px';
+        tgMenu.querySelectorAll('.it').forEach(function(it){
+          it.addEventListener('click', function(ev){
+            ev.stopPropagation();
+            var i = +it.dataset.i;
+            if (i < 0) localStorage.removeItem('claudeTargetV1');
+            else localStorage.setItem('claudeTargetV1', JSON.stringify(
+              { app: j.targets[i].app, id: j.targets[i].id, title: j.targets[i].title }));
+            markTgt(); tgMenu.style.display = 'none';
+          });
+        });
+        document.addEventListener('click', function h(){ tgMenu.style.display = 'none'; document.removeEventListener('click', h); });
+      }).catch(function(err){ console.warn('claude-targets failed', err); });
+    });
+  })();
   pill.querySelector('.cm').addEventListener('click', function(){
     place(card, selRect);
     card.querySelector('textarea').focus();

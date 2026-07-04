@@ -31,8 +31,21 @@
   #selPill .x{width:28px;height:28px;border-radius:50%;background:transparent;
       border:1px solid #3a4150;color:var(--muted);font-size:13px;flex:none}
   #selPill .x:hover{border-color:#5b6575;color:#fff}
+  #selPill .tgt{width:28px;height:28px;border-radius:50%;background:transparent;
+      border:1px solid #3a4150;color:var(--muted);font-size:14px;flex:none}
+  #selPill .tgt:hover,#selPill .tgt.set{border-color:#5b9dff;color:#5b9dff}
   #selPill .go{width:32px;height:32px;border-radius:50%;background:#c96442;color:#fff;font-size:16px;flex:none}
   #selPill .go:hover{background:#e0714a}
+  #tgMenu{position:fixed;z-index:302;display:none;flex-direction:column;min-width:240px;max-width:400px;
+      background:rgba(24,27,34,.98);border:1px solid #3a4150;border-radius:12px;padding:6px;
+      box-shadow:0 14px 48px rgba(0,0,0,.55);color:var(--txt);font-size:12.5px}
+  #tgMenu .hd{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;padding:5px 9px 3px}
+  #tgMenu .it{display:flex;gap:8px;align-items:center;padding:7px 9px;border-radius:8px;cursor:pointer}
+  #tgMenu .it:hover{background:rgba(255,255,255,.06)}
+  #tgMenu .it .app{flex:none;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+      color:#8ab4ff;border:1px solid #33415e;border-radius:5px;padding:1px 5px}
+  #tgMenu .it .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #tgMenu .it.on .t{color:#8ab4ff}
   #selCard{position:fixed;z-index:301;display:none;align-items:center;gap:10px;min-width:320px;max-width:460px;
       background:#1d2026;border:1px solid #343842;border-radius:24px;padding:8px 8px 8px 16px;
       box-shadow:0 12px 36px rgba(0,0,0,.45);color:var(--txt);font-size:13px}
@@ -67,7 +80,8 @@ function __ct(){try{return JSON.parse(localStorage.getItem('claudeTargetV1')||'n
 </header>
 <div id="pages"></div>
 <button id="sendBtn">➜ Claude</button>
-<div id="selPill"><span class="n"></span><button class="cm2" title="Ajouter un commentaire puis envoyer">&#128172; Annoter</button><button class="x" title="Annuler la sélection (Esc)">&#10005;</button><button class="go" title="Envoyer la sélection à la session Claude">&#8593;</button></div>
+<div id="selPill"><span class="n"></span><button class="cm2" title="Ajouter un commentaire puis envoyer">&#128172; Annoter</button><button class="tgt" title="Choisir la session Claude cible">&#9678;</button><button class="x" title="Annuler la sélection (Esc)">&#10005;</button><button class="go" title="Envoyer la sélection à la session Claude">&#8593;</button></div>
+<div id="tgMenu"></div>
 <div id="selCard"><span class="nb">&#128172;</span><textarea rows="1" placeholder="Ajouter une annotation&hellip;"></textarea><button class="del" title="Annuler (&Eacute;chap)"><svg viewBox="0 0 14 14"><path d="M2 3.5h10M5.5 3.5V2.2c0-.4.3-.7.7-.7h1.6c.4 0 .7.3.7.7v1.3M3.5 3.5l.6 8.1c0 .5.4.9.9.9h4c.5 0 .9-.4.9-.9l.6-8.1M5.8 6v4M8.2 6v4"/></svg></button><button class="anSave" title="Enregistrer (Entr&eacute;e)">&#10003;</button></div>
 <script>
 pdfjsLib.GlobalWorkerOptions.workerSrc = "/.fig_thumbs/pdfjs/pdf.worker.min.js";
@@ -293,6 +307,45 @@ function selSend(comment){
 selPill.addEventListener("mousedown", e => e.preventDefault());
 selPill.querySelector(".go").onclick = () => selSend("");
 selPill.querySelector(".x").onclick = e => { e.stopPropagation(); selCancel(); };
+/* ---- Claude-session target picker (stores localStorage 'claudeTargetV1') ---- */
+(function(){
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const tgtBtn = selPill.querySelector(".tgt"), tgMenu = document.getElementById("tgMenu");
+  const markTgt = () => tgtBtn.classList.toggle("set", !!__ct());
+  markTgt();
+  tgMenu.addEventListener("mousedown", e => e.preventDefault());
+  tgtBtn.onclick = async e => {
+    e.stopPropagation();
+    const cur = __ct();
+    let html = '<div class="hd">Envoyer vers</div>'
+      + '<div class="it' + (cur ? '' : ' on') + '" data-i="-1"><span class="app">auto</span>'
+      + '<span class="t">Session du projet (auto)</span></div>';
+    try{
+      const j = await (await fetch("/claude-targets")).json();
+      (j.targets || []).forEach((t, i) => {
+        const on = cur && cur.app === t.app && cur.id === t.id;
+        html += '<div class="it' + (on ? ' on' : '') + '" data-i="' + i + '"><span class="app">'
+          + esc(t.app) + '</span><span class="t">' + esc(t.title || t.id)
+          + (t.inProject ? '' : ' — ' + esc(String(t.cwd || '').split('/').pop())) + '</span></div>';
+      });
+      tgMenu.innerHTML = html;
+      tgMenu.style.display = "flex";
+      const r = tgtBtn.getBoundingClientRect();
+      tgMenu.style.left = Math.max(8, Math.min(r.left - 120, innerWidth - tgMenu.offsetWidth - 8)) + "px";
+      tgMenu.style.top = Math.max(8, r.top - tgMenu.offsetHeight - 10) + "px";
+      tgMenu.querySelectorAll(".it").forEach(it => {
+        it.onclick = ev => {
+          ev.stopPropagation();
+          const i = +it.dataset.i;
+          if(i < 0) localStorage.removeItem("claudeTargetV1");
+          else localStorage.setItem("claudeTargetV1", JSON.stringify({app:j.targets[i].app, id:j.targets[i].id, title:j.targets[i].title}));
+          markTgt(); tgMenu.style.display = "none";
+        };
+      });
+      document.addEventListener("click", function h(){ tgMenu.style.display = "none"; document.removeEventListener("click", h); });
+    }catch(err){ console.warn("claude-targets failed", err); }
+  };
+})();
 selPill.querySelector(".cm2").onclick = () => {
   selCard.style.display = "flex";
   selCard.style.left = Math.min(parseFloat(selPill.style.left) || 8, innerWidth - 356) + "px";
