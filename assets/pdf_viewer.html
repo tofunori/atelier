@@ -17,6 +17,14 @@
   .textLayer span{position:absolute;color:transparent;white-space:pre;transform-origin:0 0;cursor:text}
   .textLayer span.hl{background:rgba(91,157,255,.45);border-radius:2px}
   .pdfhl{position:absolute;border-radius:2px;mix-blend-mode:multiply;cursor:pointer}
+  .pdfnote{position:absolute;cursor:pointer;background:#1b1f26;border:1px solid #333a45;
+    border-radius:6px;padding:2px 3px;box-shadow:0 2px 8px rgba(0,0,0,.4)}
+  #pdftools{display:flex;align-items:center;gap:2px}
+  #pdftools button{width:26px;height:24px;display:inline-flex;align-items:center;justify-content:center}
+  #pdftools button.ton{background:#2c313a !important;color:#e8eaed !important}
+  #pdftools .cdot{width:13px;height:13px;border-radius:4px;cursor:pointer;margin:0 1px;
+    border:1px solid rgba(255,255,255,.15)}
+  #pdftools .cdot.con{outline:2px solid #5b9dff}
   #annotPop{position:fixed;z-index:9999;display:none;background:#1b1f26;border:1px solid #333a45;
     border-radius:12px;padding:10px;box-shadow:0 10px 28px rgba(0,0,0,.55);
     font-family:-apple-system,sans-serif;font-size:13px;color:#e6e6e6;width:230px}
@@ -437,15 +445,30 @@ function drawAnnots(pgDiv, n){
       el.className = "pdfhl";
       el.style.left = (rc[0]*100)+"%"; el.style.top = (rc[1]*100)+"%";
       el.style.width = (rc[2]*100)+"%"; el.style.height = (rc[3]*100)+"%";
-      el.style.background = a.color || "rgba(255,213,74,.4)";
+      const col = a.color || "rgba(255,213,74,.4)";
+      const solid = col.replace(/,\s*\.?\d+\)/, ",.95)");
+      if(a.kind === "ul"){ el.style.background = "transparent"; el.style.borderBottom = "2px solid " + solid; }
+      else if(a.kind === "st"){ el.style.background = "linear-gradient(transparent 46%," + solid + " 46%," + solid + " 58%,transparent 58%)"; }
+      else if(a.kind === "note"){ el.style.background = "transparent"; }
+      else { el.style.background = col; }
       if(a.note) el.title = a.note;
       el.onclick = (e) => { e.stopPropagation(); annotMenu(a, e.clientX, e.clientY); };
       pgDiv.appendChild(el);
     }
+    if(a.kind === "note" && a.pin){
+      const pin = document.createElement("div");
+      pin.className = "pdfnote";
+      pin.style.left = (a.pin[0]*100)+"%"; pin.style.top = (a.pin[1]*100)+"%";
+      pin.innerHTML = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#e0b74a" stroke-width="1.4"><path d="M3 2.5h10v8H8l-3 3v-3H3v-8z"/></svg>';
+      if(a.note) pin.title = a.note;
+      pin.onclick = (e) => { e.stopPropagation(); annotMenu(a, e.clientX, e.clientY); };
+      pgDiv.appendChild(pin);
+    }
   }
 }
 const HL_COLORS = ["rgba(255,213,74,.40)","rgba(120,220,140,.40)","rgba(120,170,255,.40)","rgba(255,140,160,.40)"];
-function addHighlightFromSel(){
+function addHighlightFromSel(kind, color){
+  kind = kind || "hl"; color = color || HL_COLORS[0];
   const spans = [...document.querySelectorAll(".textLayer span.hl")];
   if(!spans.length) return;
   const byPage = new Map();
@@ -461,7 +484,7 @@ function addHighlightFromSel(){
   for(const [pgNum, g] of byPage){
     const a = {id: Date.now() + "-" + pgNum, page: +pgNum, rects: g.rects,
       text: g.texts.join(" ").replace(/\s+/g," ").trim(),
-      color: HL_COLORS[0], note: ""};
+      kind: kind, color: color, note: ""};
     PDF_ANNOTS.push(a);
     drawAnnots(g.pg, +pgNum);
   }
@@ -507,7 +530,52 @@ document.addEventListener("click", (e) => {
     annotPop.style.display = "none";
 });
 
-// mode Studio : barre d'outils compacte et sobre
+// mode Studio : barre d'outils compacte et sobre + outils d'annotation
+let TOOL = null, TOOL_COLOR_IDX = 0;
+if(window.self !== window.top){
+  const hd = document.querySelector("header");
+  const tools = document.createElement("span");
+  tools.id = "pdftools";
+  tools.innerHTML =
+    '<button data-t="" class="ton" title="Sélection"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M4 2l8 6.5-3.4.6 2 3.9-1.8.9-2-3.9L4 12V2z"/></svg></button>'
+    + '<button data-t="hl" title="Surligneur : sélectionne du texte pour surligner"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M2 13.5h5M4.5 11L10 3.5l2.5 2L7 13H4.5v-2z"/></svg></button>'
+    + '<button data-t="ul" title="Souligner"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M4 2.5v6a4 4 0 008 0v-6M3 13.5h10"/></svg></button>'
+    + '<button data-t="st" title="Barrer"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M4 3h8M4 13h8M2 8h12"/></svg></button>'
+    + '<button data-t="note" title="Note : clique sur la page"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M3 2.5h10v8H8l-3 3v-3H3v-8z"/></svg></button>'
+    + '<span style="width:6px"></span>'
+    + HL_COLORS.map((c,i)=>'<span class="cdot'+(i===0?' con':'')+'" data-i="'+i+'" style="background:'+c.replace(",.40",",.85")+'"></span>').join("");
+  const fn = document.getElementById("fname");
+  fn.after(tools);
+  tools.querySelectorAll("button").forEach(b => b.onclick = () => {
+    TOOL = b.dataset.t || null;
+    tools.querySelectorAll("button").forEach(o => o.classList.toggle("ton", o === b));
+  });
+  tools.querySelectorAll(".cdot").forEach(d => d.onclick = () => {
+    TOOL_COLOR_IDX = +d.dataset.i;
+    tools.querySelectorAll(".cdot").forEach(o => o.classList.toggle("con", o === d));
+  });
+  // outil actif : la sélection annote directement (pas de pilule)
+  document.addEventListener("mouseup", () => {
+    if(!TOOL || TOOL === "note") return;
+    setTimeout(() => {
+      if(document.querySelectorAll(".textLayer span.hl").length){
+        addHighlightFromSel(TOOL, HL_COLORS[TOOL_COLOR_IDX]);
+      }
+    }, 30);
+  });
+  // outil note : clic sur la page = pastille de note
+  document.addEventListener("click", (e) => {
+    if(TOOL !== "note") return;
+    const pg = e.target.closest(".pg");
+    if(!pg || e.target.closest(".pdfhl") || e.target.closest(".pdfnote")) return;
+    const pr = pg.getBoundingClientRect();
+    const a = {id: Date.now()+"-n", page: +pg.dataset.page, rects: [],
+      pin: [(e.clientX-pr.left)/pr.width, (e.clientY-pr.top)/pr.height],
+      kind: "note", color: HL_COLORS[TOOL_COLOR_IDX], text: "", note: ""};
+    PDF_ANNOTS.push(a); saveAnnots(); drawAnnots(pg, +pg.dataset.page);
+    annotMenu(a, e.clientX, e.clientY);
+  });
+}
 if(window.self !== window.top){
   const st = document.createElement("style");
   st.textContent = `
