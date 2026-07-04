@@ -1317,7 +1317,7 @@ function annotInit(){
         target:claudeTarget(),embed:ANNOT_EMBEDDED,
         notes:annotStrokes.filter(s=>s.note).map(s=>({n:s.n,text:s.note}))})});
     const j=await r.json();
-    if(ANNOT_EMBEDDED&&j&&j.message)window.parent.postMessage({type:'atelier-add-to-chat',text:j.message},'*');
+    if(ANNOT_EMBEDDED&&j&&j.message)window.top.postMessage({type:'atelier-add-to-chat',text:j.message},'*');
     return j;
   }
   document.getElementById('annotPillCancel').onclick=async function(){
