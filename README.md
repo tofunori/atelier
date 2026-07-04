@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="docs/banner.png" alt="cmux-gallery" width="100%">
+  <img src="docs/banner.png" alt="atelier" width="100%">
 </p>
 
-A portable artifact gallery + annotation tool for [cmux](https://github.com/manaflow-ai/cmux).
+**Atelier** (ex-cmux-gallery) — a portable artifact gallery, tldraw whiteboard, markdown notes and annotation tool for [cmux](https://github.com/manaflow-ai/cmux), Muxy and Orca.
 Point it at any project and it builds a searchable HTML gallery of your figures,
 PDFs, videos, data and code — with thumbnails, an image lightbox, a video player,
 PDF / Markdown / code viewers, figure annotation, and an SVG element selector.
@@ -10,7 +10,7 @@ Organise with tags, favourites and smart-hide rules; export a selection or jump
 from a figure to the script that generated it. No manual setup per project.
 
 <p align="center">
-  <img src="docs/screenshot.png" alt="cmux-gallery — the searchable figure grid" width="100%">
+  <img src="docs/screenshot.png" alt="atelier — the searchable figure grid" width="100%">
 </p>
 
 ## Features
@@ -49,13 +49,13 @@ view   → cmux browser open http://127.0.0.1:<port>/figures_index.html
 ## Install
 
 ```bash
-git clone https://github.com/tofunori/cmux-gallery.git ~/tools/cmux-gallery
-bash ~/tools/cmux-gallery/install.sh
+git clone https://github.com/tofunori/atelier.git ~/tools/atelier
+bash ~/tools/atelier/install.sh
 ```
 
-`install.sh` links `cmux-gallery` into `~/.local/bin`, checks it is on your `PATH`
+`install.sh` links `atelier` (and the legacy alias `cmux-gallery`) into `~/.local/bin`, checks it is on your `PATH`
 (and shows how to add it if not), and verifies `python3` + `cmux`. Manual
-equivalent: `ln -s …/cmux_gallery.py ~/.local/bin/cmux-gallery && chmod +x …`.
+equivalent: `ln -s …/cmux_gallery.py ~/.local/bin/atelier && chmod +x …`.
 
 `build` needs only the Python 3 standard library; `run`/`serve` need the `cmux`
 CLI. Thumbnails use macOS `qlmanage` (skipped gracefully elsewhere).
@@ -63,17 +63,17 @@ CLI. Thumbnails use macOS `qlmanage` (skipped gracefully elsewhere).
 ## Use
 
 ```bash
-cmux-gallery run                 # build + background server + open in cmux
-cmux-gallery open                # alias for run
-cmux-gallery stop                # stop the background server for this project
-cmux-gallery foreground          # foreground mode; keep the pane open
-cmux-gallery serve               # build + HOST the server, self-healing, no browser tab
-cmux-gallery run --root /path    # a specific project (default: current dir)
-cmux-gallery build               # just write the HTML + viewers (no server)
+atelier run                 # build + background server + open in cmux
+atelier open                # alias for run
+atelier stop                # stop the background server for this project
+atelier foreground          # foreground mode; keep the pane open
+atelier serve               # build + HOST the server, self-healing, no browser tab
+atelier run --root /path    # a specific project (default: current dir)
+atelier build               # just write the HTML + viewers (no server)
 ```
 
 When launched from inside a git checkout, the default root is the checkout root,
-not the exact subdirectory. So you can run `cmux-gallery run` from
+not the exact subdirectory. So you can run `atelier run` from
 `my-project/figures/plots/` and it will index `my-project/`. Outside git, it
 uses the current directory. Use `--root <dir>` to override this.
 
@@ -81,9 +81,9 @@ Each project gets a **stable port** derived from its path (8790–9789), so the 
 is the same every time — open it in any browser (cmux or system) and bookmark it,
 e.g. `http://127.0.0.1:8790/figures_index.html`. Pin one with `--port <n>`.
 
-> **Opening it (avoid "connection refused"):** prefer `cmux-gallery run` over a
+> **Opening it (avoid "connection refused"):** prefer `atelier run` over a
 > raw bookmark. It starts or reuses the server before opening the page. Use
-> `cmux-gallery stop` when you want to shut down the detached server.
+> `atelier stop` when you want to shut down the detached server.
 
 ### As a cmux command / Dock control
 
@@ -91,18 +91,18 @@ e.g. `http://127.0.0.1:8790/figures_index.html`. Pin one with `--port <n>`.
   [`cmux.example.json`](./cmux.example.json) into `~/.config/cmux/cmux.json`,
   then run **Project Gallery**.
 - **Dock** (recommended): copy [`dock.example.json`](./dock.example.json) into the
-  project's `.cmux/dock.json`. It runs `cmux-gallery serve`, which **hosts** the
+  project's `.cmux/dock.json`. It runs `atelier serve`, which **hosts** the
   server, restarts it if it dies, and auto-starts when cmux launches.
 
 ## Keeping it running
 
 Pick one:
 
-- **Detached project server (recommended for ad hoc work).** `cmux-gallery run`
+- **Detached project server (recommended for ad hoc work).** `atelier run`
   starts the server in the background and returns your terminal. Stop it with
-  `cmux-gallery stop`.
+  `atelier stop`.
 
-- **A cmux Dock control or pane.** `cmux-gallery serve` hosts the
+- **A cmux Dock control or pane.** `atelier serve` hosts the
   server and self-heals; in the Dock it also auto-starts with cmux. Because it
   runs *inside cmux* it inherits cmux's file access — which matters on macOS:
 
@@ -113,10 +113,10 @@ Pick one:
   > your files) unless you grant its `python3` **Full Disk Access**. The
   > cmux-hosted server avoids this entirely.
 
-- **A plain terminal:** `cmux-gallery run` (or `serve`) in a pane you keep open.
+- **A plain terminal:** `atelier run` (or `serve`) in a pane you keep open.
 
 To run it even when cmux is closed: move the project outside those protected
-folders, or grant Full Disk Access to your `python3` and launch `cmux-gallery
+folders, or grant Full Disk Access to your `python3` and launch `atelier
 serve` from a LaunchAgent.
 
 ## Zotero library
@@ -128,7 +128,7 @@ Title.pdf`) and exposing Zotero tags + collections as gallery tags:
 
 ```bash
 python zotero_to_gallery.py            # builds ~/ZoteroGallery (hardlinks, no extra disk)
-cmux-gallery run --root ~/ZoteroGallery
+atelier run --root ~/ZoteroGallery
 ```
 
 It's a *separate* gallery (its own port + state) from any project gallery, with

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-zotero_to_gallery.py — browse a Zotero library in cmux-gallery.
+zotero_to_gallery.py — browse a Zotero library in atelier.
 
 Reads the Zotero SQLite DB (read-only) and builds a tree of HARDLINKS to the
 attachments in Zotero's ``storage/``, organised by collection, keeping Zotero's
@@ -11,10 +11,10 @@ gallery's Tags filter works out of the box.
 Then point the gallery at the output dir::
 
     python zotero_to_gallery.py            # builds ~/ZoteroGallery
-    cmux-gallery run --root ~/ZoteroGallery
+    atelier run --root ~/ZoteroGallery
 
 It is a *separate* gallery from any project gallery — its own stable port and
-state — so nothing else is affected, and it keeps every cmux-gallery feature
+state — so nothing else is affected, and it keeps every atelier feature
 (PDF viewer + highlight, image lightbox, tags, favourites, search, export…).
 
 Why hardlinks, not symlinks: the gallery server only serves files whose real
@@ -149,7 +149,7 @@ def clean_previous(out):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(description="Build a cmux-gallery hardlink mirror of a Zotero library.")
+    ap = argparse.ArgumentParser(description="Build a atelier hardlink mirror of a Zotero library.")
     ap.add_argument("--zotero-dir", default=os.path.expanduser("~/Zotero"),
                     help="Zotero data dir (holds zotero.sqlite + storage/). Default: ~/Zotero")
     ap.add_argument("--out", default=os.path.expanduser("~/ZoteroGallery"),
@@ -234,7 +234,7 @@ def main(argv=None):
     verb = "copied" if args.link == "copy" else "hardlinked"
     log("%s %d files under %s" % (verb, len(created), out))
     log("tagged %d files (Zotero tags + collections) in .fig_state.json" % len(state_tags))
-    log("next:  cmux-gallery run --root %s" % out)
+    log("next:  atelier run --root %s" % out)
     print(out)                                           # stdout = the path to point the gallery at
     return 0
 

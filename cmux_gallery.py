@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""cmux-gallery — a full-featured artifact gallery + annotation, as a cmux plugin.
+"""atelier — artifact gallery, whiteboard, notes and annotations for cmux/Muxy/Orca.
 
 Generalises an existing figures-index builder and fig-annotate server so they
 work in ANY project. `run` builds the gallery, provisions the viewer assets into
@@ -99,7 +99,7 @@ def gallery_url(port: int) -> str:
 def open_cmux_browser(url: str) -> bool:
     """Open ``url`` in cmux when the CLI is available."""
     if not shutil.which("cmux"):
-        print("[cmux-gallery] cmux CLI not found on PATH; open this URL manually "
+        print("[atelier] cmux CLI not found on PATH; open this URL manually "
               "or run with --no-open", file=sys.stderr)
         return False
     res = subprocess.run(["cmux", "browser", "open", url], capture_output=True, text=True)
@@ -188,7 +188,7 @@ def wait_up(port: int, timeout: float = 8.0) -> bool:
 def write_server_state(root: str, port: int, pid: int, log_path: str) -> None:
     os.makedirs(os.path.join(root, ".fig_thumbs"), exist_ok=True)
     data = {
-        "service": "cmux-gallery",
+        "service": "atelier",
         "project": os.path.realpath(root),
         "port": port,
         "pid": pid,
@@ -245,19 +245,19 @@ def resolve_port_for_host(root: str, requested_port: int) -> int:
     if served_project == os.path.realpath(root):
         return port
     if requested_port:
-        raise SystemExit(f"[cmux-gallery] port {port} is busy and is not serving {root}")
-    print(f"[cmux-gallery] port {port} busy (not our gallery) → using a free port", file=sys.stderr)
+        raise SystemExit(f"[atelier] port {port} is busy and is not serving {root}")
+    print(f"[atelier] port {port} busy (not our gallery) → using a free port", file=sys.stderr)
     return next((c for c in range(port + 1, port + 50) if not _port_busy(c)), 0) or free_port()
 
 
 def cmd_build(a) -> None:
     out = build(a.root)
-    print(f"[cmux-gallery] built {out}  (+ viewers provisioned)")
+    print(f"[atelier] built {out}  (+ viewers provisioned)")
 
 
 def cmd_foreground(a) -> None:
     out = build(a.root)
-    print(f"[cmux-gallery] built {out}")
+    print(f"[atelier] built {out}")
     port = a.port or project_port(a.root)
     # The build above already refreshed figures_index.html + viewers. If our own
     # gallery for THIS project is already running on its stable port, reuse it
@@ -266,28 +266,28 @@ def cmd_foreground(a) -> None:
     if not a.port and _port_busy(port):
         if server_project(port) == os.path.realpath(a.root):
             url = gallery_url(port)
-            print(f"[cmux-gallery] gallery already running on :{port} → reusing it "
+            print(f"[atelier] gallery already running on :{port} → reusing it "
                   f"(rebuilt; stable URL, no duplicate server)")
             if a.open:
                 open_cmux_browser(url)
-            print(f"[cmux-gallery] gallery → {url}")
+            print(f"[atelier] gallery → {url}")
             return
-        print(f"[cmux-gallery] port {port} busy (not our gallery) → using a free port", file=sys.stderr)
+        print(f"[atelier] port {port} busy (not our gallery) → using a free port", file=sys.stderr)
         port = next((c for c in range(port + 1, port + 50) if not _port_busy(c)), 0) or free_port()
     env = dict(os.environ, FIG_PORT=str(port), GALLERY_ROOT=a.root)
-    print(f"[cmux-gallery] starting server on :{port}  (cwd={a.root})")
+    print(f"[atelier] starting server on :{port}  (cwd={a.root})")
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))  # SIGTERM -> SystemExit -> finally tears down the server (no orphan)
     srv = subprocess.Popen([sys.executable, SERVER], cwd=a.root, env=env)
     try:
         if not wait_up(port):
-            print("[cmux-gallery] warning: server /ping did not answer", file=sys.stderr)
+            print("[atelier] warning: server /ping did not answer", file=sys.stderr)
         url = gallery_url(port)
         if a.open:
             open_cmux_browser(url)
-        print(f"[cmux-gallery] gallery → {url}   (Ctrl-C to stop)")
+        print(f"[atelier] gallery → {url}   (Ctrl-C to stop)")
         srv.wait()
     except KeyboardInterrupt:
-        print("\n[cmux-gallery] stopping server")
+        print("\n[atelier] stopping server")
     finally:
         srv.terminate()
         try:
@@ -298,22 +298,22 @@ def cmd_foreground(a) -> None:
 
 def cmd_open(a) -> None:
     out = build(a.root)
-    print(f"[cmux-gallery] built {out}")
+    print(f"[atelier] built {out}")
     port = resolve_port_for_host(a.root, a.port)
     url = gallery_url(port)
     served_project = server_project(port) if _port_busy(port) else None
     if served_project == os.path.realpath(a.root):
-        print(f"[cmux-gallery] gallery already running on :{port} → reusing it")
+        print(f"[atelier] gallery already running on :{port} → reusing it")
     else:
         pid, log_path = start_detached_server(a.root, port)
         if wait_up(port):
-            print(f"[cmux-gallery] started detached server pid {pid} on :{port}")
+            print(f"[atelier] started detached server pid {pid} on :{port}")
         else:
-            print(f"[cmux-gallery] warning: server /ping did not answer; log: {log_path}",
+            print(f"[atelier] warning: server /ping did not answer; log: {log_path}",
                   file=sys.stderr)
     if a.open:
         open_cmux_browser(url)
-    print(f"[cmux-gallery] gallery → {url}")
+    print(f"[atelier] gallery → {url}")
 
 
 def cmd_run(a) -> None:
@@ -324,14 +324,14 @@ def cmd_stop(a) -> None:
     port = a.port or project_port(a.root)
     state = read_server_state(a.root, port)
     if not state:
-        print(f"[cmux-gallery] no background server metadata for :{port}")
+        print(f"[atelier] no background server metadata for :{port}")
         return
     pid = int(state.get("pid") or 0)
     if pid and process_alive(pid):
         os.kill(pid, signal.SIGTERM)
-        print(f"[cmux-gallery] stopped background server pid {pid} on :{port}")
+        print(f"[atelier] stopped background server pid {pid} on :{port}")
     else:
-        print(f"[cmux-gallery] background server pid {pid or '?'} is not running")
+        print(f"[atelier] background server pid {pid or '?'} is not running")
     try:
         os.remove(state_path(a.root, port))
     except OSError:
@@ -345,10 +345,10 @@ def cmd_serve(a) -> None:
     opened. Ideal for a cmux Dock control or a long-lived pane: the server lives as
     long as this process, and restarts itself if it ever dies."""
     out = build(a.root)
-    print(f"[cmux-gallery] built {out}")
+    print(f"[atelier] built {out}")
     port = a.port or project_port(a.root)
     env = dict(os.environ, FIG_PORT=str(port), GALLERY_ROOT=a.root)
-    print(f"[cmux-gallery] serving {gallery_url(port)}  "
+    print(f"[atelier] serving {gallery_url(port)}  "
           f"(cwd={a.root}; hosting; self-healing; Ctrl-C to stop)")
     srv = None
     def _stop(*_):
@@ -360,7 +360,7 @@ def cmd_serve(a) -> None:
         while True:
             srv = subprocess.Popen([sys.executable, SERVER], cwd=a.root, env=env)
             srv.wait()
-            print("[cmux-gallery] server exited — restarting in 2s", file=sys.stderr)
+            print("[atelier] server exited — restarting in 2s", file=sys.stderr)
             time.sleep(2)
     except KeyboardInterrupt:
         pass
@@ -374,7 +374,7 @@ def cmd_serve(a) -> None:
 
 
 def main(argv=None) -> int:
-    p = argparse.ArgumentParser(prog="cmux-gallery", description=__doc__,
+    p = argparse.ArgumentParser(prog="atelier", description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
     b = sub.add_parser("build", help="build the gallery HTML + provision viewers")
@@ -394,7 +394,7 @@ def main(argv=None) -> int:
                    help="server port (default: a stable port derived from the project path)")
     o.add_argument("--no-open", dest="open", action="store_false",
                    help="start (or reuse) the detached server without opening a cmux browser tab")
-    st = sub.add_parser("stop", help="stop a detached server started by cmux-gallery run/open")
+    st = sub.add_parser("stop", help="stop a detached server started by atelier run/open")
     st.add_argument("--root", default=None, type=root_arg,
                     help="project to stop (default: git root for cwd, else cwd)")
     st.add_argument("--port", type=int, default=0,

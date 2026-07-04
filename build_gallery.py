@@ -290,7 +290,7 @@ def main():
     folders = sorted({r["folder"] for r in rows})
     gen = time.strftime("%Y-%m-%d %H:%M")
     _esc = lambda s: s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-    wordmark = _esc(os.environ.get("GALLERY_TITLE") or "Gallery")
+    wordmark = _esc(os.environ.get("GALLERY_TITLE") or "Atelier")
     project = _esc(os.path.basename(ROOT.rstrip("/")) or "project")
     # __ROOT__ lands inside single-quoted JS string literals ('__ROOT__/'+rel);
     # escape it for that context so a path with a quote/backslash can't break the script.
