@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/banner.png" alt="atelier" width="100%">
+  <img src="docs/banner.png?v=atelier" alt="atelier" width="100%">
 </p>
 
 **Atelier** (ex-cmux-gallery) — a portable artifact gallery, tldraw whiteboard, markdown notes and annotation tool for [cmux](https://github.com/manaflow-ai/cmux), Muxy and Orca.
@@ -10,7 +10,7 @@ Organise with tags, favourites and smart-hide rules; export a selection or jump
 from a figure to the script that generated it. No manual setup per project.
 
 <p align="center">
-  <img src="docs/screenshot.png" alt="atelier — the searchable figure grid" width="100%">
+  <img src="docs/screenshot.png?v=atelier" alt="atelier — the searchable figure grid" width="100%">
 </p>
 
 ## Features
