@@ -387,20 +387,11 @@ def list_claude_targets():
                                 "active": bool(t.get("focused") or t.get("active"))})
         except Exception:
             pass
-    exe = _cmux_exe()
-    if exe:
-        try:
-            r = subprocess.run([exe, "list-pane-surfaces"], capture_output=True, text=True, timeout=5, env=_cmux_env())
-            for ln in (r.stdout or "").splitlines() if r.returncode == 0 else []:
-                m = re.search(r"(surface:\d+)\s+(.*)$", ln)
-                if not m or not re.search(r"[\u2733\u2800-\u28FF]", ln):
-                    continue
-                title = re.sub(r"^[\u2733\u2800-\u28FF\s]+", "", re.sub(r"\s*\[selected\]\s*$", "", m.group(2))).strip()
-                targets.append({"app": "cmux", "id": m.group(1), "title": title[:80],
-                                "cwd": "", "inProject": True,   # visible workspace = most relevant
-                                "active": "[selected]" in ln})
-        except Exception:
-            pass
+    for s2 in _cmux_all_claude_surfaces():
+        targets.append({"app": "cmux", "id": s2["ref"],
+                        "title": (s2["title"] + " \u2014 " + s2["ws"])[:80],
+                        "cwd": "", "inProject": True,
+                        "active": s2["selectedInWs"]})
     targets.sort(key=lambda t: (not t["active"], not t["inProject"]))
     return targets
 
@@ -465,6 +456,39 @@ def _cmux_exe():
                      os.path.expanduser("~/.local/bin/cmux")) if os.path.exists(p)), None)
 
 
+def _cmux_all_claude_surfaces():
+    """Claude surfaces across ALL cmux workspaces:
+    [{"ref", "title", "ws", "selectedInWs", "wsActive"}].
+    The gallery usually lives in its own workspace, so the active workspace
+    often has no Claude surface at all — enumerate everything."""
+    exe = _cmux_exe()
+    if not exe:
+        return []
+    out = []
+    try:
+        r = subprocess.run([exe, "tree", "--all"], capture_output=True,
+                           text=True, timeout=5, env=_cmux_env())
+        if r.returncode != 0:
+            return []
+        ws_title, ws_active = "", False
+        for ln in r.stdout.splitlines():
+            wm = re.search(r"workspace\s+(workspace:\d+)\s+\"([^\"]*)\"(.*)$", ln)
+            if wm:
+                ws_title = wm.group(2)
+                ws_active = "active" in wm.group(3) or "[selected]" in wm.group(3)
+                continue
+            sm = re.search(r"surface\s+(surface:\d+)\s+\[terminal\]\s+\"([^\"]*)\"(.*)$", ln)
+            if not sm or not re.search(r"[✳⠀-⣿]", sm.group(2)):
+                continue
+            title = re.sub(r"^[✳⠀-⣿\s]+", "", sm.group(2)).strip()
+            out.append({"ref": sm.group(1), "title": title, "ws": ws_title,
+                        "selectedInWs": "[selected]" in sm.group(3),
+                        "wsActive": ws_active})
+    except Exception:
+        pass
+    return out
+
+
 def _cmux_visible_claude_surfaces():
     """(selected_ref, [other_refs]) of Claude surfaces in the active cmux workspace.
 
@@ -500,13 +524,17 @@ def find_claude_surface():
     Claude sessions are identified via the registry filled by the
     SessionStart hook cmux-register.sh (PID still alive = active session).
     """
-    # 0. what's on screen: Claude surface (✳ running / ⠂ working glyph) in the
-    # active workspace, the selected one first — no registry needed.
-    sel, others = _cmux_visible_claude_surfaces()
-    if sel:
-        return sel
-    if others:
-        return others[0]
+    # 0. what's on screen: Claude surfaces across workspaces — the selected one
+    # in the active workspace first; the gallery's own workspace has none, so
+    # fall back to the selected Claude surface of another workspace (unique
+    # candidate wins outright). No registry needed.
+    surfs = _cmux_all_claude_surfaces()
+    if surfs:
+        if len(surfs) == 1:
+            return surfs[0]["ref"]
+        ranked = sorted(surfs, key=lambda s2: (not (s2["wsActive"] and s2["selectedInWs"]),
+                                               not s2["selectedInWs"], not s2["wsActive"]))
+        return ranked[0]["ref"]
 
     # 1. registry of live Claude sessions, most recent first
     try:
