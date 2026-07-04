@@ -1436,6 +1436,18 @@ class Handler(SimpleHTTPRequestHandler):
                         i += 1
                     os.rename(p, dest)
                     deleted.append(rel)
+                if deleted:
+                    # Rebuild the index in the background so /rev bumps and every
+                    # OTHER open gallery tab auto-reloads without the deleted files
+                    # (the deleting tab already updated its own list locally).
+                    builder = os.path.join(os.path.dirname(os.path.abspath(__file__)), "build_gallery.py")
+                    try:
+                        subprocess.Popen([sys.executable, builder], cwd=PROJECT,
+                                         env=dict(os.environ, GALLERY_ROOT=PROJECT),
+                                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                         start_new_session=True)
+                    except Exception:
+                        pass
                 return self._respond(200, {"deleted": deleted})
             except (KeyError, ValueError, json.JSONDecodeError) as e:
                 return self._respond(400, {"error": "bad request: " + str(e)})
