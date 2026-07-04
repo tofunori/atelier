@@ -1653,9 +1653,10 @@ class Handler(SimpleHTTPRequestHandler):
                 # ~/.claude/fig-last-quote.txt, which the annotation skill reads.
                 short = (f"✏️ Regarde mon annotation ({os.path.basename(req['rel'])}{loc}"
                          + (", avec commentaire" if comment else "") + ") et agis en conséquence.")
-                subprocess.run("pbcopy", input=msg.encode(), timeout=5)
-                with open(os.path.expanduser("~/.claude/fig-last-quote.txt"), "w") as f:
-                    f.write(msg)
+                if not STUDIO:
+                    subprocess.run("pbcopy", input=msg.encode(), timeout=5)
+                    with open(os.path.expanduser("~/.claude/fig-last-quote.txt"), "w") as f:
+                        f.write(msg)
                 if req.get("embed") or STUDIO:
                     # Embarqué dans Atelier Studio : le client livre le message
                     # au composer via postMessage — aucun push externe.
@@ -1722,9 +1723,10 @@ class Handler(SimpleHTTPRequestHandler):
                 msg += ("\nApplique directement ces annotations : retrouve le script qui genere "
                         "cette figure, fais les corrections demandees et regenere la figure.")
 
-            subprocess.run("pbcopy", input=msg.encode(), timeout=5)
-            with open(os.path.expanduser("~/.claude/fig-last-quote.txt"), "w") as f:
-                f.write(msg)
+            if not STUDIO:
+                subprocess.run("pbcopy", input=msg.encode(), timeout=5)
+                with open(os.path.expanduser("~/.claude/fig-last-quote.txt"), "w") as f:
+                    f.write(msg)
             if req.get("embed") or STUDIO:
                 return self._respond(200, {"embedded": True, "message": msg})
             # Composer line kept short: the full payload (path + numbered notes +
