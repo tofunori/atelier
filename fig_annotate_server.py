@@ -640,6 +640,12 @@ def write_contact_sheet(out_path, files):
 
 
 class Handler(SimpleHTTPRequestHandler):
+    def end_headers(self):
+        # webviews (Studio) : ne jamais servir de JS/HTML périmé
+        if self.path.endswith((".js", ".html")) or self.path == "/":
+            self.send_header("Cache-Control", "no-cache")
+        super().end_headers()
+
     def __init__(self, *a, **kw):
         super().__init__(*a, directory=PROJECT, **kw)
 
