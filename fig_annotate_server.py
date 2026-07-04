@@ -387,7 +387,21 @@ def list_claude_targets():
                                 "active": bool(t.get("focused") or t.get("active"))})
         except Exception:
             pass
-    targets.sort(key=lambda t: (not t["inProject"], not t["active"]))
+    exe = _cmux_exe()
+    if exe:
+        try:
+            r = subprocess.run([exe, "list-pane-surfaces"], capture_output=True, text=True, timeout=5, env=_cmux_env())
+            for ln in (r.stdout or "").splitlines() if r.returncode == 0 else []:
+                m = re.search(r"(surface:\d+)\s+(.*)$", ln)
+                if not m or not re.search(r"[\u2733\u2800-\u28FF]", ln):
+                    continue
+                title = re.sub(r"^[\u2733\u2800-\u28FF\s]+", "", re.sub(r"\s*\[selected\]\s*$", "", m.group(2))).strip()
+                targets.append({"app": "cmux", "id": m.group(1), "title": title[:80],
+                                "cwd": "", "inProject": True,   # visible workspace = most relevant
+                                "active": "[selected]" in ln})
+        except Exception:
+            pass
+    targets.sort(key=lambda t: (not t["active"], not t["inProject"]))
     return targets
 
 
@@ -418,18 +432,63 @@ def send_to_target(target, msg, direct):
                 args.append("--enter")
             return subprocess.run(args, capture_output=True, timeout=8).returncode == 0
         if app == "cmux":
-            r = subprocess.run(["cmux", "send", "--surface", tid, msg],
+            r = subprocess.run(["cmux", "send", "--surface", tid, msg], env=_cmux_env(),
                                capture_output=True, timeout=5)
             if r.returncode != 0:
                 return False
             if direct:
                 time.sleep(0.4)
-                subprocess.run(["cmux", "send-key", "--surface", tid, "enter"],
+                subprocess.run(["cmux", "send-key", "--surface", tid, "enter"], env=_cmux_env(),
                                capture_output=True, timeout=5)
             return True
     except Exception:
         pass
     return False
+
+
+def _cmux_env():
+    """Env for cmux CLI calls: present the socket password so the detached
+    gallery daemon passes the app's password-mode socket policy."""
+    env = dict(os.environ)
+    try:
+        pw = open(os.path.expanduser("~/.config/cmux/.gallery-socket-pw")).read().strip()
+        if pw:
+            env["CMUX_SOCKET_PASSWORD"] = pw
+    except Exception:
+        pass
+    return env
+
+
+def _cmux_exe():
+    return shutil.which("cmux") or next(
+        (p for p in ("/Applications/cmux.app/Contents/Resources/bin/cmux",
+                     os.path.expanduser("~/.local/bin/cmux")) if os.path.exists(p)), None)
+
+
+def _cmux_visible_claude_surfaces():
+    """(selected_ref, [other_refs]) of Claude surfaces in the active cmux workspace.
+
+    `cmux list-pane-surfaces` lines look like `* surface:29  ⠂ Title  [selected]`;
+    the ✳ (running) / ⠂ (working) glyph marks a Claude Code session."""
+    exe = _cmux_exe()
+    if not exe:
+        return None, []
+    try:
+        r = subprocess.run([exe, "list-pane-surfaces"], capture_output=True, text=True, timeout=5, env=_cmux_env())
+        if r.returncode != 0:
+            return None, []
+        sel, others = None, []
+        for ln in r.stdout.splitlines():
+            m = re.search(r"(surface:\d+)\s+(.*)$", ln)
+            if not m or not re.search(r"[\u2733\u2800-\u28FF]", ln):
+                continue
+            if "[selected]" in ln and sel is None:
+                sel = m.group(1)
+            else:
+                others.append(m.group(1))
+        return sel, others
+    except Exception:
+        return None, []
 
 
 def find_claude_surface():
@@ -441,6 +500,14 @@ def find_claude_surface():
     Claude sessions are identified via the registry filled by the
     SessionStart hook cmux-register.sh (PID still alive = active session).
     """
+    # 0. what's on screen: Claude surface (✳ running / ⠂ working glyph) in the
+    # active workspace, the selected one first — no registry needed.
+    sel, others = _cmux_visible_claude_surfaces()
+    if sel:
+        return sel
+    if others:
+        return others[0]
+
     # 1. registry of live Claude sessions, most recent first
     try:
         entries = json.load(open(os.path.expanduser("~/.claude/cmux-sessions.json")))
@@ -1538,12 +1605,12 @@ class Handler(SimpleHTTPRequestHandler):
                     sent = send_to_target(tgt, short, direct)
                 ref = None if sent else find_claude_surface()
                 if ref:
-                    r = subprocess.run(["cmux", "send", "--surface", ref, short],
+                    r = subprocess.run(["cmux", "send", "--surface", ref, short], env=_cmux_env(),
                                        capture_output=True, timeout=5)
                     sent = r.returncode == 0
                     if sent and direct:
                         time.sleep(0.4)   # let the composer settle before submitting
-                        subprocess.run(["cmux", "send-key", "--surface", ref, "enter"],
+                        subprocess.run(["cmux", "send-key", "--surface", ref, "enter"], env=_cmux_env(),
                                        capture_output=True, timeout=5)
                 if not sent:
                     pane = find_muxy_claude_pane()
@@ -1614,12 +1681,12 @@ class Handler(SimpleHTTPRequestHandler):
                             return
                     ref = find_claude_surface()
                     if ref:
-                        r = subprocess.run(["cmux", "send", "--surface", ref, short + " "],
+                        r = subprocess.run(["cmux", "send", "--surface", ref, short + " "], env=_cmux_env(),
                                            capture_output=True, timeout=5, start_new_session=True)
                         if r.returncode == 0:                     # cmux may be dead even when the
                             if direct:                            # registry lists live Claude PIDs
                                 time.sleep(0.4)   # let the composer settle before submitting
-                                subprocess.run(["cmux", "send-key", "--surface", ref, "enter"],
+                                subprocess.run(["cmux", "send-key", "--surface", ref, "enter"], env=_cmux_env(),
                                                capture_output=True, timeout=5, start_new_session=True)
                             return
                     pane = find_muxy_claude_pane()
