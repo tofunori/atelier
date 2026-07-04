@@ -330,7 +330,10 @@ def find_orca_claude_terminal():
         if r.returncode != 0:
             return None
         data = json.loads(r.stdout or "null")
-        terms = data.get("terminals") if isinstance(data, dict) else data
+        if isinstance(data, dict):
+            terms = data.get("terminals") or (data.get("result") or {}).get("terminals")
+        else:
+            terms = data
         for t in terms or []:
             blob = json.dumps(t).lower()
             if "claude" in blob:
@@ -367,15 +370,18 @@ def list_claude_targets():
             r = subprocess.run([exe, "terminal", "list", "--json"],
                                capture_output=True, text=True, timeout=5)
             data = json.loads(r.stdout or "null")
-            terms = data.get("terminals") if isinstance(data, dict) else data
+            if isinstance(data, dict):
+                terms = data.get("terminals") or (data.get("result") or {}).get("terminals")
+            else:
+                terms = data
             for t in terms or []:
                 blob = json.dumps(t).lower()
                 if "claude" not in blob:
                     continue
-                cw = str(t.get("cwd") or t.get("path") or "")
+                cw = str(t.get("worktreePath") or t.get("cwd") or t.get("path") or "")
                 cwr = os.path.realpath(cw) if cw else ""
                 targets.append({"app": "orca", "id": t.get("handle") or t.get("id"),
-                                "title": str(t.get("title") or t.get("name") or "Claude")[:80],
+                                "title": str(t.get("title") or t.get("name") or "Claude").lstrip("\u2733\u2802 ").strip()[:80],
                                 "cwd": cw,
                                 "inProject": bool(cwr) and (cwr == root or cwr.startswith(root + os.sep)),
                                 "active": bool(t.get("focused") or t.get("active"))})
