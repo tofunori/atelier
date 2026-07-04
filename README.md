@@ -151,7 +151,7 @@ rebuild clean).
 |---|---|
 | `--root <dir>` | project to scan (default: git root for the current dir, else current dir) |
 | `--port <n>` | server port (default: a stable per-project port 8790–9789; 0 = random) |
-| `GALLERY_TITLE` | header wordmark (default `Gallery`) |
+| `GALLERY_TITLE` | header wordmark (default `Atelier`) |
 | `GALLERY_NO_THUMBS=1` | skip Quick-Look thumbnail generation |
 | `GALLERY_SHOW_FRAMES=1` | index animation-frame dirs (hidden by default) |
 
