@@ -20,17 +20,18 @@
            border-radius:8px;padding:8px 14px;font-size:13px;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.5)}
   .muted{color:var(--muted)}
   /* selection pill + annotation card (same language as the gallery/HTML overlay) */
-  #selPill{position:fixed;z-index:300;display:none;align-items:center;gap:8px;
-      background:rgba(24,27,34,.97);border:1px solid #3a4150;border-radius:22px;padding:5px 6px 5px 12px;
-      box-shadow:0 10px 36px rgba(0,0,0,.45);color:var(--txt);font-size:13px;user-select:none;-webkit-user-select:none}
-  #selPill .n{color:var(--muted);font-size:12px;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #selPill{position:fixed;z-index:300;display:none;align-items:center;gap:10px;min-width:320px;max-width:460px;
+      background:#1d2026;border:1px solid #343842;border-radius:24px;padding:8px 8px 8px 16px;
+      box-shadow:0 12px 36px rgba(0,0,0,.45);color:var(--txt);font-size:13px;user-select:none;-webkit-user-select:none}
+  #selPill .nb{font-size:14px;flex:none;line-height:1}
+  #selPill textarea{flex:1;background:transparent;border:none;outline:none;color:var(--txt);
+      font-size:13px;line-height:1.45;padding:0;resize:none;font-family:inherit;height:20px;max-height:120px}
+  #selPill textarea::placeholder{color:#6d7480}
   #selPill button{border:none;cursor:pointer;display:flex;align-items:center;justify-content:center}
-  #selPill .cm2{height:26px;padding:0 10px;border-radius:14px;background:transparent;
-      border:1px solid #3a4150;color:var(--txt);font-size:12px;flex:none}
-  #selPill .cm2:hover{border-color:#5b6575}
-  #selPill .x{width:28px;height:28px;border-radius:50%;background:transparent;
-      border:1px solid #3a4150;color:var(--muted);font-size:13px;flex:none}
-  #selPill .x:hover{border-color:#5b6575;color:#fff}
+  #selPill .del{width:26px;height:26px;border-radius:50%;background:none;color:#6d7480;flex:none;padding:0}
+  #selPill .del:hover{color:#ff7a76}
+  #selPill .del svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.6;
+      stroke-linecap:round;stroke-linejoin:round}
   #selPill .tgt{width:28px;height:28px;border-radius:50%;background:transparent;
       border:1px solid #3a4150;color:var(--muted);font-size:14px;flex:none}
   #selPill .tgt:hover,#selPill .tgt.set{border-color:#5b9dff;color:#5b9dff}
@@ -46,22 +47,6 @@
       color:#8ab4ff;border:1px solid #33415e;border-radius:5px;padding:1px 5px}
   #tgMenu .it .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   #tgMenu .it.on .t{color:#8ab4ff}
-  #selCard{position:fixed;z-index:301;display:none;align-items:center;gap:10px;min-width:320px;max-width:460px;
-      background:#1d2026;border:1px solid #343842;border-radius:24px;padding:8px 8px 8px 16px;
-      box-shadow:0 12px 36px rgba(0,0,0,.45);color:var(--txt);font-size:13px}
-  #selCard .nb{font-size:14px;flex:none;line-height:1}
-  #selCard textarea{flex:1;background:transparent;border:none;outline:none;color:var(--txt);
-      font-size:13px;line-height:1.45;padding:0;resize:none;font-family:inherit;height:20px;max-height:120px}
-  #selCard textarea::placeholder{color:#6d7480}
-  #selCard .del{width:26px;height:26px;border-radius:50%;background:none;border:none;color:#6d7480;
-      cursor:pointer;display:flex;align-items:center;justify-content:center;flex:none;padding:0}
-  #selCard .del:hover{color:#ff7a76}
-  #selCard .del svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.6;
-      stroke-linecap:round;stroke-linejoin:round}
-  #selCard .anSave{width:30px;height:30px;border-radius:50%;background:#e8eaed;color:#15171b;border:none;
-      font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;
-      flex:none;font-family:inherit}
-  #selCard .anSave:hover{background:#fff}
   #annotBtn{margin-left:12px;background:var(--border);color:var(--txt);border:1px solid var(--border);
       border-radius:8px;padding:6px 12px;font-size:13px;cursor:pointer;white-space:nowrap}
   #annotBtn:hover{border-color:#5b6575}
@@ -80,9 +65,8 @@ function __ct(){try{return JSON.parse(localStorage.getItem('claudeTargetV1')||'n
 </header>
 <div id="pages"></div>
 <button id="sendBtn">➜ Claude</button>
-<div id="selPill"><span class="n"></span><button class="cm2" title="Ajouter un commentaire puis envoyer">&#128172; Annoter</button><button class="tgt" title="Choisir la session Claude cible">&#9678;</button><button class="x" title="Annuler la sélection (Esc)">&#10005;</button><button class="go" title="Envoyer la sélection à la session Claude">&#8593;</button></div>
+<div id="selPill"><span class="nb">&#128172;</span><textarea rows="1" placeholder="Ajouter une annotation&hellip;"></textarea><button class="del" title="Annuler la sélection (&Eacute;chap)"><svg viewBox="0 0 14 14"><path d="M2 3.5h10M5.5 3.5V2.2c0-.4.3-.7.7-.7h1.6c.4 0 .7.3.7.7v1.3M3.5 3.5l.6 8.1c0 .5.4.9.9.9h4c.5 0 .9-.4.9-.9l.6-8.1M5.8 6v4M8.2 6v4"/></svg></button><button class="tgt" title="Choisir la session Claude cible">&#9678;</button><button class="go" title="Envoyer la sélection à la session Claude (Entr&eacute;e)">&#8593;</button></div>
 <div id="tgMenu"></div>
-<div id="selCard"><span class="nb">&#128172;</span><textarea rows="1" placeholder="Ajouter une annotation&hellip;"></textarea><button class="del" title="Annuler (&Eacute;chap)"><svg viewBox="0 0 14 14"><path d="M2 3.5h10M5.5 3.5V2.2c0-.4.3-.7.7-.7h1.6c.4 0 .7.3.7.7v1.3M3.5 3.5l.6 8.1c0 .5.4.9.9.9h4c.5 0 .9-.4.9-.9l.6-8.1M5.8 6v4M8.2 6v4"/></svg></button><button class="anSave" title="Enregistrer (Entr&eacute;e)">&#10003;</button></div>
 <script>
 pdfjsLib.GlobalWorkerOptions.workerSrc = "/.fig_thumbs/pdfjs/pdf.worker.min.js";
 
@@ -215,7 +199,7 @@ function spanAt(tl, x, y){
   return best;
 }
 document.addEventListener("pointerdown", e => {
-  if(e.target.closest("#selPill") || e.target.closest("#selCard")) return;  // pill/card: keep selection
+  if(e.target.closest("#selPill")) return;  // the bar: keep selection
   const tl = e.target.closest(".textLayer");
   btn.style.display = "none";
   selHide();
@@ -272,11 +256,11 @@ btn.onclick = async () => {
 
 // --- selection pill: annotate + send directly to the Claude session (same flow
 //     as the LaTeX studio pill and the HTML report overlay; /quote with direct:true) ---
-const selPill = document.getElementById("selPill"), selCard = document.getElementById("selCard");
+const selPill = document.getElementById("selPill");
+const selTa = selPill.querySelector("textarea");
 function selPillShow(hls){
   const text = hlText();
   if(!text){ selHide(); return; }
-  selPill.querySelector(".n").textContent = text.length > 48 ? text.slice(0,45).replace(/\s+\S*$/,"") + "…" : text;
   // union rect of the highlighted spans (viewport coords)
   let l = Infinity, r = -Infinity, top = Infinity, bot = -Infinity;
   hls.forEach(s => { const b = s.getBoundingClientRect();
@@ -288,25 +272,27 @@ function selPillShow(hls){
   if(y + h > innerHeight - 8) y = top - h - 10;
   selPill.style.left = x + "px"; selPill.style.top = Math.max(8, y) + "px";
 }
-function selHide(){ selPill.style.display = "none"; selCard.style.display = "none"; }
-function selCancel(){ selHide(); clearHl();
+function selHide(){ selPill.style.display = "none"; }
+function selCancel(){ selHide(); selTa.value = ""; clearHl();
   fetch("/selinfo", {method:"POST", headers:{"Content-Type":"application/json"},
     body: JSON.stringify({lines:0, words:0})}).catch(()=>{});
 }
-function selSend(comment){
+function selSend(){
   const text = hlText();
   if(!text) return;
+  const comment = selTa.value.trim();
   const go = selPill.querySelector(".go");
   go.textContent = "⏳";
   fetch("/quote", {method:"POST", headers:{"Content-Type":"application/json"},
     body: JSON.stringify({rel, page: selPage, text, comment: comment || "", direct: true, target: __ct()})})
     .then(r => r.json())
-    .then(() => { go.textContent = "✓"; setTimeout(() => { go.textContent = "↑"; selHide(); }, 1200); })
+    .then(() => { go.textContent = "✓"; setTimeout(() => { go.textContent = "↑"; selTa.value = ""; selHide(); }, 1200); })
     .catch(() => { go.textContent = "!"; setTimeout(() => { go.textContent = "↑"; }, 1600); });
 }
-selPill.addEventListener("mousedown", e => e.preventDefault());
-selPill.querySelector(".go").onclick = () => selSend("");
-selPill.querySelector(".x").onclick = e => { e.stopPropagation(); selCancel(); };
+// clicks on the bar must not destroy the selection — except the textarea, which needs focus
+selPill.addEventListener("mousedown", e => { if(e.target !== selTa) e.preventDefault(); });
+selPill.querySelector(".go").onclick = () => selSend();
+selPill.querySelector(".del").onclick = e => { e.stopPropagation(); selCancel(); };
 /* ---- Claude-session target picker (stores localStorage 'claudeTargetV1') ---- */
 (function(){
   const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -346,28 +332,12 @@ selPill.querySelector(".x").onclick = e => { e.stopPropagation(); selCancel(); }
     }catch(err){ console.warn("claude-targets failed", err); }
   };
 })();
-selPill.querySelector(".cm2").onclick = () => {
-  selCard.style.display = "flex";
-  selCard.style.left = Math.min(parseFloat(selPill.style.left) || 8, innerWidth - 356) + "px";
-  selCard.style.top = selPill.style.top;
-  selCard.querySelector("textarea").focus();
-};
-selCard.addEventListener("mousedown", e => { if(e.target.tagName !== "TEXTAREA") e.preventDefault(); });
-selCard.querySelector(".del").onclick = () => { selCard.style.display = "none"; selCard.querySelector("textarea").value = ""; };
-selCard.querySelector(".anSave").onclick = () => {
-  const v = selCard.querySelector("textarea").value.trim();
-  selCard.style.display = "none"; selCard.querySelector("textarea").value = "";
-  selSend(v);
-};
-{
-  const _sta = selCard.querySelector("textarea");
-  _sta.addEventListener("input", () => { _sta.style.height = "20px"; _sta.style.height = Math.min(120, _sta.scrollHeight) + "px"; });
-  _sta.addEventListener("keydown", e => {
-    e.stopPropagation();
-    if(e.key === "Enter" && !e.shiftKey){ e.preventDefault(); selCard.querySelector(".anSave").click(); }
-    else if(e.key === "Escape"){ selCard.querySelector(".del").click(); }
-  });
-}
+selTa.addEventListener("input", () => { selTa.style.height = "20px"; selTa.style.height = Math.min(120, selTa.scrollHeight) + "px"; });
+selTa.addEventListener("keydown", e => {
+  e.stopPropagation();
+  if(e.key === "Enter" && !e.shiftKey){ e.preventDefault(); selSend(); }
+  else if(e.key === "Escape"){ e.preventDefault(); selCancel(); }
+});
 document.addEventListener("keydown", e => { if(e.key === "Escape") selCancel(); });
 
 // --- drawn annotation (shared AnnotKit): one transparent overlay per page,
