@@ -198,6 +198,13 @@ async function load(){
   if(j.error) return setState("err", j.error);
   recentsAdd(path);
   diskMtime = j.mtime;
+  // re-mesurer CodeMirror quand le panneau est redimensionné (sinon les
+  // retours de ligne gardent l'ancienne largeur et l'affichage se décale)
+  let __rsT=null;
+  window.addEventListener("resize", () => {
+    clearTimeout(__rsT);
+    __rsT=setTimeout(() => { if(cm) cm.refresh(); }, 120);
+  });
   cm = CodeMirror(document.getElementById("left"), {
     value: j.text, mode: "stex", theme: "material-darker",
     lineNumbers: true, lineWrapping: true, viewportMargin: 50, styleSelectedText: true

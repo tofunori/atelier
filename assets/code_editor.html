@@ -108,6 +108,8 @@ async function load(){
   recentsAdd(path);
   diskMtime = j.mtime;
   if(!cm){
+  let __rsT=null;
+  window.addEventListener("resize", () => { clearTimeout(__rsT); __rsT=setTimeout(() => { if(cm) cm.refresh(); }, 120); });
     cm = CodeMirror(document.getElementById("ed"), {
       value: j.text, mode: MODES[ext] || null, theme: "material-darker",
       lineNumbers: true, lineWrapping: true, viewportMargin: 50, styleSelectedText: true
