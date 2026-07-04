@@ -749,7 +749,7 @@ function toolOpenTab(endpoint, page){
   // fall back to the in-page lightbox viewer if that fails. Both muxy and orca
   // can run at once — tell the server which app hosts THIS gallery so the tab
   // opens here (?orcaFs=1 is stamped on the URL by the Orca launcher).
-  const host=new URLSearchParams(location.search).get('orcaFs')==='1'?'orca':'muxy';
+  const host=new URLSearchParams(location.search).get('orcaFs')==='1'?'orca':'';  // ''=laisser le serveur choisir (cmux d'abord)
   const fb=()=>toolOpenLightbox(page);
   fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({host})}).then(r=>{ if(!r.ok) fb(); }).catch(fb);
