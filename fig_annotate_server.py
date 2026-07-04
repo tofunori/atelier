@@ -23,6 +23,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
 PROJECT = os.path.realpath(os.environ.get("GALLERY_ROOT") or os.getcwd())
 OUT_DIR = os.path.join(PROJECT, "annotations")
+STUDIO = bool(os.environ.get("ATELIER_STUDIO"))  # embarqué dans Atelier Studio : zéro push cmux/muxy/orca
 PORT = int(os.environ.get("FIG_PORT", 8790))
 
 # /thumb spawns a rasteriser per request on the threaded server, so cap concurrency:
@@ -285,6 +286,8 @@ def find_tex_root(p):
 
 
 def find_muxy_claude_pane():
+    if STUDIO:
+        return None
     """Muxy fallback: pane id of a Claude Code session, preferring this project.
 
     `muxy list-panes` lines: <id>\t<title>\t<cwd>\t<active>. Claude sessions
@@ -319,6 +322,8 @@ def find_muxy_claude_pane():
 
 
 def find_orca_claude_terminal():
+    if STUDIO:
+        return None
     """Orca fallback: handle of a live Claude terminal in this project's worktree."""
     exe = shutil.which("orca") or ("/usr/local/bin/orca" if os.path.exists("/usr/local/bin/orca") else None)
     if not exe:
@@ -402,6 +407,8 @@ def _oneline(msg):
 
 
 def send_to_target(target, msg, direct):
+    if STUDIO:
+        return False
     """Push msg to an explicit {app, id} target. Returns True on success."""
     try:
         app, tid = target.get("app"), target.get("id")
@@ -516,6 +523,8 @@ def _cmux_visible_claude_surfaces():
 
 
 def find_claude_surface():
+    if STUDIO:
+        return None
     """Target Claude Code panel surface.
 
     Priority: (1) selected Claude surface in the active workspace,
@@ -972,6 +981,8 @@ class Handler(SimpleHTTPRequestHandler):
             except Exception as e:
                 return self._respond(500, {"error": str(e)})
         if self.path == "/claude-targets":
+            if STUDIO:
+                return self._respond(200, {"targets": []})
             try:
                 return self._respond(200, {"targets": list_claude_targets()})
             except Exception as e:
@@ -1645,7 +1656,7 @@ class Handler(SimpleHTTPRequestHandler):
                 subprocess.run("pbcopy", input=msg.encode(), timeout=5)
                 with open(os.path.expanduser("~/.claude/fig-last-quote.txt"), "w") as f:
                     f.write(msg)
-                if req.get("embed"):
+                if req.get("embed") or STUDIO:
                     # Embarqué dans Atelier Studio : le client livre le message
                     # au composer via postMessage — aucun push externe.
                     return self._respond(200, {"embedded": True, "message": msg})
@@ -1714,7 +1725,7 @@ class Handler(SimpleHTTPRequestHandler):
             subprocess.run("pbcopy", input=msg.encode(), timeout=5)
             with open(os.path.expanduser("~/.claude/fig-last-quote.txt"), "w") as f:
                 f.write(msg)
-            if req.get("embed"):
+            if req.get("embed") or STUDIO:
                 return self._respond(200, {"embedded": True, "message": msg})
             # Composer line kept short: the full payload (path + numbered notes +
             # instruction) lives in fig-last-quote.txt, which the annotation skill reads.
