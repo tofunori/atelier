@@ -1176,7 +1176,17 @@ class Handler(SimpleHTTPRequestHandler):
                     store = json.load(f)
             except Exception:
                 store = {}
-            store[req.get("rel") or ""] = req.get("annots") or []
+            rel_key = req.get("rel") or ""
+            new_annots = req.get("annots") or []
+            # filet : si un client vide un rel qui avait des annots, garder une copie
+            if not new_annots and store.get(rel_key):
+                try:
+                    bak = store_path + ".bak"
+                    with open(bak, "w") as bf:
+                        json.dump(store, bf)
+                except Exception:
+                    pass
+            store[rel_key] = new_annots
             os.makedirs(os.path.dirname(store_path), exist_ok=True)
             with open(store_path, "w") as f:
                 json.dump(store, f)
