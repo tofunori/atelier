@@ -671,6 +671,10 @@ if(bc) bc.onmessage = e => {
 // --- selection pill: annotate + send directly to the Claude session (same flow
 //     as the figure pill and the HTML report overlay; /quote with direct:true) ---
 const selPill = document.getElementById("selPill");
+const __goHTML0 = (window.self!==window.top && selPill.querySelector('.go')) ? null : null; // rempli après restyle
+let __goHTML = null;
+function goReset(go){ if (__goHTML) go.innerHTML = __goHTML; else go.textContent = "↑"; }
+setTimeout(function(){ var g = selPill.querySelector('.go'); if (window.self!==window.top && g) __goHTML = g.innerHTML; }, 0);
 const selTa = selPill.querySelector("textarea");
   // Mode Studio : pilule simple « Add to chat » (comme la sélection du chat) —
   // pas de commentaire ni corbeille, le texte part en puce dans le composer.
@@ -716,8 +720,8 @@ function selSend(){
     .then(r => r.json())
     .then(j => { if(__EMB && j && j.message) __atelierPost({type:'atelier-add-to-chat', text:j.message});
       if(window._clMark){ window._clMark.clear(); window._clMark = null; }
-      go.textContent = "✓"; setTimeout(() => { go.textContent = "↑"; selTa.value = ""; selHide(); }, 1200); })
-    .catch(() => { go.textContent = "!"; setTimeout(() => { go.textContent = "↑"; }, 1600); });
+      go.textContent = "✓"; setTimeout(() => { goReset(go); selTa.value = ""; selHide(); }, 1200); })
+    .catch(() => { go.textContent = "!"; setTimeout(() => { goReset(go); }, 1600); });
 }
 // clicks on the bar must not destroy the selection — except the textarea, which needs focus
 selPill.addEventListener("mousedown", e => { if(e.target !== selTa) e.preventDefault(); });
