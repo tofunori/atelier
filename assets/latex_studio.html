@@ -5,6 +5,14 @@
 <title>LaTeX Studio</title>
 <link rel="stylesheet" href="/.fig_thumbs/cm/codemirror.min.css">
 <link rel="stylesheet" href="/.fig_thumbs/cm/material-darker.min.css">
+<script>(function(){
+  try{ var m=(location.hash||'').match(/atelier_nonce=([\w-]+)/); if(m) sessionStorage.setItem('atelier_nonce', m[1]); }catch(e){}
+  /* nonce IPC : inclus dans chaque message vers l'app hôte ; l'app rejette sans lui */
+  window.__atelierPost = function(p){
+    try{ p = Object.assign({}, p, {nonce: sessionStorage.getItem('atelier_nonce')||''}); }catch(e){}
+    try{ window.top.postMessage(p, '*'); }catch(e){}
+  };
+})();</script>
 <script src="/.fig_thumbs/cm/codemirror.min.js"></script>
 <script src="/.fig_thumbs/cm/mark-selection.min.js"></script>
 <script src="/.fig_thumbs/cm/stex.min.js"></script>
@@ -302,7 +310,7 @@ if(!IS_TEX){
           fetch("/quote", {method:"POST", headers:{"Content-Type":"application/json"},
             body: JSON.stringify({rel: path, page: page, text: selTxt, comment: "", direct: true, embed: true})})
             .then(r => r.json())
-            .then(j => { if(j && j.message) window.top.postMessage({type:"atelier-add-to-chat", text:j.message}, "*"); })
+            .then(j => { if(j && j.message) __atelierPost({type:"atelier-add-to-chat", text:j.message}); })
             .catch(() => {});
           pillBtn.style.display = "none";
           try{ window.getSelection().removeAllRanges(); }catch(err){}
@@ -629,7 +637,7 @@ function selSend(){
   fetch("/quote", {method:"POST", headers:{"Content-Type":"application/json"},
     body: JSON.stringify({rel: path, page: lastSel.page, text: lastSel.text, comment: comment || "", direct: true, target: __ct(), embed: __EMB})})
     .then(r => r.json())
-    .then(j => { if(__EMB && j && j.message) window.top.postMessage({type:'atelier-add-to-chat', text:j.message}, '*');
+    .then(j => { if(__EMB && j && j.message) __atelierPost({type:'atelier-add-to-chat', text:j.message});
       if(window._clMark){ window._clMark.clear(); window._clMark = null; }
       go.textContent = "✓"; setTimeout(() => { go.textContent = "↑"; selTa.value = ""; selHide(); }, 1200); })
     .catch(() => { go.textContent = "!"; setTimeout(() => { go.textContent = "↑"; }, 1600); });
@@ -726,8 +734,8 @@ document.getElementById("popPdf").onclick = () => {
   const __pdfUrl = "/.fig_thumbs/latex_studio.html?path=" + encodeURIComponent(path) + "&mode=pdf";
   if(window.self !== window.top){
     // embarqué dans Atelier Studio : ouvrir dans un onglet du panneau
-    window.top.postMessage({type:'atelier-open-tab', url: __pdfUrl,
-      title: (path.split("/").pop() || "PDF") + " — PDF"}, '*');
+    __atelierPost({type:'atelier-open-tab', url: __pdfUrl,
+      title: (path.split("/").pop() || "PDF") + " — PDF"});
   } else {
     window.open(__pdfUrl, "_blank");
   }
@@ -869,7 +877,7 @@ if(window.self !== window.top){
     fetch("/quote", {method:"POST", headers:{"Content-Type":"application/json"},
       body: JSON.stringify({rel: path, page: "", text: dSel, comment: "", direct: true, embed: true})})
       .then(r => r.json())
-      .then(j => { if(j && j.message) window.top.postMessage({type:"atelier-add-to-chat", text:j.message}, "*"); })
+      .then(j => { if(j && j.message) __atelierPost({type:"atelier-add-to-chat", text:j.message}); })
       .catch(() => {});
     dPill.style.display = "none";
     try{ window.getSelection().removeAllRanges(); }catch(err){}
