@@ -54,15 +54,18 @@
          overflow:hidden;white-space:nowrap}
   header .grp{display:flex;gap:4px;align-items:center;flex:none}
   header .sep{width:1px;height:18px;background:var(--border);flex:none;margin:0 3px}
-  header button{background:transparent;color:var(--muted);border:1px solid var(--border);
+  header button{background:transparent;color:var(--muted);border:1px solid transparent;
                 border-radius:6px;padding:0 10px;height:26px;font-size:12px;cursor:pointer;flex:none}
-  header button:hover{color:var(--txt);border-color:#5b6575}
+  header button:hover{color:var(--txt);background:rgba(255,255,255,0.06)}
   header button.on{background:var(--border);color:var(--txt)}
   header select{background:transparent;color:var(--txt);border:1px solid var(--border);
                 border-radius:6px;padding:0 6px;height:26px;font-size:12px;cursor:pointer;flex:none}
   #build{background:var(--border);color:var(--txt);border-color:var(--border)}
   #build:hover{background:#5b5b63;border-color:#5b5b63}
-  #fname{font-size:12.5px;max-width:150px;overflow:hidden;text-overflow:ellipsis;flex:none}
+  #fname{font-size:12.5px;font-weight:500;color:#cfd4dc;max-width:260px;overflow:hidden;text-overflow:ellipsis;flex:none;white-space:nowrap}
+  header .sep{display:none}
+  #findBtn,#moreBtn{width:26px;height:24px;display:inline-flex;align-items:center;justify-content:center;padding:0}
+  header .grp:has(#findBtn){margin-left:auto}
   #ddot{color:#ffd54a;display:none;flex:none}
   #state{color:var(--muted);flex:1;min-width:0;text-align:right;overflow:hidden;
          text-overflow:ellipsis;white-space:nowrap}
