@@ -13,6 +13,7 @@
 <script src="/.fig_thumbs/cm/markdown.min.js"></script>
 <script src="/.fig_thumbs/cm/julia.min.js"></script>
 <script src="/.fig_thumbs/cm/shell.min.js"></script>
+<script src="/.fig_thumbs/cm/javascript.min.js"></script>
 <script src="/.fig_thumbs/pdfjs/pdf.min.js"></script>
 <script src="/.fig_thumbs/marked.min.js"></script>
 <script src="/.fig_thumbs/purify.min.js"></script>
@@ -200,7 +201,9 @@ const __EXT = (path || "").split(".").pop().toLowerCase();
 const IS_TEX = __EXT === "tex";
 const __CM_MODE = ({tex:"stex", py:"python", r:"r", md:"markdown", jl:"julia",
   sh:"shell", bash:"shell", zsh:"shell", json:{name:"javascript",json:true},
-  js:"javascript", csv:null, txt:null})[__EXT] ?? "stex";
+  js:"javascript", mjs:"javascript", cjs:"javascript",
+  ts:{name:"javascript",typescript:true}, tsx:{name:"javascript",typescript:true},
+  jsx:"javascript", csv:null, txt:null})[__EXT] ?? null;
 let pdfPath = path ? path.replace(/\.tex$/, ".pdf") : null;
 // single initial-load trigger: resolve the real PDF path first, THEN load once
 // (two concurrent getDocument() calls can deadlock pdf.js worker startup)
