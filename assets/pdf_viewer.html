@@ -479,7 +479,7 @@ function saveAnnots(){
     body: JSON.stringify({rel, annots: PDF_ANNOTS})}).catch(()=>{});
 }
 function drawAnnots(pgDiv, n){
-  pgDiv.querySelectorAll(".pdfhl").forEach(el => el.remove());
+  pgDiv.querySelectorAll(".pdfhl, .pdfnote").forEach(el => el.remove());
   for(const a of PDF_ANNOTS){
     if(+a.page !== +n) continue;
     for(const rc of a.rects){
