@@ -86,7 +86,7 @@ function __ct(){try{return JSON.parse(localStorage.getItem('claudeTargetV1')||'n
 <header>
   <b id="fname">PDF</b>
   <span class="muted">Highlight a passage — Claude can access it automatically ("my selection")</span>
-  <button id="annotBtn" title="Annoter la page courante (dessiner + envoyer à Claude)">&#9998; Annoter</button>
+  <button id="annotBtn" title="Annoter la page courante (dessiner + envoyer à Claude)">&#9998;<span class="lbl"> Annoter</span></button>
   <span id="selinfo" style="margin-left:auto;color:#ffd54a"></span>
   <span class="muted" id="status"></span>
 </header>
@@ -629,6 +629,17 @@ if(window.self !== window.top){
       color:#8a919e !important;font-size:12.5px !important;padding:3px 8px !important;
       border-radius:6px !important;cursor:pointer;box-shadow:none !important}
     header button:hover{background:#2c313a !important;color:#e8eaed !important}
+    header{flex-wrap:nowrap !important}
+    header #fname{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;
+      white-space:nowrap}
+    #pdftools{flex-shrink:0}
+    @media (max-width: 640px){
+      header #fname{display:none}   /* le titre est déjà dans l'entête Bibliothèque */
+      header #annotBtn span.lbl{display:none}
+    }
+    @media (max-width: 440px){
+      header #selinfo{display:none}
+    }
   `;
   document.head.appendChild(st);
 }
