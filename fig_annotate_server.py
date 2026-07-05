@@ -941,6 +941,33 @@ class Handler(SimpleHTTPRequestHandler):
             except Exception:
                 self.send_response(500); self.end_headers()
             return
+        if STUDIO and self.path.startswith("/lint?"):
+            try:
+                from urllib.parse import parse_qs, urlparse
+                import shutil as _sh, subprocess as _sp
+                q = parse_qs(urlparse(self.path).query)
+                p = os.path.realpath(os.path.expanduser(q.get("path", [""])[0]))
+                home = os.path.expanduser("~")
+                allowed = any(p.startswith(os.path.join(home, d) + os.sep)
+                              for d in ("Documents", "Desktop"))
+                if not (allowed and p.endswith(".py") and os.path.isfile(p)):
+                    return self._respond(200, {"available": False})
+                ruff = _sh.which("ruff")
+                if not ruff:
+                    return self._respond(200, {"available": False})
+                try:
+                    r = _sp.run([ruff, "check", "--output-format", "json", "--quiet", p],
+                                capture_output=True, text=True, timeout=5)
+                    diags = json.loads(r.stdout or "[]")
+                except Exception:
+                    return self._respond(200, {"available": False})
+                out = [{"row": d.get("location", {}).get("row", 1),
+                        "col": d.get("location", {}).get("column", 1),
+                        "code": d.get("code") or "",
+                        "message": d.get("message") or ""} for d in diags[:200]]
+                return self._respond(200, {"available": True, "diagnostics": out})
+            except Exception as e:
+                return self._respond(200, {"available": False, "error": str(e)})
         if self.path.startswith("/code?"):
             try:
                 from urllib.parse import parse_qs, urlparse
