@@ -118,20 +118,26 @@ async function main(){
   // resize du panneau (split replié/déplié, fenêtre) → re-render à la bonne largeur,
   // en conservant la position de lecture (ratio de scroll)
   (function(){
-    let lastW = window.innerWidth, t = null;
-    window.addEventListener("resize", function(){
-      clearTimeout(t);
-      t = setTimeout(function(){
-        if (Math.abs(window.innerWidth - lastW) < 40) return;
-        try {
-          const el = document.scrollingElement || document.documentElement;
-          sessionStorage.setItem("pdfv_scroll_" + location.search,
-            String(el.scrollTop / Math.max(1, el.scrollHeight)));
-        } catch(e){}
-        location.reload();
-      }, 350);
-    });
+    // WebKit ne délivre pas toujours 'resize' à l'iframe quand le divider du
+    // panneau bouge : on sonde la largeur périodiquement (imparable et léger)
+    let lastW = window.innerWidth, stable = 0;
+    setInterval(function(){
+      const w = window.innerWidth;
+      if (Math.abs(w - lastW) >= 40) { lastW = w; stable = 0; return; }
+      if (Math.abs(w - lastW) < 40 && stable >= 0) {
+        // largeur stabilisée : re-render si différente de celle du rendu
+        if (Math.abs(w - RENDER_W) >= 40 && ++stable >= 2) {
+          try {
+            const el = document.scrollingElement || document.documentElement;
+            sessionStorage.setItem("pdfv_scroll_" + location.search,
+              String(el.scrollTop / Math.max(1, el.scrollHeight)));
+          } catch(e){}
+          location.reload();
+        }
+      }
+    }, 400);
   })();
+  const RENDER_W = window.innerWidth;
   const scale = Math.min(2.4, (window.innerWidth - 60) / 612);
   for(let n = 1; n <= pdf.numPages; n++){
     const page = await pdf.getPage(n);
