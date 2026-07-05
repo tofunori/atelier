@@ -765,6 +765,31 @@ class Handler(SimpleHTTPRequestHandler):
                 remaining -= len(chunk)
 
     def do_GET(self):
+        # PDFs Zotero (mode Studio seulement) : /zotero/<ITEMKEY>/<fichier>.pdf
+        if STUDIO and self.path.startswith("/zotero/"):
+            import re as _re
+            from urllib.parse import unquote, urlparse
+            parts = urlparse(self.path).path.split("/")
+            if len(parts) == 4:
+                key, fname = parts[2], unquote(parts[3])
+                if _re.fullmatch(r"[A-Za-z0-9]{8}", key) and _re.fullmatch(r"[^/\\]+\.pdf", fname, _re.I):
+                    zp = os.path.join(os.path.expanduser("~/Zotero/storage"), key, fname)
+                    zroot = os.path.realpath(os.path.expanduser("~/Zotero/storage"))
+                    rp = os.path.realpath(zp)
+                    if rp.startswith(zroot + os.sep) and os.path.isfile(rp):
+                        try:
+                            with open(rp, "rb") as f:
+                                data = f.read()
+                            self.send_response(200)
+                            self.send_header("Content-Type", "application/pdf")
+                            self.send_header("Content-Length", str(len(data)))
+                            self.end_headers()
+                            self.wfile.write(data)
+                        except Exception:
+                            self._respond(500, {"error": "read error"})
+                        return
+            return self._respond(404, {"error": "not found"})
+
         # On-demand downscaled thumbnail for grid cards (keeps full-res images out of
         # the browser: a 4320px plot decodes to ~38MB; its 480px thumb to ~0.5MB).
         # The lightbox still loads the full original, so viewing quality is unchanged.
