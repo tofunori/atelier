@@ -1157,6 +1157,10 @@ class Handler(SimpleHTTPRequestHandler):
             # Open the whiteboard/notes as a new embedded-browser tab (window.open
             # is swallowed inside embedded surfaces, so the page asks us to do it).
             try:
+                if STUDIO:
+                    # pas de push cmux/muxy/orca en mode Studio : la page ouvre
+                    # l'onglet elle-même (postMessage) ; 500 => fallback lightbox
+                    return self._respond(500, {"ok": False, "error": "studio mode"})
                 page = "whiteboard" if self.path.startswith("/board") else "notes"
                 url = f"http://127.0.0.1:{PORT}/.fig_thumbs/{page}/index.html"
                 host = ""                                           # optional hint from the gallery page
