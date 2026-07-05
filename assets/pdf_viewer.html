@@ -115,7 +115,24 @@ async function main(){
     return;
   }
   const wrap = document.getElementById("pages");
-  const scale = Math.min(1.6, (window.innerWidth - 60) / 612);
+  // resize du panneau (split replié/déplié, fenêtre) → re-render à la bonne largeur,
+  // en conservant la position de lecture (ratio de scroll)
+  (function(){
+    let lastW = window.innerWidth, t = null;
+    window.addEventListener("resize", function(){
+      clearTimeout(t);
+      t = setTimeout(function(){
+        if (Math.abs(window.innerWidth - lastW) < 40) return;
+        try {
+          const el = document.scrollingElement || document.documentElement;
+          sessionStorage.setItem("pdfv_scroll_" + location.search,
+            String(el.scrollTop / Math.max(1, el.scrollHeight)));
+        } catch(e){}
+        location.reload();
+      }, 350);
+    });
+  })();
+  const scale = Math.min(2.4, (window.innerWidth - 60) / 612);
   for(let n = 1; n <= pdf.numPages; n++){
     const page = await pdf.getPage(n);
     const vp = page.getViewport({scale});
@@ -138,6 +155,15 @@ async function main(){
     tl._order = readingOrder(tl, vp.width);
     drawAnnots(div, n);
   }
+  try {
+    const k = "pdfv_scroll_" + location.search;
+    const r = parseFloat(sessionStorage.getItem(k));
+    if (r > 0) {
+      sessionStorage.removeItem(k);
+      const el = document.scrollingElement || document.documentElement;
+      el.scrollTop = r * el.scrollHeight;
+    }
+  } catch(e){}
 }
 
 // Couche texte maison : un span par item, largeur EXACTE tiree du PDF
