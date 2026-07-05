@@ -221,7 +221,7 @@ function __ct(){try{return JSON.parse(localStorage.getItem('claudeTargetV1')||'n
     <button id="reloadPdf" title="Recharger le PDF">&#8635;</button>
   </span>
   <span class="sep"></span>
-  <span class="grp">
+  <span class="grp pdfonly">
     <button id="zoomOut" title="Zoom arrière">&#8722;</button>
     <button id="zoomFit" title="Ajuster à la largeur">&#10530;</button>
     <button id="zoomIn" title="Zoom avant">+</button>
@@ -231,12 +231,13 @@ function __ct(){try{return JSON.parse(localStorage.getItem('claudeTargetV1')||'n
     <button id="moreBtn" title="Plus&hellip;">&#8943;</button>
   </span>
   <span id="state"></span>
-  <button id="helpBtn" title="Raccourcis clavier">?</button>
+  <button id="helpBtn" title="Raccourcis clavier" style="display:none">?</button>
   <div id="morePop" style="display:none">
     <div data-act="save">Sauvegarder <em>&#8984;S</em></div>
     <div data-act="open">Ouvrir un fichier&hellip;</div>
     <div data-act="rewrap">Rewrap paragraphe <em>&#8997;Q</em></div>
     <div data-act="wrap">Wrap : <span id="moreWrapVal"></span></div>
+    <div data-act="help">Raccourcis clavier</div>
   </div>
 </header>
 <div id="helpPop">
@@ -1032,6 +1033,7 @@ document.getElementById("diffRestore").onclick = async () => {
     if (act === "save") document.getElementById("saveBtn").click();
     if (act === "open") document.getElementById("openFile").click();
     if (act === "rewrap") document.getElementById("rewrapBtn").click();
+    if (act === "help") document.getElementById("helpBtn").click();
     if (act === "wrap") { sbWrap.onclick(); return; }
     if (act !== "wrap") morePop.style.display = "none";
   };
