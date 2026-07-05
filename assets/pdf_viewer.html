@@ -630,11 +630,9 @@ if(window.self !== window.top){
       border-radius:6px !important;cursor:pointer;box-shadow:none !important}
     header button:hover{background:#2c313a !important;color:#e8eaed !important}
     header{flex-wrap:nowrap !important}
-    header #fname{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;
-      white-space:nowrap}
+    header #fname{display:none}  /* titre déjà dans l'entête Bibliothèque/onglet */
     #pdftools{flex-shrink:0}
     @media (max-width: 640px){
-      header #fname{display:none}   /* le titre est déjà dans l'entête Bibliothèque */
       header #annotBtn span.lbl{display:none}
     }
     @media (max-width: 440px){
