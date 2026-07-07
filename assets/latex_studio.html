@@ -45,63 +45,84 @@
 <script src="/.fig_thumbs/marked.min.js"></script>
 <script src="/.fig_thumbs/purify.min.js"></script>
 <script src="/.fig_thumbs/diff.min.js"></script>
+<link rel="stylesheet" href="/.fig_thumbs/katex/katex.min.css">
+<script src="/.fig_thumbs/katex/katex.min.js"></script>
+<script src="/.fig_thumbs/texvisual.min.js"></script>
 <style>
-:root{--bg:#202024;--card:#27272a;--card2:#1f1f23;--txt:#e4e4e7;--muted:#a1a1aa;--accent:#5b9dff;--border:#3f3f46}
+:root{--ui-font:-apple-system,'SF Pro Text','Inter Variable',sans-serif;--code-font:ui-monospace,'SF Mono',Menlo,monospace;--bg:#212429;--card:#1a1d22;--card2:#1a1d22;--txt:#dbdfe5;--muted:#868d9a;--accent:#e8823a;--border:#333a45;--border-strong:#3f4652}
   html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);
-            font-family:-apple-system,sans-serif;display:flex;flex-direction:column;overflow:hidden}
+            font-family:var(--ui-font);display:flex;flex-direction:column;overflow:hidden}
   header{background:var(--card);border-bottom:1px solid var(--border);padding:6px 10px;
-         display:flex;gap:6px;align-items:center;font-size:12.5px;flex-shrink:0;
+         display:flex;gap:6px;align-items:center;font-size:13px;flex-shrink:0;
          overflow:hidden;white-space:nowrap}
   header .grp{display:flex;gap:4px;align-items:center;flex:none}
   header .sep{width:1px;height:18px;background:var(--border);flex:none;margin:0 3px}
   header button{background:transparent;color:var(--muted);border:1px solid transparent;
                 border-radius:6px;padding:0 10px;height:26px;font-size:12px;cursor:pointer;flex:none}
-  header button:hover{color:var(--txt);background:rgba(255,255,255,0.06)}
+  header button:hover{color:var(--txt);background:var(--border)}
   header button.on{background:var(--border);color:var(--txt)}
+  .modeseg{display:inline-flex;border:1px solid var(--border);border-radius:6px;overflow:hidden;flex:none}
+  .modeseg button{border:none!important;border-radius:0!important;height:24px;padding:0 10px;font-size:12px}
+  .modeseg button.on{background:var(--border);color:var(--txt)}
   header select{background:transparent;color:var(--txt);border:1px solid var(--border);
                 border-radius:6px;padding:0 6px;height:26px;font-size:12px;cursor:pointer;flex:none}
-  #build{background:var(--border);color:var(--txt);border-color:var(--border)}
-  #build:hover{background:#5b5b63;border-color:#5b5b63}
-  #fname{font-size:12.5px;font-weight:500;color:#cfd4dc;max-width:260px;overflow:hidden;text-overflow:ellipsis;flex:none;white-space:nowrap}
+  #build{background:transparent;color:var(--txt);border:1px solid var(--border);font-weight:500}
+  #build:hover{border-color:var(--accent);color:var(--accent)}
+  #fname{font-size:13px;font-weight:600;letter-spacing:-.01em;color:var(--txt);max-width:260px;overflow:hidden;text-overflow:ellipsis;flex:none;white-space:nowrap}
   header .sep{display:none}
   #findBtn,#moreBtn{width:26px;height:24px;display:inline-flex;align-items:center;justify-content:center;padding:0}
   header .grp:has(#findBtn){margin-left:auto}
-  #ddot{color:#ffd54a;display:none;flex:none}
+  #ddot{color:var(--accent);display:none;flex:none}
   #state{color:var(--muted);flex:1;min-width:0;text-align:right;overflow:hidden;
          text-overflow:ellipsis;white-space:nowrap}
   #state.err{color:#ff6b6b}
-  #state.ok{color:#7ec97e}
-  #state.dirty{color:#ffd54a}
+  #state.ok{color:var(--muted)}
+  #state.hint{color:var(--muted)}
+  #state.dirty{color:var(--muted)}
   #helpPop{position:fixed;top:44px;right:10px;z-index:400;display:none;flex-direction:column;gap:7px;
            background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 16px;
            font-size:12px;color:var(--muted);box-shadow:0 8px 30px rgba(0,0,0,.5);line-height:1.5}
   #helpPop b{color:var(--txt);font-weight:600}
+  @media (max-width: 640px){ #state{display:none} }
+  @media (max-width: 520px){ #popPdf .lbl, #build{padding:0 7px} header{gap:3px;padding:4px 6px} }
   .pdfmode .editonly{display:none!important}
   body:not(.pdfmode) .pdfonly{display:none!important}
   .pdfmode #left{display:none}
   #split{flex:1;display:flex;min-height:0}
-  #left{width:50%;display:flex;flex-direction:column;border-right:1px solid var(--border);min-width:0;background:#212121}
+  #left{width:50%;display:flex;flex-direction:column;border-right:1px solid var(--border);min-width:0;background:#1e2126}
   #right{flex:1;overflow:auto;background:var(--card2);position:relative;scrollbar-gutter:stable}
-  .CodeMirror{flex:1;height:auto;font-size:13px;font-family:"SF Mono",Menlo,monospace;line-height:1.5}
+  .CodeMirror{flex:1;height:auto;font-size:13px;font-family:var(--code-font);line-height:1.62;background:#1e2126;color:var(--txt)}
+  /* craft éditeur : respiration, ligne active, gouttière lisible, curseur accent */
+  .CodeMirror-lines{padding:10px 0}
+  .CodeMirror pre.CodeMirror-line,.CodeMirror pre.CodeMirror-line-like{padding:0 14px 0 10px}
+  .CodeMirror-gutters{background:#1e2126;border-right:1px solid transparent}
+  .CodeMirror-linenumber{color:#565e6b;padding:0 12px 0 8px;font-size:12px}
+  .cm-activeline{background:rgba(255,255,255,.035)}
+  .cm-activeline-gutter .CodeMirror-linenumber{color:var(--txt)}
+  .CodeMirror-cursor{border-left:2px solid var(--accent)}
+  .CodeMirror-matchingbracket{color:var(--accent)!important;font-weight:600;border-bottom:1px solid var(--accent)}
   .pdfpage{position:relative;margin:10px auto;background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.5);cursor:crosshair}
   .pdfpage canvas{display:block}
-  #marker{position:absolute;left:0;right:0;height:22px;background:rgba(91,157,255,.25);
+  #marker{position:absolute;left:0;right:0;height:22px;background:rgba(232,130,58,.22);
           border-left:3px solid var(--accent);pointer-events:none;display:none;z-index:5}
-  .cm-syncline{background:rgba(91,157,255,.18)}
+  .cm-syncline{background:rgba(232,130,58,.16)}
   /* selection hugs the text (mark-selection) instead of filling the whole line */
   .CodeMirror .CodeMirror-selected{background:transparent !important}
   .CodeMirror-focused .CodeMirror-selected{background:transparent !important}
-  .CodeMirror-selectedtext{background:rgba(91,157,255,.45) !important;box-shadow:none !important;border-radius:2px}
-  .cm-line-flash{background:rgba(91,157,255,.18) !important;transition:background .6s}
+  .CodeMirror-selectedtext{background:rgba(232,130,58,.38) !important;box-shadow:none !important;border-radius:2px}
+  .cm-line-flash{background:rgba(232,130,58,.16) !important;transition:background .6s}
+  .cm-ghost-suggest{color:#7d858f;opacity:.72;pointer-events:none}
+  .cm-ghost-suggest::after{content:"Tab";display:inline-block;margin-left:8px;padding:0 5px;border:1px solid #3a414d;border-radius:4px;
+    color:#646d7b;font:10px/1.4 var(--ui-font);vertical-align:1px;opacity:.85}
   /* last selection sent to Claude: persistent marker */
-  .cm-clsel{background:rgba(91,157,255,.28);border-radius:2px}
+  .cm-clsel{background:rgba(232,130,58,.28);border-radius:2px}
   #picker{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;z-index:200;
           align-items:flex-start;justify-content:center;padding-top:8vh}
   #picker.show{display:flex}
   #pickerBox{background:var(--card);border:1px solid var(--border);border-radius:10px;width:520px;
              max-height:70vh;display:flex;flex-direction:column;overflow:hidden;
              box-shadow:0 8px 40px rgba(0,0,0,.6)}
-  #pickerPath{padding:10px 14px;font-size:11.5px;color:var(--muted);border-bottom:1px solid var(--border);
+  #pickerPath{padding:10px 14px;font-size:12px;color:var(--muted);border-bottom:1px solid var(--border);
               white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   #pickerList{overflow-y:auto;flex:1}
   #pickerList div{padding:7px 14px;font-size:13px;cursor:pointer;display:flex;gap:8px}
@@ -109,9 +130,9 @@
   #pickerList .d{color:var(--accent)}
   /* selection pill + annotation card (same language as the gallery/HTML overlay) */
   #selPill{position:fixed;z-index:300;display:none;align-items:center;gap:10px;min-width:320px;max-width:460px;
-      background:#1d2026;border:1px solid #343842;border-radius:24px;padding:8px 8px 8px 16px;
+      background:#1d2026;border:1px solid #343842;border-radius:999px;padding:8px 8px 8px 16px;
       box-shadow:0 12px 36px rgba(0,0,0,.45);color:var(--txt);font-size:13px;user-select:none;-webkit-user-select:none}
-  #selPill .nb{font-size:14px;flex:none;line-height:1}
+  #selPill .nb{font-size:13px;flex:none;line-height:1}
   #selPill textarea{flex:1;background:transparent;border:none;outline:none;color:var(--txt);
       font-size:13px;line-height:1.45;padding:0;resize:none;font-family:inherit;height:20px;max-height:120px}
   #selPill textarea::placeholder{color:#6d7480}
@@ -121,34 +142,64 @@
   #selPill .del svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.6;
       stroke-linecap:round;stroke-linejoin:round}
   #selPill .tgt{width:28px;height:28px;border-radius:50%;background:transparent;
-      border:1px solid #3a4150;color:var(--muted);font-size:14px;flex:none}
-  #selPill .tgt:hover,#selPill .tgt.set{border-color:#5b9dff;color:#5b9dff}
-  #selPill .go{width:32px;height:32px;border-radius:50%;background:#c96442;color:#fff;font-size:16px;flex:none}
+      border:1px solid #3a4150;color:var(--muted);font-size:13px;flex:none}
+  #selPill .tgt:hover,#selPill .tgt.set{border-color:#e8823a;color:#e8823a}
+  #selPill .go{width:32px;height:32px;border-radius:50%;background:#c96442;color:#fff;font-size:15px;flex:none}
   #selPill .go:hover{background:#e0714a}
   #tgMenu{position:fixed;z-index:302;display:none;flex-direction:column;min-width:240px;max-width:400px;
-      background:rgba(24,27,34,.98);border:1px solid #3a4150;border-radius:12px;padding:6px;
-      box-shadow:0 14px 48px rgba(0,0,0,.55);color:var(--txt);font-size:12.5px}
-  #tgMenu .hd{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;padding:5px 9px 3px}
-  #tgMenu .it{display:flex;gap:8px;align-items:center;padding:7px 9px;border-radius:8px;cursor:pointer}
+      background:rgba(24,27,34,.98);border:1px solid #3a4150;border-radius:10px;padding:6px;
+      box-shadow:0 14px 48px rgba(0,0,0,.55);color:var(--txt);font-size:13px}
+  #tgMenu .hd{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;padding:5px 9px 3px}
+  #tgMenu .it{display:flex;gap:8px;align-items:center;padding:7px 9px;border-radius:10px;cursor:pointer}
   #tgMenu .it:hover{background:rgba(255,255,255,.06)}
-  #tgMenu .it .app{flex:none;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
-      color:#8ab4ff;border:1px solid #33415e;border-radius:5px;padding:1px 5px}
+  #tgMenu .it .app{flex:none;font-size:10px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;
+      color:#8ab4ff;border:1px solid #33415e;border-radius:6px;padding:1px 5px}
   #tgMenu .it .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   #tgMenu .it.on .t{color:#8ab4ff}
 #mdModeSeg button.mdon{background:var(--accent);color:#10151d;border-color:var(--accent)}
+  #diffPane .dHead{position:sticky;top:0;display:flex;align-items:center;gap:10px;padding:7px 14px;
+    background:var(--card);border-bottom:1px solid var(--border);font-family:var(--ui-font,-apple-system,sans-serif);
+    font-size:12px;color:var(--muted);z-index:5}
+  #diffPane .dHead b{color:var(--txt);font-weight:600}
+  #diffPane .dHead .dx{margin-left:auto;background:transparent;border:1px solid var(--border);border-radius:6px;
+    color:var(--muted);cursor:pointer;padding:2px 10px;font-size:12px}
+  #diffPane .dHead .dx:hover{color:var(--txt);border-color:var(--border-strong)}
+  #diffPane .dBody{padding:12px 16px;white-space:pre-wrap}
+  #diffPane .dFold{display:block;color:var(--faint,#646d7b);background:var(--card2);border:1px dashed var(--border);
+    border-radius:6px;text-align:center;padding:3px 0;margin:6px 0;cursor:pointer;font-size:11px;
+    font-family:var(--ui-font,-apple-system,sans-serif)}
+  #diffPane .dFold:hover{color:var(--muted)}
   #diffPane{display:none;position:absolute;inset:0;z-index:50;overflow:auto;background:var(--bg,#212429);
-    padding:18px 22px;font-family:ui-monospace,Menlo,monospace;font-size:12.5px;line-height:1.7;
-    white-space:pre-wrap;word-break:break-word;color:#cfd4dc}
+    padding:18px 22px;font-family:var(--code-font);font-size:13px;line-height:1.7;
+    white-space:pre-wrap;word-break:break-word;color:#b6bdc7}
   #diffPane .dAdd{background:rgba(52,201,142,.16);color:#7fe0b4;border-bottom:1px solid rgba(52,201,142,.6);
     border-radius:2px;text-decoration:none}
   #diffPane .dDel{background:rgba(224,108,117,.14);color:#e09aa0;text-decoration:line-through;border-radius:2px}
-  #diffGrp button.on{background:var(--accent);color:#10151d;border-color:var(--accent)}
+  #diffGrp button.on{background:var(--border);color:var(--txt)}
+  #diffGrp .dg-label{color:var(--faint,#646d7b);font-size:11px;letter-spacing:.05em;text-transform:uppercase;margin-right:2px}
   /* palette LaTeX/code plus riche (par-dessus material-darker) */
-  .cm-s-material-darker .cm-tag{color:#7aa2f7}                 /* \commandes */
+
+  /* ===== thème code « atelier » (surcharge material-darker) ===== */
+  .cm-s-material-darker.CodeMirror{background:#1e2126;color:#d8d3c8}
+  .cm-s-material-darker .cm-keyword{color:#e8823a}
+  .cm-s-material-darker .cm-def{color:#d8d3c8}
+  .cm-s-material-darker .cm-variable{color:#d8d3c8}
+  .cm-s-material-darker .cm-variable-2{color:#c9c3b6}
+  .cm-s-material-darker .cm-property{color:#c9c3b6}
+  .cm-s-material-darker .cm-string{color:#5fb0a5}
+  .cm-s-material-darker .cm-string-2{color:#5fb0a5}
+  .cm-s-material-darker .cm-number{color:#5fb0a5}
+  .cm-s-material-darker .cm-atom{color:#5fb0a5}
+  .cm-s-material-darker .cm-builtin{color:#7fbcb2}
+  .cm-s-material-darker .cm-operator{color:#9a958a}
+  .cm-s-material-darker .cm-comment{color:#868d9a;font-style:italic}
+  .cm-s-material-darker .cm-meta{color:#9a958a}
+  .cm-s-material-darker .cm-qualifier{color:#7fbcb2}
+  .cm-s-material-darker .cm-tag{color:#e8823a}                 /* \commandes */
   .cm-s-material-darker .cm-bracket{color:#e0b74a}             /* { } [ ] */
-  .cm-s-material-darker .cm-atom{color:#b587d6}                /* noms d'environnements */
+  .cm-s-material-darker .cm-atom{color:#7fbcb2}                /* noms d'environnements */
   .cm-s-material-darker .cm-string{color:#8fd3a7}              /* math $…$ */
-  .cm-s-material-darker .cm-comment{color:#6b7482;font-style:italic}
+  .cm-s-material-darker .cm-comment{color:#646d7b;font-style:italic}
   .cm-s-material-darker .cm-number{color:#e8a35a}
   .cm-s-material-darker .cm-keyword{color:#d97757}
   .cm-s-material-darker .cm-builtin{color:#7aa2f7}
@@ -158,38 +209,125 @@
 
 /* ---- option B : status bar + menus (sobre) ---- */
 #statusbar{display:flex;gap:16px;align-items:center;padding:2px 12px;min-height:22px;
-  background:#1a1d22;border-top:1px solid #333a45;font-size:11px;color:#8a919e;
+  background:#1a1d22;border-top:1px solid #333a45;font-size:11px;color:#868d9a;
   font-variant-numeric:tabular-nums}
 #statusbar span{cursor:default}
-#sbWrap:hover,#sbLint:hover{color:#e8eaed;cursor:pointer}
+#sbWrap:hover,#sbLint:hover{color:#dbdfe5;cursor:pointer}
 #sbLint.err{color:#e06c75}
 #sbLint.ok{color:#98c379}
 #morePop{position:fixed;top:40px;right:10px;z-index:400;background:#1b1f26;
   border:1px solid #333a45;border-radius:10px;padding:5px;min-width:220px;
-  box-shadow:0 8px 24px rgba(0,0,0,.5);font-size:12.5px;color:#cfd4dc}
-#morePop div{padding:6px 10px;border-radius:7px;cursor:pointer;display:flex;justify-content:space-between;gap:14px}
+  box-shadow:0 8px 24px rgba(0,0,0,.5);font-size:13px;color:#b6bdc7}
+#morePop div{padding:6px 10px;border-radius:6px;cursor:pointer;display:flex;justify-content:space-between;gap:14px}
 #morePop div:hover{background:#2c313a}
-#morePop em{font-style:normal;color:#6b7482;font-size:11px}
+#morePop em{font-style:normal;color:#646d7b;font-size:11px}
 #lintPane{max-height:140px;overflow-y:auto;background:#1a1d22;border-top:1px solid #333a45;
   font:11.5px/1.6 ui-monospace,Menlo,monospace;padding:4px 0}
-#lintPane div{padding:1px 12px;cursor:pointer;color:#cfd4dc}
+#lintPane div{padding:1px 12px;cursor:pointer;color:#b6bdc7}
 #lintPane div:hover{background:#2c313a}
 #lintPane .lc{color:#e06c75;margin-right:8px}
 .CodeMirror-dialog{background:#1b1f26 !important;border-bottom:1px solid #333a45 !important;
-  color:#cfd4dc !important;padding:5px 10px !important;font-size:12.5px}
+  color:#b6bdc7 !important;padding:5px 10px !important;font-size:13px}
 .CodeMirror-dialog input{background:#2c313a !important;border:1px solid #3f4652 !important;
-  border-radius:6px !important;color:#e8eaed !important;padding:3px 8px !important;
+  border-radius:6px !important;color:#dbdfe5 !important;padding:3px 8px !important;
   font-family:inherit !important;outline:none}
-.CodeMirror-search-hint{color:#6b7482 !important}
-.cm-matchhighlight{background:rgba(91,157,255,0.14)}
-.CodeMirror-focused .cm-matchhighlight{background:rgba(91,157,255,0.14)}
+.CodeMirror-search-hint{color:#646d7b !important}
+.cm-matchhighlight{background:rgba(232,130,58,0.14)}
+.CodeMirror-focused .cm-matchhighlight{background:rgba(232,130,58,0.14)}
 .CodeMirror-foldgutter{width:12px}
-.CodeMirror-foldgutter-open:after,.CodeMirror-foldgutter-folded:after{color:#6b7482;font-size:10px}
+.CodeMirror-foldgutter-open:after,.CodeMirror-foldgutter-folded:after{color:#646d7b;font-size:10px}
 .lint-gutter-err{color:#e06c75;font-size:10px;line-height:1}
 .cm-lint-line{border-bottom:1px dotted rgba(224,108,117,.7)}
+
+  /* ===== commentaires ancrés (mode Review sobre) ===== */
+  .texc-hl{background:rgba(224,183,74,.14);border-bottom:1px dotted rgba(224,183,74,.6);cursor:pointer}
+  #texcPop{position:fixed;z-index:310;display:none;width:300px;background:var(--card);
+    border:1px solid var(--border-strong,#3f4652);border-radius:10px;box-shadow:0 10px 34px rgba(0,0,0,.45);padding:10px 12px}
+  #texcPop .tc-quote{font:italic 11.5px/1.4 -apple-system,sans-serif;color:var(--muted);
+    border-left:2px solid var(--border);padding-left:8px;margin-bottom:7px;max-height:60px;overflow:hidden}
+  #texcPop textarea{width:100%;box-sizing:border-box;background:var(--card2);border:1px solid var(--border);
+    border-radius:7px;color:var(--txt);font:12.5px/1.5 -apple-system,sans-serif;padding:6px 8px;resize:vertical;min-height:52px;outline:none}
+  #texcPop .tc-row{display:flex;gap:4px;margin-top:8px;align-items:center}
+  #texcPop .tc-sp{flex:1}
+  #texcPop .tc-row button{border:none;background:transparent;color:var(--muted);width:26px;height:26px;
+    border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0}
+  #texcPop .tc-row button:hover{color:var(--txt);background:var(--card2)}
+  #texcPop .tc-row .tc-claude:hover{color:var(--accent)}
+  #texcPop .tc-row .tc-del:hover{color:#e0726a}
+  /* ===== plan du document ===== */
+  #outline{display:none;position:absolute;top:6px;left:8px;z-index:70;width:250px;max-height:70%;
+    background:var(--card);border:1px solid var(--border-strong,#3f4652);border-radius:10px;
+    box-shadow:0 10px 34px rgba(0,0,0,.4);overflow-y:auto;padding:6px}
+  #outline.open{display:block}
+  #outline .oh{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding:4px 8px 6px}
+  #outline .oi{display:block;width:100%;text-align:left;background:transparent;border:none;color:var(--muted);
+    font:12.5px/1.5 -apple-system,sans-serif;padding:3px 8px;border-radius:6px;cursor:pointer;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #outline .oi:hover{background:var(--card2);color:var(--txt)}
+  #outline .oi.on{color:var(--accent)}
+  #outline .l2{padding-left:20px}
+  #outline .l3{padding-left:32px;font-size:12px}
+  /* ===== console de compilation ===== */
+  #texlog{display:none;flex-shrink:0;max-height:38%;background:var(--card2);border-top:1px solid var(--border);
+    flex-direction:column;min-height:120px}
+  #texlog.open{display:flex}
+  #texlog .tl-head{display:flex;align-items:center;gap:8px;padding:5px 12px;border-bottom:1px solid var(--border);
+    font-size:12px;color:var(--muted);flex-shrink:0}
+  #texlog .tl-head b{color:var(--txt);font-weight:600}
+  #texlog .tl-close{margin-left:auto;background:transparent;border:none;color:var(--muted);cursor:pointer;padding:2px 6px;border-radius:6px}
+  #texlog .tl-close:hover{background:var(--border);color:var(--txt)}
+  #texlog .tl-chat{margin-left:auto;background:transparent;border:1px solid var(--border);color:var(--muted);
+    cursor:pointer;padding:2px 8px;border-radius:6px;font:11px var(--font,system-ui)}
+  #texlog .tl-chat:hover{background:var(--border);color:var(--txt)}
+  #texlog .tl-chat+.tl-close{margin-left:6px}
+  #texlog pre{flex:1;overflow:auto;margin:0;padding:10px 14px;font:11.5px/1.55 var(--code-font,"SF Mono",Menlo,monospace);
+    color:var(--muted);white-space:pre-wrap;word-break:break-word}
+  #texlog .tl-err{color:#e0726a;font-weight:600}
+  #texlog .tl-warn{color:#d7b47a}
+  #texlog .tl-jump{color:var(--accent);cursor:pointer;text-decoration:underline}
+  /* ===== mode Visuel (éditeur CM6, source décorée façon Overleaf) ===== */
+  #texvis{display:none;height:100%;overflow:auto}
+  #right.visual .pdfpage,#right.visual #marker,#right.visual #texread{display:none!important}
+  #right.visual #texvis{display:block}
+  #texvis .tv-b{font-weight:650;color:#f2f4f7}
+  #texvis .tv-i{font-style:italic}
+  #texvis .tv-tt{font-family:var(--code-font,monospace);font-size:.88em;background:rgba(255,255,255,.06);border-radius:4px;padding:0 3px}
+  #texvis .tv-todo{color:#e0726a;font-weight:600}
+  #texvis .tv-cite{color:var(--accent);font-size:.9em}
+  #texvis .tv-comment{color:#646d7b;font-style:italic}
+  #texvis .cm-line.tv-h1{font-size:24px;font-weight:600;letter-spacing:-.01em}
+  #texvis .cm-line.tv-h2{font-size:19px;font-weight:600;letter-spacing:-.01em}
+  #texvis .cm-line.tv-h3{font-size:16px;font-weight:600}
+  #texvis .tv-math .katex{font-size:1.03em}
+  /* ===== mode Lecture (rendu LaTeX-prose façon Claude Science) ===== */
+  #texread{display:none;max-width:760px;margin:0 auto;padding:36px 40px 120px;
+    font-family:Charter,Georgia,"Times New Roman",serif;font-size:17px;line-height:1.7;color:#e6e8ec}
+  #right.reading .pdfpage,#right.reading #marker{display:none!important}
+  #right.reading #texread{display:block}
+  #texread h1{font-size:26px;font-weight:600;text-align:center;margin:0 0 22px;letter-spacing:-.01em}
+  #texread h2{font-size:20px;font-weight:600;margin:30px 0 12px;letter-spacing:-.01em}
+  #texread h3{font-size:17px;font-weight:600;margin:24px 0 10px}
+  #texread h4,#texread h5{font-size:15px;font-weight:600;margin:20px 0 8px;color:#c7ccd4}
+  #texread p{margin:0 0 15px}
+  #texread ul,#texread ol{margin:0 0 15px;padding-left:26px}
+  #texread li{margin:4px 0}
+  #texread strong{font-weight:650;color:#f2f4f7}
+  #texread code{font-family:var(--code-font,"SF Mono",Menlo,monospace);font-size:.88em;
+    background:rgba(255,255,255,.06);padding:1px 5px;border-radius:4px}
+  #texread [data-line]{cursor:text;transition:background .12s;border-radius:3px}
+  #texread [data-line]:hover{background:rgba(232,130,58,.07)}
+  #texread .tex-todo{color:#e0726a;font-weight:600}
+  #texread .tex-cite{color:var(--accent);font-variant:small-caps;font-size:.92em}
+  #texread .tex-ref{color:#868d9a}
+  #texread .tex-fn{color:var(--accent);cursor:help}
+  #texread .tex-env{color:#646d7b;font-style:italic;text-align:center;border:1px dashed #333a45;
+    border-radius:8px;padding:14px;margin:16px 0;font-family:var(--ui-font,sans-serif);font-size:13px}
+  #texread .tex-matherr{color:#e0726a;font-family:monospace;font-size:.9em}
+  #texread .katex{font-size:1.02em}
+  #texread .katex-display{margin:14px 0;overflow-x:auto;overflow-y:hidden}
 </style>
 <script>
-function __ct(){try{return JSON.parse(localStorage.getItem('claudeTargetV1')||'null')}catch(e){return null}}(function(){var T={'Default':{bg:'#202024',card:'#27272a',card2:'#1f1f23',txt:'#e4e4e7',muted:'#a1a1aa',accent:'#5b9dff',border:'#3f3f46'},'Codex One':{bg:'#202024',card:'#2f343f',card2:'#21252b',txt:'#abb2bf',muted:'#7f848e',accent:'#4d78cc',border:'#3e4451'},'Dracula':{bg:'#282a36',card:'#343746',card2:'#21222c',txt:'#f8f8f2',muted:'#9aa0b3',accent:'#bd93f9',border:'#44475a'},'Nord':{bg:'#2e3440',card:'#3b4252',card2:'#272c36',txt:'#e5e9f0',muted:'#9aa3b2',accent:'#88c0d0',border:'#434c5e'}};var t;try{t=T[localStorage.getItem('figTheme')];}catch(e){}t=t||T['Default'];var r=document.documentElement.style;for(var k in t)r.setProperty('--'+k,t[k]);})();</script>
+function __ct(){try{return JSON.parse(localStorage.getItem('claudeTargetV1')||'null')}catch(e){return null}}(function(){var T={'Default':{bg:'#202024',card:'#27272a',card2:'#1f1f23',txt:'#dbdfe5',muted:'#a1a1aa',accent:'#e8823a',border:'#3f3f46'},'Codex One':{bg:'#202024',card:'#2f343f',card2:'#21252b',txt:'#abb2bf',muted:'#7f848e',accent:'#4d78cc',border:'#3e4451'},'Dracula':{bg:'#282a36',card:'#343746',card2:'#21222c',txt:'#f8f8f2',muted:'#9aa0b3',accent:'#bd93f9',border:'#44475a'},'Nord':{bg:'#2e3440',card:'#3b4252',card2:'#272c36',txt:'#e5e9f0',muted:'#9aa3b2',accent:'#88c0d0',border:'#434c5e'}};var t;try{t=T[localStorage.getItem('figTheme')];}catch(e){}t=t||T['Default'];var r=document.documentElement.style;for(var k in t)r.setProperty('--'+k,t[k]);})();</script>
 </head>
 <body>
 <header>
@@ -213,11 +351,11 @@ function __ct(){try{return JSON.parse(localStorage.getItem('claudeTargetV1')||'n
     <button id="popPdf" title="Ouvrir le PDF dans un onglet séparé — synctex actif (clic PDF &#8594; ligne source ici)">PDF &#8599;</button>
   </span>
   <span class="sep"></span>
-  <span class="grp" id="diffGrp" style="display:none">
-    <button id="diffPrev" title="Version précédente">&#8249;</button>
-    <button id="diffTag" title="Voir le diff de cette version">&#177; v1</button>
-    <button id="diffNext" title="Version suivante">&#8250;</button>
-    <button id="diffRestore" title="Rétablir la version affichée sur le disque">Rétablir</button>
+  <span class="grp" id="diffGrp">
+    <button id="diffPrev" style="display:none" title="Version précédente">&#8249;</button>
+    <button id="diffTag" disabled style="opacity:.4" title="Historique des modifications — vide pour l’instant (⌘S ou une modif de l’agent crée une version)"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="1.5" width="11" height="13" rx="2"/><path d="M8 5.2v4M6 7.2h4M6 11h4"/></svg></button>
+    <button id="diffNext" style="display:none" title="Version suivante">&#8250;</button>
+    <button id="diffRestore" style="display:none" title="Rétablir la version affichée sur le disque">Rétablir</button>
   </span>
   <span style="display:none"></span>
   <span class="grp pdfonly">
@@ -230,6 +368,7 @@ function __ct(){try{return JSON.parse(localStorage.getItem('claudeTargetV1')||'n
     <button id="zoomIn" title="Zoom avant">+</button>
   </span>
   <span class="grp editonly">
+    <button id="outlineBtn" title="Plan du document (&#8984;&#8679;O)"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M5.5 3.5h8M5.5 8h8M5.5 12.5h8M2 3.5h.01M2 8h.01M2 12.5h.01"/></svg></button>
     <button id="findBtn" title="Rechercher (&#8984;F)"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="7" cy="7" r="4.4"/><path d="M10.4 10.4L14 14"/></svg></button>
     <button id="moreBtn" title="Plus&hellip;">&#8943;</button>
   </span>
@@ -250,6 +389,16 @@ function __ct(){try{return JSON.parse(localStorage.getItem('claudeTargetV1')||'n
   <span><b>Sélection de texte</b> &#8594; pastille : annoter / envoyer à Claude</span>
   <span><b>Esc</b> annule la sélection</span>
 </div>
+<div id="outline"></div>
+<div id="texcPop"><div class="tc-quote"></div><textarea placeholder="Ton commentaire…"></textarea>
+<div class="tc-row">
+<button class="tc-del" title="Supprimer le commentaire"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M2.5 4h11M6.5 4V2.5h3V4M4 4l.8 9.5h6.4L12 4M6.5 7v4M9.5 7v4"/></svg></button>
+<button class="tc-ok" title="Résoudre (retire le surlignage)"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 8.5l3.5 3.5 7.5-8"/></svg></button>
+<span class="tc-sp"></span>
+<button class="tc-claude" title="Envoyer à Claude (passage + commentaire dans le composer)"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M14 8c0 3-2.7 5.2-6 5.2-.8 0-1.6-.1-2.3-.4L2.5 14l1-2.6C2.6 10.5 2 9.3 2 8c0-3 2.7-5.2 6-5.2S14 5 14 8z"/></svg></button>
+<button class="tc-save" title="Enregistrer (⏎)"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M13 14H3a1 1 0 01-1-1V3a1 1 0 011-1h7.5L14 5.5V13a1 1 0 01-1 1zM5 2v3.5h5V2M5 14v-4.5h6V14"/></svg></button>
+</div></div>
+<div id="texlog"><div class="tl-head"><b>Compilation</b><span id="tlStatus"></span><button class="tl-chat" id="tlChat" title="Envoyer le log au chat"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" style="vertical-align:-2px"><path d="M14 8c0 3-2.7 5.2-6 5.2-.8 0-1.6-.1-2.3-.4L2.5 14l1-2.6C2.6 10.5 2 9.3 2 8c0-3 2.7-5.2 6-5.2S14 5 14 8z"/></svg>&nbsp;Add to chat</button><button class="tl-close" id="tlClose">✕</button></div><pre id="tlBody"></pre></div>
 <div id="statusbar" class="editonly">
   <span id="sbPos">Ln 1, Col 1</span>
   <span id="sbMode"></span>
@@ -302,7 +451,7 @@ if(!IS_TEX){
       // ne PAS écraser #right (le #marker qu'il contient est référencé plus bas)
       r.insertAdjacentHTML("beforeend",
         '<div id="mdprev" style="max-width:820px;margin:0 auto;padding:28px 32px;'
-        + 'font-family:var(--ui-font,-apple-system,sans-serif);font-size:14.5px;line-height:1.65;color:#d6dae0"></div>');
+        + 'font-family:var(--ui-font,-apple-system,sans-serif);font-size:15px;line-height:1.65;color:#d6dae0"></div>');
       const prev = document.getElementById("mdprev");
       const render = () => {
         try{ prev.innerHTML = DOMPurify.sanitize(marked.parse(cm.getValue())); }catch(e){}
@@ -343,9 +492,9 @@ if(!IS_TEX){
         const pillBtn = document.createElement("button");
         pillBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" style="vertical-align:-2px"><path d="M14 8c0 3-2.7 5.2-6 5.2-.8 0-1.6-.1-2.3-.4L2.5 14l1-2.6C2.6 10.5 2 9.3 2 8c0-3 2.7-5.2 6-5.2S14 5 14 8z"/></svg>&nbsp; Add to chat';
         pillBtn.style.cssText = "position:fixed;z-index:9999;display:none;background:#2c313a;"
-          + "color:#e6e6e6;border:1px solid #3a414d;border-radius:999px;padding:7px 14px;"
+          + "color:#dbdfe5;border:1px solid #3a414d;border-radius:999px;padding:7px 14px;"
           + "font-size:13px;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.5);"
-          + "font-family:-apple-system,sans-serif";
+          + "font-family:var(--ui-font)";
         document.body.appendChild(pillBtn);
         let selTxt = "";
         pillBtn.addEventListener("mousedown", (e) => {
@@ -412,13 +561,22 @@ const _base = path ? path.split("/").pop() : "(no file)";
 document.getElementById("fname").textContent = _base;
 document.title = isPdfMode ? _base + " — PDF" : _base;
 
-let cm = null, diskMtime = 0, dirty = false, pdfDoc = null, pageEls = [], pdfVps = [];
+let cm = null, diskMtime = 0, dirty = false, lastSavedText = null, pdfDoc = null, pageEls = [], pdfVps = [];
 let zoom = parseFloat(localStorage.getItem("texZoom") || "1");
 const stateEl = document.getElementById("state");
-const setState = (cls, txt) => { stateEl.className = cls; stateEl.textContent = txt; stateEl.title = txt; };
+let __stT = null;
+const setState = (cls, txt) => { stateEl.className = cls; stateEl.textContent = txt; stateEl.title = txt;
+  clearTimeout(__stT);
+  if(cls === "ok") __stT = setTimeout(() => { if(stateEl.className === "ok") stateEl.textContent = ""; }, 2500);
+};
 const ddot = document.getElementById("ddot");
 
 // word wrap (VS Code-style): off | window | fixed column (80/100/120)
+// parité VS Code : wrap désactivé par défaut. L'ancien défaut "win" re-coupait
+// les sources déjà retournées à la ligne en dur → « paragraphes brisés ». Bascule
+// unique win→off pour les réglages hérités ; un choix explicite reste respecté.
+try { if(localStorage.getItem("cmWrap")==="win" && !localStorage.getItem("cmWrapMig")){
+  localStorage.setItem("cmWrap","off"); localStorage.setItem("cmWrapMig","1"); } } catch(e){}
 const wrapSel = document.getElementById("wrapSel");
 function applyWrap(v){
   localStorage.setItem("cmWrap", v);
@@ -433,8 +591,233 @@ function applyWrap(v){
     cm.refresh();
   }
 }
-wrapSel.value = localStorage.getItem("cmWrap") || "win";
+wrapSel.value = localStorage.getItem("cmWrap") || "off";
 wrapSel.onchange = () => applyWrap(wrapSel.value);
+
+const LATEX_GHOST_COMMANDS = [
+  "abstract", "author", "begin", "bibliography", "bibliographystyle", "caption",
+  "chapter", "cite", "citep", "citet", "clearpage", "cref", "documentclass",
+  "emph", "end", "eqref", "figure", "footnote", "includegraphics", "item",
+  "label", "maketitle", "newpage", "paragraph", "ref", "section", "subsection",
+  "subsubsection", "table", "textbf", "textit", "texttt", "title", "url"
+];
+const LATEX_GHOST_ENVS = [
+  "document", "abstract", "figure", "table", "itemize", "enumerate",
+  "equation", "equation*", "align", "align*", "gather", "gather*",
+  "tabular", "center", "quote", "verbatim", "thebibliography"
+];
+const LATEX_GHOST_WORDS = [
+  "albedo", "analysis", "approach", "background", "because", "between",
+  "compared", "consistent", "decrease", "effect", "estimated", "figure",
+  "however", "important", "increase", "indicates", "method", "model",
+  "observed", "regional", "response", "results", "section", "significant",
+  "snow", "surface", "therefore", "using", "whereas", "which"
+];
+const LATEX_GHOST_NEXT = {
+  albedo: ["response", "change", "signal"],
+  analysis: ["shows", "indicates", "suggests"],
+  model: ["shows", "estimates", "includes"],
+  our: ["results", "analysis", "model"],
+  results: ["show", "suggest", "indicate"],
+  surface: ["albedo", "response", "conditions"],
+  the: ["model", "results", "analysis", "surface", "observed"],
+  these: ["results", "patterns", "estimates"],
+  this: ["suggests", "indicates", "section", "result"],
+  we: ["find", "estimate", "show", "use"]
+};
+let ghostMark = null, ghostText = "", ghostTimer = null, ghostHiddenUntilChange = false;
+let ghostCacheRaw = null, ghostCacheTokens = null, ghostCacheLabels = null;
+
+function ghostClear(){
+  if(ghostMark){ ghostMark.clear(); ghostMark = null; }
+  ghostText = "";
+}
+function ghostInvalidate(){
+  ghostCacheRaw = ghostCacheTokens = ghostCacheLabels = null;
+}
+function ghostEscape(s){
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+function ghostTextBeforeCursor(){
+  const cur = cm.getCursor();
+  const out = [];
+  const start = Math.max(0, cur.line - 160);
+  for(let i = start; i < cur.line; i++) out.push(cm.getLine(i));
+  out.push(cm.getLine(cur.line).slice(0, cur.ch));
+  return out.join("\n");
+}
+function ghostCleanText(src){
+  return String(src || "")
+    .replace(/(^|[^\\])%.*$/gm, "$1")
+    .replace(/\\(?:begin|end|cite[a-z]*|ref|eqref|cref|label|url|includegraphics)\{[^}]*\}/g, " ")
+    .replace(/\\[a-zA-Z]+\*?(?:\[[^\]]*\])?(?:\{[^}]*\})?/g, " ")
+    .replace(/[{}[\]$^_~&#]/g, " ")
+    .replace(/[.,;:!?()"]/g, " ");
+}
+function ghostTokens(src){
+  return ghostCleanText(src).toLowerCase().match(/[a-z][a-z'-]{2,}/g) || [];
+}
+function ghostDocumentText(){
+  return cm ? cm.getValue() : "";
+}
+function ghostDocumentTokens(){
+  const raw = ghostDocumentText();
+  if(raw !== ghostCacheRaw){
+    ghostCacheRaw = raw;
+    ghostCacheTokens = ghostTokens(raw);
+    ghostCacheLabels = null;
+  }
+  return ghostCacheTokens || [];
+}
+function ghostEnvironmentNames(){
+  const names = LATEX_GHOST_ENVS.slice();
+  const re = /\\begin\{([^}]+)\}/g;
+  let m;
+  while((m = re.exec(ghostDocumentText()))){
+    if(!names.includes(m[1])) names.push(m[1]);
+  }
+  return names;
+}
+function ghostOpenEnvironment(ctx){
+  const stack = [];
+  const re = /\\(begin|end)\{([^}]+)\}/g;
+  let m;
+  while((m = re.exec(ctx))){
+    if(m[1] === "begin") stack.push(m[2]);
+    else {
+      const i = stack.lastIndexOf(m[2]);
+      if(i >= 0) stack.splice(i, 1);
+    }
+  }
+  return stack[stack.length - 1] || "";
+}
+function ghostFallbackWord(prefix){
+  return LATEX_GHOST_WORDS.find(w => w.startsWith(prefix) && w !== prefix) || "";
+}
+function ghostBestWord(prefix){
+  if(prefix.length < 2) return "";
+  const tokens = ghostDocumentTokens();
+  const score = Object.create(null);
+  tokens.forEach((w, i) => {
+    if(w !== prefix && w.startsWith(prefix)){
+      score[w] = (score[w] || 0) + 2 + Math.min(5, i / Math.max(1, tokens.length));
+    }
+  });
+  return Object.keys(score).sort((a,b) => score[b] - score[a] || a.length - b.length)[0] || ghostFallbackWord(prefix);
+}
+function ghostBestNext(prev){
+  if(!prev || prev.length < 3) return "";
+  const tokens = ghostDocumentTokens();
+  const score = Object.create(null);
+  for(let i = 0; i < tokens.length - 1; i++){
+    if(tokens[i] === prev && tokens[i + 1] !== prev) score[tokens[i + 1]] = (score[tokens[i + 1]] || 0) + 1;
+  }
+  return Object.keys(score).sort((a,b) => score[b] - score[a] || a.length - b.length)[0] || (LATEX_GHOST_NEXT[prev] || [])[0] || "";
+}
+function ghostLabelSuggestion(prefix){
+  if(!ghostCacheLabels){
+    const labels = [];
+    const re = /\\(?:label|bibitem)\{([^}]+)\}/g;
+    let m;
+    while((m = re.exec(ghostDocumentText()))) labels.push(m[1]);
+    ghostCacheLabels = labels;
+  }
+  const labels = ghostCacheLabels;
+  return labels.find(x => x.startsWith(prefix) && x !== prefix) || "";
+}
+function ghostSuggestion(){
+  if(!cm || !IS_TEX || ghostHiddenUntilChange || cm.somethingSelected()) return "";
+  const cur = cm.getCursor();
+  const line = cm.getLine(cur.line) || "";
+  const before = line.slice(0, cur.ch);
+  const after = line.slice(cur.ch);
+  if(/\S/.test(after.slice(0, 1))) return "";
+  if(/^\s*%/.test(before)) return "";
+  const dollars = (before.match(/(^|[^\\])\$/g) || []).length;
+  if(dollars % 2) return "";
+
+  let m = before.match(/\\(begin|end)\{([^}]*)$/);
+  if(m){
+    const kind = m[1], raw = m[2];
+    const envs = ghostEnvironmentNames();
+    const first = kind === "end" ? ghostOpenEnvironment(ghostTextBeforeCursor()) : "";
+    const ordered = first ? [first].concat(envs.filter(x => x !== first)) : envs;
+    const hit = ordered.find(env => env.startsWith(raw) && env !== raw);
+    return hit ? hit.slice(raw.length) + "}" : "";
+  }
+
+  m = before.match(/\\([A-Za-z]*)$/);
+  if(m){
+    const raw = m[1];
+    if(raw.length < 1) return "";
+    const hit = LATEX_GHOST_COMMANDS.find(cmd => cmd.startsWith(raw) && cmd !== raw);
+    return hit ? hit.slice(raw.length) : "";
+  }
+
+  m = before.match(/\\(?:cite[a-z]*|ref|eqref|cref|Cref)\{([^},\s]*)$/);
+  if(m){
+    const hit = ghostLabelSuggestion(m[1]);
+    return hit ? hit.slice(m[1].length) : "";
+  }
+
+  m = before.match(/([A-Za-z][A-Za-z'-]{1,})$/);
+  if(m){
+    const prefix = m[1].toLowerCase();
+    const hit = ghostBestWord(prefix);
+    return hit ? hit.slice(prefix.length) : "";
+  }
+
+  m = before.match(/([A-Za-z][A-Za-z'-]{2,})\s+$/);
+  if(m){
+    const hit = ghostBestNext(m[1].toLowerCase());
+    return hit ? hit : "";
+  }
+
+  const ctx = ghostTextBeforeCursor();
+  m = ctx.match(/([A-Za-z][A-Za-z'-]{2,})\s*$/);
+  if(m){
+    const hit = ghostBestNext(m[1].toLowerCase());
+    return hit ? " " + hit : "";
+  }
+  return "";
+}
+function ghostShow(text){
+  ghostClear();
+  if(!text || !/\S/.test(text)) return;
+  const span = document.createElement("span");
+  span.className = "cm-ghost-suggest";
+  span.innerHTML = ghostEscape(text).replace(/ /g, "&nbsp;");
+  ghostText = text;
+  ghostMark = cm.setBookmark(cm.getCursor(), {widget: span, insertLeft: false});
+}
+function ghostUpdate(delay){
+  clearTimeout(ghostTimer);
+  ghostTimer = setTimeout(() => ghostShow(ghostSuggestion()), delay ?? 120);
+}
+function ghostAccept(){
+  if(!ghostText) return false;
+  const text = ghostText;
+  ghostClear();
+  cm.replaceRange(text, cm.getCursor(), null, "+ghost");
+  return true;
+}
+function ghostInstall(){
+  if(!cm || !IS_TEX) return;
+  cm.addKeyMap({
+    "Tab": function(){ return ghostAccept() ? null : CodeMirror.Pass; },
+    "Esc": function(){ if(ghostText){ ghostHiddenUntilChange = true; ghostClear(); return null; } return CodeMirror.Pass; }
+  });
+  cm.on("inputRead", () => { ghostHiddenUntilChange = false; ghostUpdate(90); });
+  cm.on("cursorActivity", () => ghostUpdate(120));
+  cm.on("change", (_, ch) => {
+    ghostInvalidate();
+    if(ch.origin !== "+ghost"){
+      ghostHiddenUntilChange = false;
+      ghostUpdate(140);
+    }
+  });
+  cm.on("blur", ghostClear);
+}
 
 async function load(){
   const r = await fetch("/code?path=" + encodeURIComponent(path));
@@ -449,6 +832,7 @@ async function load(){
     clearTimeout(__rsT);
     __rsT=setTimeout(() => { if(cm) cm.refresh(); }, 120);
   });
+  lastSavedText = j.text;
   cm = CodeMirror(document.getElementById("left"), {
     value: j.text, mode: __CM_MODE, theme: "material-darker",
     lineNumbers: true, lineWrapping: true, viewportMargin: 50, styleSelectedText: true,
@@ -461,7 +845,21 @@ async function load(){
     const el = document.getElementById("sbPos");
     if (el) el.textContent = "Ln " + (c.line + 1) + ", Col " + (c.ch + 1);
   });
+  // ligne active (VS Code) : surbrillance discrète + numéro de ligne courant en clair
+  let __activeLn = null;
+  cm.on("cursorActivity", () => {
+    const l = cm.getCursor().line;
+    if (l === __activeLn) return;
+    if (__activeLn != null) {
+      cm.removeLineClass(__activeLn, "background", "cm-activeline");
+      cm.removeLineClass(__activeLn, "gutter", "cm-activeline-gutter");
+    }
+    cm.addLineClass(l, "background", "cm-activeline");
+    cm.addLineClass(l, "gutter", "cm-activeline-gutter");
+    __activeLn = l;
+  });
   cm.on("change", (_, ch) => { if(ch.origin !== "setValue"){ dirty = true; ddot.style.display = "inline"; setState("dirty", "modified"); } });
+  ghostInstall();
   // ?line=N (ou N-M) : sauter à la ligne et la surligner brièvement (liens fichier:ligne du chat)
   const __lineParam = new URLSearchParams(location.search).get("line");
   if(__lineParam){
@@ -550,6 +948,18 @@ async function load(){
     cm.refresh();
   })();
 
+  // Le divider du panneau (Bibliothèque/atelier) redimensionne l'iframe SANS
+  // émettre de 'resize' fenêtre dans WebKit → CodeMirror gardait son ancien
+  // calcul de wrap/hauteur et la gouttière se décalait (un numéro toutes les
+  // 2 lignes). ResizeObserver capte TOUTE variation de largeur, drag inclus.
+  (function(){
+    let raf = 0;
+    const doRefresh = () => { raf = 0; if(cm) cm.refresh(); };
+    const ro = new ResizeObserver(() => { if(!raf) raf = requestAnimationFrame(doRefresh); });
+    const leftEl = document.getElementById("left");
+    if(leftEl) ro.observe(leftEl);
+  })();
+
   // initial loadPdf is triggered by the /texroot resolution (single-trigger rule)
 }
 
@@ -559,6 +969,10 @@ async function save(){
   const j = await r.json();
   if(j.error === "conflit"){ setState("err", "disk conflict — re-⌘S to overwrite"); diskMtime = j.mtime; return false; }
   diskMtime = j.mtime; dirty = false; ddot.style.display = "none"; setState("ok", "saved");
+  // versionner AUSSI tes propres modifications (une version par sauvegarde)
+  const savedNow = cm.getValue();
+  if(lastSavedText !== null && typeof diffPush === "function") diffPush(lastSavedText, savedNow);
+  lastSavedText = savedNow;
   if (window.__onSaved) window.__onSaved();
   return true;
 }
@@ -569,12 +983,182 @@ async function compile(){
   const r = await fetch("/compile", {method:"POST", headers:{"Content-Type":"application/json"},
     body: JSON.stringify({path})});
   const j = await r.json();
-  if(!j.ok) return setState("err", "✗ " + (j.error || "failed"));
+  showCompileLog(j);
+  if(!j.ok) return setState("err", "✗ compilation échouée — voir la console");
   if(j.pdf) pdfPath = j.pdf;
   setState("ok", "✓ compiled " + new Date().toLocaleTimeString());
   loadPdf();
   if(bc) bc.postMessage({t: "compiled"});   // PDF tabs reload themselves
 }
+
+// console de compilation : log complet, erreurs en rouge, l.<n> cliquable → ligne source
+let lastCompile = null; // {log, ok} — pour « Add to chat »
+function showCompileLog(j){
+  const el = document.getElementById("texlog"), body = document.getElementById("tlBody");
+  lastCompile = { log: String(j.log || j.error || ""), ok: !!j.ok };
+  document.getElementById("tlStatus").textContent = j.ok ? "· réussie" : "· échec";
+  const esc = (t) => t.replace(/&/g,"&amp;").replace(/</g,"&lt;");
+  const html = esc(String(j.log || j.error || "(pas de log)"))
+    .split("\n").map(line => {
+      let cls = "";
+      if(/^!|Fatal error|Emergency stop/.test(line)) cls = "tl-err";
+      else if(/^LaTeX Warning|^Package .* Warning|Overfull|Underfull/.test(line)) cls = "tl-warn";
+      const withJump = line.replace(/\bl\.(\d+)/g, (m,n)=>`<span class="tl-jump" data-l="${n}">l.${n}</span>`)
+                           .replace(/lines? (\d+)/g, (m,n)=>`<span class="tl-jump" data-l="${n}">${m}</span>`);
+      return cls ? `<span class="${cls}">${withJump}</span>` : withJump;
+    }).join("\n");
+  body.innerHTML = html;
+  el.classList.toggle("open", !j.ok);   // s'ouvre à l'échec, se ferme si succès
+  if(!j.ok){ const firstErr = body.querySelector(".tl-err"); if(firstErr) firstErr.scrollIntoView({block:"start"}); }
+}
+// ---- commentaires ancrés : stockés via /pdfannot (rel = tex:<path>) ----
+const texcPop = document.getElementById("texcPop");
+let texcAll = [];        // {id, from, to, text, comment}
+let texcMarks = {};      // id -> markText
+let texcCur = null;      // id en cours d'édition (ou objet neuf)
+const texcRel = () => "tex-comments:" + path;
+async function texcLoad(){
+  try {
+    const r = await fetch("/pdfannot?rel=" + encodeURIComponent(texcRel()));
+    const j = await r.json();
+    texcAll = Array.isArray(j.annots) ? j.annots : [];
+    texcAll.forEach(texcMark);
+  } catch(e){}
+}
+function texcSave(){
+  fetch("/pdfannot", {method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({rel: texcRel(), annots: texcAll})}).catch(()=>{});
+}
+function texcMark(c){
+  if(!cm) return;
+  try {
+    texcMarks[c.id] = cm.markText(c.from, c.to, {className: "texc-hl", attributes: {"data-texc": c.id}});
+  } catch(e){}
+}
+function texcOpen(sel){
+  texcCur = { id: "c" + Date.now(), from: sel.from, to: sel.to, text: String(sel.text).slice(0, 300), comment: "" };
+  texcShow(texcCur, true);
+}
+let texcOpenedAt = 0;
+function texcShow(c, isNew){
+  texcOpenedAt = Date.now();
+  texcPop.querySelector(".tc-quote").textContent = "« " + c.text.slice(0, 140) + (c.text.length > 140 ? "…" : "") + " »";
+  texcPop.querySelector("textarea").value = c.comment || "";
+  texcPop.querySelector(".tc-del").style.display = isNew ? "none" : "";
+  texcPop.querySelector(".tc-ok").style.display = isNew ? "none" : "";
+  const co = cm.charCoords(c.to, "window");
+  texcPop.style.display = "block";
+  texcPop.style.left = Math.min(Math.max(8, co.left - 150), innerWidth - 310) + "px";
+  texcPop.style.top = Math.min(co.bottom + 8, innerHeight - texcPop.offsetHeight - 8) + "px";
+  texcPop.querySelector("textarea").focus();
+}
+texcPop.querySelector("textarea").addEventListener("keydown", (e) => {
+  if(e.key === "Enter" && !e.shiftKey){ e.preventDefault(); texcPop.querySelector(".tc-save").click(); }
+});
+texcPop.querySelector(".tc-save").onclick = () => {
+  if(!texcCur) return;
+  texcCur.comment = texcPop.querySelector("textarea").value.trim();
+  if(!texcAll.find(x => x.id === texcCur.id)){ texcAll.push(texcCur); texcMark(texcCur); }
+  texcSave(); texcPop.style.display = "none"; texcCur = null;
+};
+function texcRemove(id){
+  texcAll = texcAll.filter(x => x.id !== id);
+  if(texcMarks[id]){ texcMarks[id].clear(); delete texcMarks[id]; }
+  texcSave(); texcPop.style.display = "none"; texcCur = null;
+}
+texcPop.querySelector(".tc-ok").onclick = () => { if(texcCur) texcRemove(texcCur.id); };
+texcPop.querySelector(".tc-del").onclick = () => { if(texcCur) texcRemove(texcCur.id); };
+texcPop.querySelector(".tc-claude").onclick = () => {
+  if(!texcCur) return;
+  texcCur.comment = texcPop.querySelector("textarea").value.trim();
+  const msg = path + " (" + "L" + (texcCur.from.line+1) + "-" + (texcCur.to.line+1) + ") : \u00ab " + texcCur.text.slice(0,200) + " \u00bb\nCommentaire : " + (texcCur.comment || "(voir passage)");
+  __atelierPost({type: "atelier-add-to-chat", text: msg});
+  if(!texcAll.find(x => x.id === texcCur.id)){ texcAll.push(texcCur); texcMark(texcCur); }
+  texcSave(); texcPop.style.display = "none"; texcCur = null;
+};
+// clic sur un surlignage → rouvrir
+document.addEventListener("click", (e) => {
+  const el = e.target.closest(".texc-hl");
+  if(el){
+    const id = el.getAttribute("data-texc");
+    const c = texcAll.find(x => x.id === id);
+    if(c){ texcCur = c; texcShow(c, false); return; }
+  }
+  // ignorer le clic qui vient d ouvrir (bouton Commenter dans la pilule de sélection)
+  // le mousedown d ouverture cache la pilule → le click suivant atterrit ailleurs : ignorer 350ms
+  if(Date.now() - texcOpenedAt < 350) return;
+  if(!texcPop.contains(e.target) && !e.target.closest("#selPill")) texcPop.style.display = "none";
+});
+// charger quand cm est prêt
+(function waitCmC(){ if(cm){ texcLoad(); } else setTimeout(waitCmC, 150); })();
+
+// ---- plan du document : \section/\subsection → navigation ----
+const outlineEl = document.getElementById("outline");
+function buildOutline(){
+  if(!cm) return;
+  const lines = cm.getValue().split("\n");
+  const items = [];
+  const RE = /^\s*\\(section|subsection|subsubsection)\*?\{([^{}]*)\}/;
+  lines.forEach((ln, i) => { const m = RE.exec(ln); if(m) items.push({lvl:{section:1,subsection:2,subsubsection:3}[m[1]], t:m[2], line:i}); });
+  const cur = cm.getCursor().line;
+  let active = -1;
+  items.forEach((it, k) => { if(it.line <= cur) active = k; });
+  outlineEl.innerHTML = '<div class="oh">Plan</div>' + (items.length
+    ? items.map((it,k)=>`<button class="oi l${it.lvl}${k===active?" on":""}" data-l="${it.line}">${it.t.replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]))}</button>`).join("")
+    : '<div class="oi" style="cursor:default">aucune section</div>');
+}
+function toggleOutline(force){
+  const open = force ?? !outlineEl.classList.contains("open");
+  outlineEl.classList.toggle("open", open);
+  if(open) buildOutline();
+}
+outlineEl.addEventListener("click", (e) => {
+  const b = e.target.closest(".oi[data-l]"); if(!b) return;
+  const ln = parseInt(b.dataset.l, 10);
+  cm.setCursor({line: ln, ch: 0}); cm.focus();
+  cm.scrollIntoView({line: ln, ch: 0}, 80);
+  toggleOutline(false);
+});
+document.getElementById("outlineBtn").onclick = () => toggleOutline();
+document.addEventListener("keydown", (e) => {
+  if((e.metaKey||e.ctrlKey) && e.shiftKey && (e.key==="o"||e.key==="O")){ e.preventDefault(); toggleOutline(); }
+  if(e.key==="Escape") toggleOutline(false);
+});
+document.addEventListener("mousedown", (e) => {
+  if(outlineEl.classList.contains("open") && !outlineEl.contains(e.target) && e.target.id!=="outlineBtn" && !e.target.closest("#outlineBtn"))
+    toggleOutline(false);
+});
+document.getElementById("tlClose").onclick = () => document.getElementById("texlog").classList.remove("open");
+// « Add to chat » : envoie le log de compilation au chat de l'app hôte.
+// Sélection dans la console → seulement la sélection ; sinon la fin du log (les erreurs y sont).
+document.getElementById("tlChat").onclick = () => {
+  if(!lastCompile) return;
+  const sel = String(window.getSelection() || "").trim();
+  let extrait = sel;
+  if(!extrait){
+    const lines = lastCompile.log.split("\n");
+    extrait = lines.slice(-120).join("\n");
+    if(extrait.length > 6000) extrait = extrait.slice(-6000);
+  }
+  const nom = (path || "").split("/").pop() || "document.tex";
+  const statut = lastCompile.ok ? "réussie" : "ÉCHEC";
+  __atelierPost({type:"atelier-add-to-chat",
+    text: "Log de compilation LaTeX (" + statut + ") — " + nom + " :\n```\n" + extrait + "\n```"});
+  const b = document.getElementById("tlChat");
+  const prev = b.innerHTML; b.textContent = "✓ envoyé";
+  setTimeout(() => { b.innerHTML = prev; }, 1400);
+};
+document.getElementById("tlBody").addEventListener("click", (e) => {
+  const t = e.target.closest(".tl-jump"); if(!t || !cm) return;
+  const ln = parseInt(t.dataset.l, 10) - 1;
+  cm.setCursor({line: ln, ch: 0}); cm.focus(); cm.scrollIntoView({line: ln, ch: 0}, 120);
+});
+// l'état "✗ …" devient cliquable pour rouvrir la console
+document.getElementById("state").style.cursor = "pointer";
+document.getElementById("state").addEventListener("click", () => {
+  const el = document.getElementById("texlog");
+  if(document.getElementById("tlBody").textContent) el.classList.toggle("open");
+});
 
 let _pdfToken = 0;
 async function loadPdf(){
@@ -637,7 +1221,7 @@ async function synctexView(){
   const r = await fetch("/synctex", {method:"POST", headers:{"Content-Type":"application/json"},
     body: JSON.stringify({dir:"view", tex: path, pdf: pdfPath, line})});
   const j = await r.json();
-  if(!j.page) return setState("err", "synctex: no match");
+  if(!j.page) return setState("hint", "synctex : pas de correspondance ici");
   if(bc) bc.postMessage({t: "view", page: j.page, y: j.y});   // separate PDF tabs scroll too
   if(pdfDoc && !showMarker(j.page, j.y) ) setState("err", "synctex: page not rendered");
 }
@@ -657,7 +1241,7 @@ async function synctexEdit(page, x, y){
   const r = await fetch("/synctex", {method:"POST", headers:{"Content-Type":"application/json"},
     body: JSON.stringify({dir:"edit", tex: path, pdf: pdfPath, page, x, y})});
   const j = await r.json();
-  if(!j.line) return setState("err", "synctex: no match");
+  if(!j.line) return setState("hint", "synctex : pas de correspondance ici");
   if(cm) jumpToLine(j.line);
   if(bc) bc.postMessage({t: "jump", line: j.line});   // editor tab jumps when we're the PDF tab
 }
@@ -688,14 +1272,20 @@ const selTa = selPill.querySelector("textarea");
     });
     selPill.style.cssText += ';background:transparent;border:none;box-shadow:none;padding:0;min-width:0;width:auto';
     if (__go){ __go.innerHTML = '<svg width=\'13\' height=\'13\' viewBox=\'0 0 16 16\' fill=\'none\' stroke=\'currentColor\' stroke-width=\'1.3\' style=\'vertical-align:-2px\'><path d=\'M14 8c0 3-2.7 5.2-6 5.2-.8 0-1.6-.1-2.3-.4L2.5 14l1-2.6C2.6 10.5 2 9.3 2 8c0-3 2.7-5.2 6-5.2S14 5 14 8z\'/></svg>&nbsp; Add to chat';
-      __go.style.cssText = 'width:auto;min-width:0;height:auto;border-radius:999px;padding:7px 14px;font-size:13px;white-space:nowrap;background:#2c313a;color:#e6e6e6;border:1px solid #3a414d;box-shadow:0 6px 18px rgba(0,0,0,0.5);cursor:pointer'; }
+      __go.style.cssText = 'width:auto;min-width:0;height:auto;border-radius:999px;padding:7px 14px;font-size:13px;white-space:nowrap;background:#2c313a;color:#dbdfe5;border:1px solid #3a414d;box-shadow:0 6px 18px rgba(0,0,0,0.5);cursor:pointer';
+      var __cbtn = document.createElement('button');
+      __cbtn.innerHTML = '<svg width=\'13\' height=\'13\' viewBox=\'0 0 16 16\' fill=\'none\' stroke=\'currentColor\' stroke-width=\'1.3\' style=\'vertical-align:-2px\'><path d=\'M3 2.5h10v8H8l-3 3v-3H3v-8z\'/></svg>&nbsp; Commenter';
+      __cbtn.style.cssText = __go.style.cssText;
+      __cbtn.onmousedown = function(e){ e.preventDefault(); e.stopPropagation(); if(lastSel) texcOpen(lastSel); selHide(); };
+      __go.insertAdjacentElement('afterend', __cbtn);
+    }
   }
 
 let lastSel = null;
 function selPillShow(f, t, sel){
   // don't reposition/steal focus while the user is typing a comment
   if(selPill.style.display === "flex" && (document.activeElement === selTa || selTa.value)) return;
-  lastSel = {text: sel, page: "L" + (f.line+1) + "-" + (t.line+1)};
+  lastSel = {text: sel, page: "L" + (f.line+1) + "-" + (t.line+1), from: {line:f.line, ch:f.ch}, to: {line:t.line, ch:t.ch}};
   const c = cm.charCoords(t, "window");
   selPill.style.display = "flex";
   const w = selPill.offsetWidth, h = selPill.offsetHeight;
@@ -797,6 +1387,253 @@ function applyPdfVisible(v){
   if(cm) cm.refresh();
 }
 document.getElementById("togglePdf").onclick = () => applyPdfVisible(rightEl.style.display === "none");
+
+// ===== mode Lecture : rendu LaTeX-prose (KaTeX) dans #right, façon Claude Science =====
+// Parseur LaTeX-prose → HTML (mode Lecture, façon Claude Science).
+// Ambition : rendre la PROSE lisible, pas compiler LaTeX. Dégradation gracieuse :
+// tout ce qu'on ne connaît pas garde son texte, jamais de crash.
+
+function texToHtml(src, katex) {
+  src = String(src || "");
+  // 1. corps entre \begin{document}..\end{document} si présent
+  const doc = /\\begin\{document\}([\s\S]*?)\\end\{document\}/.exec(src);
+  let body = doc ? doc[1] : src;
+
+  // 2. retirer commentaires (% non échappé jusqu'à la fin de ligne)
+  body = body.replace(/(^|[^\\])%.*$/gm, "$1");
+
+  // 3. protéger les maths : on remplace par des jetons, rendus KaTeX après
+  const math = [];
+  const stash = (tex, display) => { math.push({ tex: tex.trim(), display }); return `\x00M${math.length - 1}\x00`; };
+  body = body.replace(/\$\$([\s\S]+?)\$\$/g, (_, t) => stash(t, true));
+  body = body.replace(/\\\[([\s\S]+?)\\\]/g, (_, t) => stash(t, true));
+  body = body.replace(/\\begin\{(equation|align|equation\*|align\*|gather|gather\*)\}([\s\S]*?)\\end\{\1\}/g,
+    (_, env, t) => stash(t, true));
+  body = body.replace(/\$([^$]+?)\$/g, (_, t) => stash(t, false));
+  body = body.replace(/\\\(([\s\S]+?)\\\)/g, (_, t) => stash(t, false));
+
+  // util : échappe le HTML (le texte source n'est jamais du HTML)
+  const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+  // 4. découper en blocs par ligne, en suivant le numéro de ligne source
+  const lines = body.split("\n");
+  const blocks = []; // {type, html, line}
+  let para = [], paraLine = 0, list = null;
+  const flushPara = () => {
+    if (para.length) { blocks.push({ type: "p", text: para.join(" "), line: paraLine }); para = []; }
+  };
+  const flushList = () => { if (list) { blocks.push(list); list = null; } };
+
+  for (let i = 0; i < lines.length; i++) {
+    const raw = lines[i];
+    const line = raw.trim();
+    const ln = i + 1;
+    let m;
+    if (!line) { flushPara(); flushList(); continue; }
+    // titres
+    if ((m = /^\\(title|section|subsection|subsubsection|paragraph)\*?\{([\s\S]*?)\}\s*$/.exec(line))) {
+      flushPara(); flushList();
+      const tag = { title: "h1", section: "h2", subsection: "h3", subsubsection: "h4", paragraph: "h5" }[m[1]];
+      blocks.push({ type: "h", tag, text: m[2], line: ln }); continue;
+    }
+    if (/^\\(begin|end)\{(itemize|enumerate)\}/.test(line)) {
+      flushPara();
+      if (/^\\begin/.test(line)) { flushList(); list = { type: "list", ordered: /enumerate/.test(line), items: [], line: ln }; }
+      else flushList();
+      continue;
+    }
+    if ((m = /^\\item\s*([\s\S]*)$/.exec(line)) && list) { list.items.push({ text: m[1], line: ln }); continue; }
+    // environnements ignorés (rendus en encadré léger)
+    if ((m = /^\\begin\{(figure|table|tabular|tikzpicture|thebibliography|abstract)\*?\}/.exec(line))) {
+      flushPara(); flushList();
+      if (m[1] === "abstract") { blocks.push({ type: "h", tag: "h2", text: "Abstract", line: ln }); continue; }
+      // avaler jusqu'au \end correspondant
+      const envName = m[1];
+      let j = i + 1;
+      while (j < lines.length && !new RegExp("\\\\end\\{" + envName).test(lines[j])) j++;
+      if (envName !== "thebibliography")
+        blocks.push({ type: "env", name: envName, line: ln });
+      i = j; continue;
+    }
+    if (/^\\end\{abstract\}/.test(line)) { flushPara(); flushList(); continue; }
+    // lignes de commande pure sans prose (\maketitle, \newpage, \clearpage, \bibliography, \input...)
+    if (/^\\(maketitle|newpage|clearpage|pagebreak|bibliographystyle|bibliography|input|include|tableofcontents|noindent|centering|raggedright|hline|toprule|midrule|bottomrule)\b/.test(line)) {
+      continue;
+    }
+    // sinon : accumuler dans le paragraphe courant
+    if (!para.length) paraLine = ln;
+    para.push(line);
+  }
+  flushPara(); flushList();
+
+  // 5. rendu inline d'un fragment de texte LaTeX → HTML
+  function inline(t) {
+    t = esc(t);
+    // jetons math d'abord (déjà échappés par le \x00 qui survit à esc)
+    // (on les remplace en toute fin, après les commandes)
+    // typographie
+    t = t.replace(/---/g, "—").replace(/--/g, "–")
+         .replace(/``/g, "“").replace(/''/g, "”").replace(/`/g, "‘")
+         .replace(/~/g, " ")
+         .replace(/\\%/g, "%").replace(/\\&/g, "&amp;").replace(/\\_/g, "_")
+         .replace(/\\#/g, "#").replace(/\\\$/g, "$").replace(/\\ /g, " ")
+         .replace(/\\\\/g, "<br>").replace(/\\newline/g, "<br>");
+    // notes de brouillon : [[...]] et \todo{...}  → rouge
+    t = t.replace(/\[\[([\s\S]*?)\]\]/g, '<span class="tex-todo">[[$1]]</span>');
+    t = t.replace(/\\todo\{([\s\S]*?)\}/g, '<span class="tex-todo">$1</span>');
+    t = t.replace(/\\textcolor\{[^}]*\}\{([\s\S]*?)\}/g, '<span class="tex-todo">$1</span>');
+    // gras / italique / mono / souligné
+    for (let k = 0; k < 3; k++) { // imbrications simples
+      t = t.replace(/\\textbf\{([^{}]*)\}/g, "<strong>$1</strong>")
+           .replace(/\\(emph|textit|textsl)\{([^{}]*)\}/g, "<em>$2</em>")
+           .replace(/\\texttt\{([^{}]*)\}/g, "<code>$1</code>")
+           .replace(/\\underline\{([^{}]*)\}/g, "<u>$1</u>");
+    }
+    // citations / refs / labels
+    t = t.replace(/\\(cite[a-z]*|citep|citet)\{([^}]*)\}/g, '<span class="tex-cite">[$2]</span>');
+    t = t.replace(/\\(eqref|ref|autoref|cref|Cref)\{([^}]*)\}/g, '<span class="tex-ref">§$2</span>');
+    t = t.replace(/\\label\{[^}]*\}/g, "");
+    t = t.replace(/\\footnote\{([\s\S]*?)\}/g, '<sup class="tex-fn" title="$1">*</sup>');
+    t = t.replace(/\\(href)\{([^}]*)\}\{([^}]*)\}/g, '<a href="$2">$3</a>');
+    t = t.replace(/\\url\{([^}]*)\}/g, '<a href="$1">$1</a>');
+    // commande générique inconnue avec argument → garder l'argument
+    for (let k = 0; k < 4; k++) t = t.replace(/\\[a-zA-Z]+\*?\{([^{}]*)\}/g, "$1");
+    // commande sans argument → retirer
+    t = t.replace(/\\[a-zA-Z]+\*?/g, "");
+    // accolades résiduelles
+    t = t.replace(/[{}]/g, "");
+    return t;
+  }
+
+  // 6. rendre KaTeX dans un fragment déjà inliné
+  function withMath(html) {
+    return html.replace(/\x00M(\d+)\x00/g, (_, i) => {
+      const mm = math[Number(i)];
+      if (!mm) return "";
+      try { return katex.renderToString(mm.tex, { displayMode: mm.display, throwOnError: false, errorColor: "#e0726a" }); }
+      catch (e) { return '<span class="tex-matherr">' + esc(mm.tex) + "</span>"; }
+    });
+  }
+
+  // 7. assembler
+  const out = [];
+  for (const b of blocks) {
+    if (b.type === "h") out.push(`<${b.tag} data-line="${b.line}">${withMath(inline(b.text))}</${b.tag}>`);
+    else if (b.type === "p") out.push(`<p data-line="${b.line}">${withMath(inline(b.text))}</p>`);
+    else if (b.type === "list") {
+      const tag = b.ordered ? "ol" : "ul";
+      const items = b.items.map((it) => `<li data-line="${it.line}">${withMath(inline(it.text))}</li>`).join("");
+      out.push(`<${tag}>${items}</${tag}>`);
+    } else if (b.type === "env") {
+      out.push(`<div class="tex-env" data-line="${b.line}">[ ${b.name} ]</div>`);
+    }
+  }
+  return out.join("\n");
+}
+
+if(IS_TEX && window.katex){
+  const right = document.getElementById("right");
+  right.insertAdjacentHTML("beforeend", '<div id="texread"></div>');
+  const readEl = document.getElementById("texread");
+  // bouton Lecture dans la barre, à côté de Split
+  const splitBtn = document.getElementById("togglePdf");
+  const readBtn = document.createElement("button");
+  readBtn.id = "readBtn"; readBtn.title = "Vue Lecture — prose rendue (KaTeX), sans le code";
+  readBtn.textContent = "Lecture";
+  splitBtn.insertAdjacentElement("afterend", readBtn);
+
+  let readOn = false, rafR = 0;
+  function renderRead(){
+    rafR = 0;
+    try{ readEl.innerHTML = texToHtml(cm.getValue(), window.katex); }catch(e){ readEl.innerHTML = '<p style="color:#e0726a">Rendu impossible : '+String(e.message||e)+'</p>'; }
+  }
+  const scheduleRead = () => { if(readOn && !rafR) rafR = requestAnimationFrame(renderRead); };
+
+  function setRead(on){
+    readOn = on;
+    right.classList.toggle("reading", on);
+    readBtn.classList.toggle("on", on);
+    if(on){
+      // afficher le split éditeur | lecture ; masquer le PDF
+      if(right.style.display === "none") applyPdfVisible(true);
+      splitBtn.classList.remove("on");
+      renderRead();
+    } else {
+      right.classList.remove("reading");
+    }
+    if(cm) setTimeout(()=>cm.refresh(), 60);
+  }
+  readBtn.onclick = () => setRead(!readOn);
+
+  // ===== mode Visuel : CM6 éditable (source décorée) — CM5 reste le pivot =====
+  right.insertAdjacentHTML("beforeend", '<div id="texvis"></div>');
+  const visBtn = document.createElement("button");
+  visBtn.id = "visBtn"; visBtn.title = "Vue Visuel — édite la source rendue (math, gras, todos), façon Overleaf";
+  visBtn.textContent = "Visuel";
+  readBtn.insertAdjacentElement("afterend", visBtn);
+  // Split/Lecture/Visuel = un contrôle segmenté (ce sont des modes exclusifs)
+  const seg = document.createElement("span"); seg.className = "modeseg";
+  splitBtn.parentNode.insertBefore(seg, splitBtn);
+  seg.appendChild(splitBtn); seg.appendChild(readBtn); seg.appendChild(visBtn);
+  let visOn = false, visEd = null, visSyncT = null, visSyncing = false;
+  function setVis(on){
+    visOn = on;
+    right.classList.toggle("visual", on);
+    visBtn.classList.toggle("on", on);
+    localStorage.setItem("texVisMode", on ? "1" : "0");
+    if(on){
+      if(readOn) setRead(false);
+      if(right.style.display === "none") applyPdfVisible(true);
+      // plein panneau : cacher l’éditeur code (CM5 reste le pivot caché)
+      document.getElementById("left").style.display = "none";
+      if(!visEd){
+        visEd = TexVisual.create(document.getElementById("texvis"), cm.getValue(), {
+          onChange: (v) => {
+            clearTimeout(visSyncT);
+            visSyncT = setTimeout(() => {
+              visSyncing = true; cm.setValue(v); visSyncing = false;
+              // setValue est exclu du handler dirty (origin) → marquer ici
+              dirty = true; ddot.style.display = "inline"; setState("dirty", "modified");
+            }, 250);
+          },
+        });
+      } else {
+        visEd.setValue(cm.getValue());
+      }
+    } else {
+      document.getElementById("left").style.display = "flex";
+      if(cm) setTimeout(() => cm.refresh(), 60);
+    }
+  }
+  visBtn.onclick = () => setVis(!visOn);
+  splitBtn.addEventListener("click", () => { if(visOn) setVis(false); });
+  document.getElementById("popPdf")?.addEventListener("click", () => { if(visOn) setVis(false); });
+  readBtn.addEventListener("click", () => { if(visOn && readOn) { right.classList.remove("visual"); visBtn.classList.remove("on"); visOn=false; } });
+  // sortir de Lecture si on repasse au PDF
+  splitBtn.addEventListener("click", () => { if(readOn) setRead(false); });
+  document.getElementById("popPdf")?.addEventListener("click", () => { if(readOn) setRead(false); });
+  // mise à jour en direct pendant la frappe — cm est créé dans load() (async),
+  // on attend qu'il existe avant de brancher le listener + restaurer le mode
+  (function waitCm(){
+    if(cm){ cm.on("change", scheduleRead);
+      if(localStorage.getItem("texReadMode") === "1") setRead(true);
+    } else setTimeout(waitCm, 100);
+  })();
+  // clic sur un bloc rendu → saute à la ligne source dans l'éditeur
+  readEl.addEventListener("click", (e) => {
+    const el = e.target.closest("[data-line]");
+    if(!el) return;
+    const ln = parseInt(el.getAttribute("data-line"), 10) - 1;
+    if(isNaN(ln)) return;
+    cm.setCursor({line: ln, ch: 0});
+    cm.focus();
+    cm.scrollIntoView({line: ln, ch: 0}, 100);
+  });
+  // persister le mode à chaque bascule
+  const _origSetRead = setRead;
+  setRead = (on)=>{ localStorage.setItem("texReadMode", on?"1":"0"); _origSetRead(on); };
+}
+
 function setZoom(z){
   zoom = Math.max(0.4, Math.min(3, z));
   localStorage.setItem("texZoom", zoom);
@@ -849,13 +1686,14 @@ setInterval(async () => {
       cm.setValue(j.text); cm.setCursor(cur); cm.scrollTo(s.left, s.top);
       dirty = false; setState("ok", "reloaded (modified on disk)");
       diffPush(before, j.text);
+      lastSavedText = j.text;
     }
   }catch(e){}
 }, 2000);
 
 if(path && isPdfMode){
   document.body.classList.add("pdfmode");
-  setState("ok", "clic dans le PDF → ligne source dans l'onglet éditeur");
+  setState("hint", "clic dans le PDF → ligne source dans l'éditeur");
   // initial loadPdf is triggered by the /texroot resolution above
 } else if(path) load();
 else {
@@ -921,12 +1759,15 @@ function diffPush(before, after){
   DIFF_VERSIONS.push({before, after, ts: Date.now()});
   diffIdx = DIFF_VERSIONS.length - 1;
   diffGrp.style.display = "";
+  const tg = document.getElementById("diffTag");
+  tg.disabled = false; tg.style.opacity = "";
+  ["diffPrev","diffNext","diffRestore"].forEach(id => document.getElementById(id).style.display = "");
   updateDiffTag();
   renderDiff();
   if(!diffShown) toggleDiff(true);
 }
 function updateDiffTag(){
-  document.getElementById("diffTag").innerHTML = "&#177; v" + (diffIdx + 2);
+  document.getElementById("diffTag").title = "Modifications — version " + (diffIdx + 2) + "/" + (DIFF_VERSIONS.length + 1) + " (cliquer : voir le diff)";
   document.getElementById("diffPrev").disabled = diffIdx <= 0;
   document.getElementById("diffNext").disabled = diffIdx >= DIFF_VERSIONS.length - 1;
 }
@@ -934,10 +1775,28 @@ function renderDiff(){
   const v = DIFF_VERSIONS[diffIdx];
   if(!v) return;
   const parts = Diff.diffWordsWithSpace(v.before, v.after);
-  diffPane.innerHTML = parts.map(pt =>
-    pt.added ? '<span class="dAdd">' + escH(pt.value) + "</span>" :
-    pt.removed ? '<span class="dDel">' + escH(pt.value) + "</span>" :
-    escH(pt.value)).join("");
+  const body = parts.map(pt => {
+    if(pt.added)   return '<span class="dAdd">' + escH(pt.value) + "</span>";
+    if(pt.removed) return '<span class="dDel">' + escH(pt.value) + "</span>";
+    // passage identique long → replié (on ne montre que le voisinage des changements)
+    const lines = pt.value.split("\n");
+    if(lines.length > 12){
+      const head = lines.slice(0, 3).join("\n"), tail = lines.slice(-3).join("\n");
+      const hidden = lines.slice(3, -3).join("\n");
+      return escH(head) + '<span class="dFold" data-full="' + escH(hidden).replace(/"/g,"&quot;") + '">⋯ ' + (lines.length - 6) + ' lignes identiques — cliquer pour afficher ⋯</span>' + escH(tail);
+    }
+    return escH(pt.value);
+  }).join("");
+  const when = new Date(v.ts).toLocaleTimeString();
+  diffPane.innerHTML = '<div class="dHead"><b>Comparaison</b> v' + (diffIdx + 2) + "/" + (DIFF_VERSIONS.length + 1)
+    + ' · ' + when + ' · <span class="dDel">supprimé</span> <span class="dAdd">ajouté</span>'
+    + '<button class="dx">Fermer — retour à l\u2019éditeur</button></div><div class="dBody">' + body + "</div>";
+  diffPane.querySelector(".dx").onclick = () => toggleDiff(false);
+  diffPane.querySelectorAll(".dFold").forEach(f => f.onclick = () => {
+    const t = document.createTextNode(f.dataset.full ? f.dataset.full.replace(/&quot;/g,"\"") : "");
+    const pre = document.createElement("span"); pre.textContent = f.getAttribute("data-full") ?? "";
+    f.replaceWith(pre);
+  });
 }
 function toggleDiff(show){
   diffShown = show ?? !diffShown;
@@ -948,11 +1807,12 @@ function toggleDiff(show){
 document.getElementById("diffTag").onclick = () => toggleDiff();
 // Add to chat sur sélection DANS le panneau diff (mode Studio)
 if(window.self !== window.top){
+  const __fn = document.getElementById("fname"); if(__fn) __fn.style.display = "none"; // nom déjà dans l onglet Studio
   const dPill = document.createElement("button");
   dPill.innerHTML = '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" style="vertical-align:-2px"><path d="M14 8c0 3-2.7 5.2-6 5.2-.8 0-1.6-.1-2.3-.4L2.5 14l1-2.6C2.6 10.5 2 9.3 2 8c0-3 2.7-5.2 6-5.2S14 5 14 8z"/></svg>&nbsp; Add to chat';
-  dPill.style.cssText = "position:fixed;z-index:9999;display:none;background:#2c313a;color:#e6e6e6;"
+  dPill.style.cssText = "position:fixed;z-index:9999;display:none;background:#2c313a;color:#dbdfe5;"
     + "border:1px solid #3a414d;border-radius:999px;padding:7px 14px;font-size:13px;cursor:pointer;"
-    + "box-shadow:0 6px 18px rgba(0,0,0,.5);font-family:-apple-system,sans-serif";
+    + "box-shadow:0 6px 18px rgba(0,0,0,.5);font-family:var(--ui-font)";
   document.body.appendChild(dPill);
   let dSel = "";
   dPill.addEventListener("mousedown", (e) => {
@@ -1006,7 +1866,7 @@ document.getElementById("diffRestore").onclick = async () => {
     ?? (__EXT || "").toUpperCase() ?? "";
   const WRAPS = ["win", "off", "80", "100", "120"];
   function wrapLabel(){ 
-    const v = localStorage.getItem("cmWrap") || "win";
+    const v = localStorage.getItem("cmWrap") || "off";
     return "Wrap: " + (v === "win" ? "window" : v);
   }
   function refreshWrap(){
@@ -1016,7 +1876,7 @@ document.getElementById("diffRestore").onclick = async () => {
   }
   refreshWrap();
   sbWrap.onclick = () => {
-    const cur = localStorage.getItem("cmWrap") || "win";
+    const cur = localStorage.getItem("cmWrap") || "off";
     const next = WRAPS[(WRAPS.indexOf(cur) + 1) % WRAPS.length];
     const sel = document.getElementById("wrapSel");
     if (sel) { sel.value = next; sel.onchange(); } 

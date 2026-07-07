@@ -896,6 +896,25 @@ class Handler(SimpleHTTPRequestHandler):
                 return
             except Exception as e:
                 return self._respond(500, {"error": str(e)})
+        if self.path == "/data":
+            # figures_data.json brut (parité serveur Node Atelier) : rafraîchissement
+            # live du template sans rebuild de figures_index.html.
+            dp = os.path.join(PROJECT, "figures_data.json")
+            if not os.path.isfile(dp):
+                return self._respond(404, {"error": "not found"})
+            try:
+                with open(dp, "rb") as f:
+                    data = f.read()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Cache-Control", "no-cache")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+            except Exception as e:
+                self._respond(500, {"error": str(e)})
+            return
         if self.path.startswith("/ls?"):
             try:
                 from urllib.parse import parse_qs, urlparse
