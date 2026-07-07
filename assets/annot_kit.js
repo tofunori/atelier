@@ -325,9 +325,15 @@
       var go = this;
       go.textContent = '⏳';
       try{
-        await send(true);
-        go.textContent = '✓';
-        strokes = []; setTimeout(function(){ go.textContent = '↑'; shutdown(); }, 1500);
+        var j = await send(true);
+        if (j && j.claudePreview){
+          go.textContent = '✓ Copié — ⌘V dans Claude';
+          go.style.cssText += ';width:auto;min-width:0;padding:0 12px;border-radius:999px;white-space:nowrap;font-size:12px';
+          strokes = []; setTimeout(function(){ go.textContent = '↑'; go.style.width=''; shutdown(); }, 2600);
+        } else {
+          go.textContent = '✓';
+          strokes = []; setTimeout(function(){ go.textContent = '↑'; shutdown(); }, 1500);
+        }
       }catch(e){
         go.textContent = '!';
         setTimeout(function(){ go.textContent = '↑'; }, 1800);

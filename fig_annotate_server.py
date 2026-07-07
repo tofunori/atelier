@@ -1829,9 +1829,11 @@ class Handler(SimpleHTTPRequestHandler):
                     with open(os.path.expanduser("~/.claude/fig-last-quote.txt"), "w") as f:
                         f.write(msg)
                 if req.get("embed") or STUDIO:
-                    # Embarqué dans Atelier Studio : le client livre le message
-                    # au composer via postMessage — aucun push externe.
-                    return self._respond(200, {"embedded": True, "message": msg})
+                    # Embarqué (iframe) : le client livre le message au composer via
+                    # postMessage (Atelier) ; en Claude preview le presse-papier +
+                    # ~/.claude/fig-last-quote.txt sont déjà remplis ci-dessus.
+                    return self._respond(200, {"embedded": True, "message": msg,
+                                               "claudePreview": CLAUDE_PREVIEW})
                 sent = False
                 tgt = req.get("target")
                 if isinstance(tgt, dict):
@@ -1899,7 +1901,8 @@ class Handler(SimpleHTTPRequestHandler):
                 with open(os.path.expanduser("~/.claude/fig-last-quote.txt"), "w") as f:
                     f.write(msg)
             if req.get("embed") or STUDIO:
-                return self._respond(200, {"embedded": True, "message": msg})
+                return self._respond(200, {"embedded": True, "message": msg,
+                                           "claudePreview": CLAUDE_PREVIEW, "path": path})
             # Composer line kept short: the full payload (path + numbered notes +
             # instruction) lives in fig-last-quote.txt, which the annotation skill reads.
             nb = len(notes)

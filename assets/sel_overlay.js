@@ -127,7 +127,12 @@ function __ct(){try{return JSON.parse(localStorage.getItem('claudeTargetV1')||'n
       body: JSON.stringify({rel: REL, page: '', text: selText, comment: comment || '', direct: true, target: __ct(), embed: EMBEDDED})})
       .then(function(r){ return r.json(); })
       .then(function(j){ if (EMBEDDED && j && j.message) __atelierPost({type: 'atelier-add-to-chat', text: j.message});
-        go.textContent = '✓'; setTimeout(function(){ go.textContent = '↑'; pillTa.value = ''; hideAll(); }, 1200); })
+        if (j && j.claudePreview){
+          go.textContent = '✓ Copié — ⌘V dans Claude, ou dis « regarde ma sélection »';
+          setTimeout(function(){ pillTa.value = ''; hideAll(); }, 2600);
+        } else {
+          go.textContent = '✓'; setTimeout(function(){ go.textContent = '↑'; pillTa.value = ''; hideAll(); }, 1200);
+        } })
       .catch(function(){ go.textContent = '!'; setTimeout(function(){ go.textContent = '↑'; }, 1600); });
   }
 
