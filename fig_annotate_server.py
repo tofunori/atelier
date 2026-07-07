@@ -37,6 +37,25 @@ PORT = int(os.environ.get("FIG_PORT") or os.environ.get("PORT") or 8790)
 _THUMB_SEM = threading.BoundedSemaphore(max(2, min(8, (os.cpu_count() or 4))))
 _CHROME_SEM = threading.BoundedSemaphore(2)
 
+# Fil d'événements Claude -> galerie (Claude Code desktop) : quand l'agent régénère
+# une figure il POST /claude-event ; la page affiche un toast + rafraîchit la carte.
+_CLAUDE_EVENTS = []              # [{id, ts, rel, note, row}]
+_CLAUDE_EVENTS_LOCK = threading.Lock()
+_CLAUDE_EVENTS_NEXT = [1]
+_SNIP_EXTS = {"py", "r", "jl", "sh", "tex", "md", "csv"}
+
+
+def _claude_event_row(full, rel):
+    st = os.stat(full)
+    ext = os.path.splitext(rel)[1].lstrip(".").lower()
+    bt = int(getattr(st, "st_birthtime", st.st_mtime))
+    return {"thumb": None, "code": ext in _SNIP_EXTS, "name": os.path.basename(rel),
+            "rel": rel, "folder": os.path.dirname(rel) or ".", "ext": ext,
+            "mtime": int(st.st_mtime), "btime": bt,
+            "mdate": time.strftime("%Y-%m-%d %H:%M", time.localtime(st.st_mtime)),
+            "bdate": time.strftime("%Y-%m-%d %H:%M", time.localtime(bt)),
+            "size": st.st_size, "archive": False}
+
 # Whiteboard: pending commands (Claude/gallery → canvas), drained by /board/poll.
 _BOARD_QUEUE = []
 _BOARD_LOCK = threading.Lock()
@@ -896,6 +915,14 @@ class Handler(SimpleHTTPRequestHandler):
                 return
             except Exception as e:
                 return self._respond(500, {"error": str(e)})
+        if self.path.startswith("/claude-events"):
+            from urllib.parse import urlparse, parse_qs
+            q = parse_qs(urlparse(self.path).query)
+            since = int((q.get("since") or ["0"])[0] or 0)
+            with _CLAUDE_EVENTS_LOCK:
+                evs = [e for e in _CLAUDE_EVENTS if e["id"] > since]
+                last = _CLAUDE_EVENTS[-1]["id"] if _CLAUDE_EVENTS else 0
+            return self._respond(200, {"events": evs, "last": last})
         if self.path == "/data":
             # figures_data.json brut (parité serveur Node Atelier) : rafraîchissement
             # live du template sans rebuild de figures_index.html.
@@ -1757,6 +1784,27 @@ class Handler(SimpleHTTPRequestHandler):
                     os.remove(p)
                 return self._respond(200, {"ok": True})
             except (KeyError, ValueError, json.JSONDecodeError) as e:
+                return self._respond(400, {"error": "bad request: " + str(e)})
+            except Exception as e:
+                return self._respond(500, {"error": str(e)})
+        if self.path == "/claude-event":
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+                req = json.loads(self.rfile.read(length))
+                rel = (req.get("rel") or "").strip().lstrip("/")
+                full = self._safe_path(os.path.join(PROJECT, rel))
+                if not full or not os.path.isfile(full):
+                    return self._respond(404, {"error": "file not found: " + rel})
+                rel = os.path.relpath(full, PROJECT)
+                with _CLAUDE_EVENTS_LOCK:
+                    eid = _CLAUDE_EVENTS_NEXT[0]
+                    _CLAUDE_EVENTS_NEXT[0] += 1
+                    _CLAUDE_EVENTS.append({"id": eid, "ts": time.time(), "rel": rel,
+                                           "note": (req.get("note") or "").strip()[:500],
+                                           "row": _claude_event_row(full, rel)})
+                    del _CLAUDE_EVENTS[:-100]
+                return self._respond(200, {"ok": True, "id": eid})
+            except (ValueError, json.JSONDecodeError) as e:
                 return self._respond(400, {"error": "bad request: " + str(e)})
             except Exception as e:
                 return self._respond(500, {"error": str(e)})

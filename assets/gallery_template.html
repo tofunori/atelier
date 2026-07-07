@@ -27,6 +27,18 @@
     background:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='8' height='5' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' fill='none' stroke='%23868d9a' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/></svg>") no-repeat center}
   .csel-btn:hover{border-color:var(--border-strong)}
   .csel-menu{position:fixed;z-index:120;min-width:170px;max-height:340px;overflow-y:auto}
+  /* fil d'événements Claude (Claude Code desktop) */
+  #claudeToasts{position:fixed;right:14px;bottom:14px;z-index:130;display:flex;flex-direction:column;gap:8px;max-width:380px}
+  .claude-toast{display:flex;align-items:flex-start;gap:8px;padding:10px 12px;border-radius:10px;cursor:pointer;
+    background:color-mix(in srgb,var(--card) 96%,transparent);border:1px solid var(--border-strong);
+    box-shadow:0 10px 32px rgba(0,0,0,.45);font-size:12.5px;line-height:1.35;
+    animation:ctIn .18s ease-out}
+  .claude-toast .ic{flex:none;margin-top:1px;color:var(--accent)}
+  .claude-toast .nm{font-weight:600;word-break:break-all}
+  .claude-toast .nt{color:var(--muted);margin-top:2px}
+  @keyframes ctIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  .card.claude-flash{outline:2px solid var(--accent);outline-offset:2px;transition:outline-color 1s}
+  .card.claude-flash.fade{outline-color:transparent}
   .csel-menu div{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:13px;white-space:nowrap}
   .csel-menu div:hover{background:var(--card2)}
   .csel-menu div .ck{width:12px;flex:none;color:var(--accent);opacity:0}
@@ -1644,6 +1656,50 @@ render();
   let boot = null;
   const getRev = () => fetch('/rev').then(r => r.json()).then(j => j.rev).catch(() => null);
   getRev().then(r => { boot = r; });
+
+  /* --- fil d'événements Claude (Claude Code desktop) --- */
+  let evLast = 0, evBoot = true;
+  const toasts = document.createElement('div'); toasts.id='claudeToasts'; document.body.appendChild(toasts);
+  function claudeToast(ev){
+    const t = document.createElement('div'); t.className='claude-toast';
+    const nm = document.createElement('span'); nm.className='nm'; nm.textContent = ev.row ? ev.row.name : ev.rel;
+    const bx = document.createElement('div'); bx.appendChild(nm);
+    if(ev.note){ const nt=document.createElement('div'); nt.className='nt'; nt.textContent=ev.note; bx.appendChild(nt); }
+    const ic = document.createElement('span'); ic.className='ic'; ic.textContent='\u2726';
+    t.appendChild(ic); t.appendChild(bx);
+    t.onclick = () => { flashCard(ev.rel, true); t.remove(); };
+    toasts.appendChild(t);
+    setTimeout(()=>{ t.style.opacity='0'; t.style.transition='opacity .4s'; setTimeout(()=>t.remove(), 450); }, 9000);
+  }
+  function flashCard(rel, scroll){
+    const el = [...document.querySelectorAll('#grid [data-act="lb"],#grid [data-act="open"],#grid [data-act="sel"]')]
+      .find(e => e.dataset.rel === rel);
+    const card = el && el.closest('.card');
+    if(!card) return;
+    if(scroll) card.scrollIntoView({behavior:'smooth', block:'center'});
+    card.classList.add('claude-flash');
+    setTimeout(()=>card.classList.add('fade'), 5000);
+    setTimeout(()=>card.classList.remove('claude-flash','fade'), 6500);
+  }
+  async function pollClaudeEvents(){
+    try{
+      const j = await fetch('/claude-events?since='+evLast, {cache:'no-store'}).then(r=>r.json());
+      if(evBoot){ evLast = j.last || 0; evBoot = false; return; }   // ignore l'historique d'avant l'ouverture
+      if(!j.events || !j.events.length){ evLast = j.last || evLast; return; }
+      evLast = j.last;
+      for(const ev of j.events){
+        const i = FILES.findIndex(f => f.rel === ev.rel);
+        if(i >= 0 && ev.row) Object.assign(FILES[i], {mtime:ev.row.mtime, mdate:ev.row.mdate, size:ev.row.size});
+        else if(ev.row){ ev.row.folder = ev.row.folder || '.'; FILES.unshift(ev.row);
+                         if(!FOLDERS.includes(ev.row.folder)){ FOLDERS.push(ev.row.folder); FOLDERS.sort(); } }
+        claudeToast(ev);
+      }
+      render();                                   // tri mtime => la carte mise à jour remonte d'elle-même
+      requestAnimationFrame(()=>{ for(const ev of j.events) flashCard(ev.rel, false); });
+    }catch(e){}
+  }
+  pollClaudeEvents(); setInterval(pollClaudeEvents, 3000);
+
   setInterval(async () => {
     if(boot == null){ boot = await getRev(); return; }
     const lb = document.getElementById('lb');
