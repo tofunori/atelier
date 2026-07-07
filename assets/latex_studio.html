@@ -213,6 +213,8 @@
   font-variant-numeric:tabular-nums}
 #statusbar span{cursor:default}
 #sbWrap:hover,#sbLint:hover{color:#dbdfe5;cursor:pointer}
+#sbWrapCustom{display:none;width:44px;background:#20242b;color:#dbdfe5;border:1px solid #3f3f46;
+  border-radius:4px;padding:0 4px;font-size:11px;font-family:inherit}
 #sbLint.err{color:#e06c75}
 #sbLint.ok{color:#98c379}
 #morePop{position:fixed;top:40px;right:10px;z-index:400;background:#1b1f26;
@@ -403,6 +405,7 @@ function __ct(){try{return JSON.parse(localStorage.getItem('claudeTargetV1')||'n
   <span id="sbPos">Ln 1, Col 1</span>
   <span id="sbMode"></span>
   <span id="sbWrap" title="Cliquer pour changer le retour à la ligne"></span>
+  <input id="sbWrapCustom" type="number" min="20" max="400" step="1" placeholder="cols" title="Colonne de wrap">
   <span id="sbLint" style="display:none"></span>
   <span style="flex:1"></span>
   <span id="sbSaved"></span>
@@ -1864,8 +1867,9 @@ document.getElementById("diffRestore").onclick = async () => {
   sbMode.textContent = ({stex:"LaTeX", python:"Python", r:"R", markdown:"Markdown",
     julia:"Julia", shell:"Shell"})[typeof __CM_MODE === "string" ? __CM_MODE : "javascript"]
     ?? (__EXT || "").toUpperCase() ?? "";
-  const WRAPS = ["win", "off", "80", "100", "120"];
-  function wrapLabel(){ 
+  const WRAPS = ["win", "off", "80", "100", "120", "custom"];
+  const sbWrapCustom = document.getElementById("sbWrapCustom");
+  function wrapLabel(){
     const v = localStorage.getItem("cmWrap") || "off";
     return "Wrap: " + (v === "win" ? "window" : v);
   }
@@ -1874,12 +1878,34 @@ document.getElementById("diffRestore").onclick = async () => {
     const mv = document.getElementById("moreWrapVal");
     if (mv) mv.textContent = wrapLabel().replace("Wrap: ", "");
   }
+  function openWrapCustom(){
+    sbWrap.style.display = "none";
+    sbWrapCustom.style.display = "inline-block";
+    const cur = localStorage.getItem("cmWrap") || "";
+    sbWrapCustom.value = /^\d+$/.test(cur) ? cur : "";
+    sbWrapCustom.focus();
+    sbWrapCustom.select();
+  }
+  function commitWrapCustom(){
+    sbWrapCustom.style.display = "none";
+    sbWrap.style.display = "";
+    const n = parseInt(sbWrapCustom.value, 10);
+    if (n > 0) applyWrap(String(n));   // bypass wrapSel: it has no <option> for arbitrary columns
+    refreshWrap();
+  }
+  sbWrapCustom.addEventListener("keydown", e => {
+    if (e.key === "Enter") commitWrapCustom();
+    else if (e.key === "Escape") { sbWrapCustom.style.display = "none"; sbWrap.style.display = ""; }
+  });
+  sbWrapCustom.addEventListener("blur", commitWrapCustom);
+  sbWrapCustom.addEventListener("click", e => e.stopPropagation());
   refreshWrap();
   sbWrap.onclick = () => {
     const cur = localStorage.getItem("cmWrap") || "off";
     const next = WRAPS[(WRAPS.indexOf(cur) + 1) % WRAPS.length];
+    if (next === "custom") { openWrapCustom(); return; }
     const sel = document.getElementById("wrapSel");
-    if (sel) { sel.value = next; sel.onchange(); } 
+    if (sel) { sel.value = next; sel.onchange(); }
     refreshWrap();
   };
   // heure de sauvegarde (hook posé dans saveNow)
