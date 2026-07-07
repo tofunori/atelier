@@ -22,6 +22,8 @@ import time
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
 PROJECT = os.path.realpath(os.environ.get("GALLERY_ROOT") or os.getcwd())
+HERE = os.path.dirname(os.path.realpath(__file__))
+ASSETS_DIR = os.path.join(HERE, "assets")   # source vivante des viewers (biblio, annot_kit, cm/, pdfjs/…)
 OUT_DIR = os.path.join(PROJECT, "annotations")
 STUDIO = bool(os.environ.get("ATELIER_STUDIO"))  # embarqué dans Atelier Studio : zéro push cmux/muxy/orca
 # Claude Code desktop preview: pas de push cmux/muxy/orca (aucun terminal à viser),
@@ -877,6 +879,46 @@ def write_contact_sheet(out_path, files):
         f.write(doc)
 
 
+_REBUILD_LOCK = threading.Lock()
+_REBUILD_LAST = [0.0]
+
+def _index_stale():
+    """L'index du projet est-il plus vieux que le template ou le builder ?"""
+    idx = os.path.join(PROJECT, "figures_index.html")
+    try:
+        idx_m = os.path.getmtime(idx)
+    except OSError:
+        return True
+    for src in (os.path.join(ASSETS_DIR, "gallery_template.html"),
+                os.path.join(HERE, "build_gallery.py")):
+        try:
+            if os.path.getmtime(src) > idx_m:
+                return True
+        except OSError:
+            pass
+    return False
+
+def _rebuild_if_stale():
+    """Reconstruit figures_index.html en arrière-plan si le template/builder a
+    changé depuis la génération (auto-fraîcheur : le /rev bump fera recharger
+    la page ouverte). Débounce 60 s pour ne pas empiler des builds."""
+    now = time.time()
+    if not _index_stale() or now - _REBUILD_LAST[0] < 60:
+        return
+    if not _REBUILD_LOCK.acquire(blocking=False):
+        return
+    _REBUILD_LAST[0] = now
+    def run():
+        try:
+            subprocess.run([sys.executable, os.path.join(HERE, "build_gallery.py")],
+                           cwd=PROJECT, env=dict(os.environ, GALLERY_ROOT=PROJECT),
+                           capture_output=True, timeout=300, start_new_session=True)
+        except Exception:
+            pass
+        finally:
+            _REBUILD_LOCK.release()
+    threading.Thread(target=run, daemon=True).start()
+
 class Handler(SimpleHTTPRequestHandler):
     def end_headers(self):
         # webviews (Studio) : ne jamais servir de JS/HTML périmé
@@ -925,6 +967,18 @@ class Handler(SimpleHTTPRequestHandler):
         return p if p == root or p.startswith(root + os.sep) else None
 
     def translate_path(self, path):
+        # Viewers « toujours frais » : /.fig_thumbs/<asset> est servi depuis le
+        # assets/ de l'install (source) quand le fichier y existe — une mise à
+        # jour de cmux-gallery apparaît partout au simple rechargement de page.
+        # Les fichiers générés (vignettes, états board/notes) n'existent pas
+        # dans assets/ et retombent sur la copie du projet.
+        clean = path.split("?", 1)[0].split("#", 1)[0]
+        if clean.startswith("/.fig_thumbs/"):
+            rel = clean[len("/.fig_thumbs/"):]
+            cand = os.path.realpath(os.path.join(ASSETS_DIR, rel))
+            aroot = os.path.realpath(ASSETS_DIR)
+            if (cand == aroot or cand.startswith(aroot + os.sep)) and os.path.isfile(cand):
+                return cand
         # SimpleHTTPRequestHandler serves symlink targets without bound-checking.
         # Pin static GETs to PROJECT with the same realpath rule as the JSON API,
         # so an in-tree symlink pointing outside the project can't be read.
@@ -1361,6 +1415,7 @@ class Handler(SimpleHTTPRequestHandler):
         if self.path == "/rev":
             # build revision = mtime of the generated index; bumps on every rescan/rebuild,
             # so the open gallery can auto-reload after Claude edits + rescans
+            _rebuild_if_stale()   # auto-fraîcheur : template/builder modifiés -> rebuild arrière-plan
             try:
                 idx = os.path.join(PROJECT, "figures_index.html")
                 rev = int(os.path.getmtime(idx)) if os.path.exists(idx) else 0
@@ -2215,4 +2270,5 @@ class Handler(SimpleHTTPRequestHandler):
 
 
 if __name__ == "__main__":
+    _rebuild_if_stale()   # serveur relancé après une mise à jour de cmux-gallery -> index régénéré
     ThreadingHTTPServer(("127.0.0.1", PORT), Handler).serve_forever()
