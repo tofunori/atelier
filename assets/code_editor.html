@@ -78,7 +78,10 @@
     <option value="80">Wrap: 80</option>
     <option value="100">Wrap: 100</option>
     <option value="120">Wrap: 120</option>
+    <option value="custom">Wrap: custom…</option>
   </select>
+  <input id="wrapCustom" type="number" min="20" max="400" step="1" placeholder="cols" title="Wrap column"
+         style="display:none;width:56px;background:var(--card);color:var(--txt);border:1px solid var(--border);border-radius:6px;padding:3px 6px;font-size:12px">
   <span id="state"></span>
   <span style="margin-left:auto;color:var(--muted)">Cmd+S: save · selection visible to Claude</span>
 </header>
@@ -100,8 +103,18 @@ let cm = null, diskMtime = 0, dirty = false;
 const stateEl = document.getElementById("state");
 function setState(cls, txt){ stateEl.className = cls; stateEl.textContent = txt; }
 
-// word wrap (VS Code-style): off | window | fixed column (80/100/120)
+// word wrap (VS Code-style): off | window | fixed column (any positive integer)
 const wrapSel = document.getElementById("wrapSel");
+const wrapCustom = document.getElementById("wrapCustom");
+function ensureWrapOption(v){
+  // built-in fixed values already have <option>s; anything else (custom columns,
+  // or a value restored from a previous session) gets one inserted before "custom…"
+  if(!wrapSel.querySelector('option[value="' + v + '"]')){
+    const opt = document.createElement("option");
+    opt.value = v; opt.textContent = "Wrap: " + v;
+    wrapSel.insertBefore(opt, wrapSel.querySelector('option[value="custom"]'));
+  }
+}
 function applyWrap(v){
   localStorage.setItem("cmWrap", v);
   const fixed = /^\d+$/.test(v);
@@ -115,8 +128,36 @@ function applyWrap(v){
     cm.refresh();
   }
 }
-wrapSel.value = localStorage.getItem("cmWrap") || "win";
-wrapSel.onchange = () => applyWrap(wrapSel.value);
+{
+  const saved = localStorage.getItem("cmWrap") || "win";
+  if(/^\d+$/.test(saved)) ensureWrapOption(saved);
+  wrapSel.value = saved;
+}
+wrapSel.onchange = () => {
+  if(wrapSel.value === "custom"){
+    wrapCustom.style.display = "";
+    wrapCustom.value = /^\d+$/.test(localStorage.getItem("cmWrap")) ? localStorage.getItem("cmWrap") : "";
+    wrapCustom.focus();
+    wrapCustom.select();
+    return;
+  }
+  wrapCustom.style.display = "none";
+  applyWrap(wrapSel.value);
+};
+function commitWrapCustom(){
+  const n = parseInt(wrapCustom.value, 10);
+  if(n > 0){
+    ensureWrapOption(String(n));
+    wrapSel.value = String(n);
+    applyWrap(String(n));
+  }
+  wrapCustom.style.display = "none";
+}
+wrapCustom.addEventListener("keydown", e => {
+  if(e.key === "Enter") commitWrapCustom();
+  else if(e.key === "Escape"){ wrapCustom.style.display = "none"; wrapSel.value = localStorage.getItem("cmWrap") || "win"; }
+});
+wrapCustom.addEventListener("blur", commitWrapCustom);
 
 async function load(){
   const r = await fetch("/code?path=" + encodeURIComponent(path));
