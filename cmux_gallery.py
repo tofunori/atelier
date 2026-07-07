@@ -373,6 +373,43 @@ def cmd_serve(a) -> None:
                 srv.kill()
 
 
+def cmd_claude_init(a) -> None:
+    """Écrit l'entrée figures-gallery dans <root>/.claude/launch.json (Claude Code
+    desktop, menu Serveurs). Fusionne sans toucher aux autres entrées ; idempotent.
+    Le serveur never-stale construit l'index tout seul au premier démarrage —
+    aucune autre préparation n'est nécessaire dans un nouveau projet."""
+    server = os.path.join(HERE, "fig_annotate_server.py")
+    entry = {
+        "name": "figures-gallery",
+        "runtimeExecutable": "sh",
+        "runtimeArgs": [
+            "-c",
+            'CLAUDE_PREVIEW=1 FIG_PORT="${PORT:-%d}" GALLERY_ROOT="$PWD" %s %s'
+            % (a.port or project_port(a.root), sys.executable, server),
+        ],
+        "port": a.port or project_port(a.root),
+        "autoPort": True,
+    }
+    d = os.path.join(a.root, ".claude")
+    os.makedirs(d, exist_ok=True)
+    lp = os.path.join(d, "launch.json")
+    cfg = {"version": "0.0.1", "configurations": []}
+    if os.path.exists(lp):
+        try:
+            with open(lp) as f:
+                cfg = json.load(f)
+        except Exception:
+            print(f"⚠ {lp} illisible — je le remplace", file=sys.stderr)
+    cfg.setdefault("configurations", [])
+    cfg["configurations"] = [c for c in cfg["configurations"] if c.get("name") != "figures-gallery"]
+    cfg["configurations"].append(entry)
+    with open(lp, "w") as f:
+        json.dump(cfg, f, indent=2, ensure_ascii=False)
+        f.write("\n")
+    print(f"✓ figures-gallery ajouté à {lp} (port {entry['port']}, autoPort)")
+    print("  Dans Claude Code desktop : menu Serveurs → figures-gallery → Exécuter.")
+
+
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(prog="atelier", description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -406,6 +443,11 @@ def main(argv=None) -> int:
                     help="server port (default: a stable port derived from the project path)")
     fg.add_argument("--no-open", dest="open", action="store_false",
                     help="start (or reuse) the server without opening a cmux browser tab")
+    ci = sub.add_parser("claude-init", help="add the figures-gallery entry to <root>/.claude/launch.json (Claude Code desktop)")
+    ci.add_argument("--root", default=None, type=root_arg,
+                    help="project to set up (default: git root for cwd, else cwd)")
+    ci.add_argument("--port", type=int, default=0,
+                    help="preferred port (default: a stable port derived from the project path)")
     s = sub.add_parser("serve", help="build + HOST the server, self-healing, no browser (for a Dock control)")
     s.add_argument("--root", default=None, type=root_arg,
                    help="project to scan (default: git root for cwd, else cwd)")
@@ -421,6 +463,7 @@ def main(argv=None) -> int:
         "stop": cmd_stop,
         "foreground": cmd_foreground,
         "serve": cmd_serve,
+        "claude-init": cmd_claude_init,
     }[a.cmd](a)
     return 0
 
