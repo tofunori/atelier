@@ -213,8 +213,13 @@
   font-variant-numeric:tabular-nums}
 #statusbar span{cursor:default}
 #sbWrap:hover,#sbLint:hover{color:#dbdfe5;cursor:pointer}
-#sbWrapCustom{display:none;width:44px;background:#20242b;color:#dbdfe5;border:1px solid #3f3f46;
-  border-radius:4px;padding:0 4px;font-size:11px;font-family:inherit}
+#wrapMenu{position:fixed;z-index:400;background:#1b1f26;border:1px solid #333a45;border-radius:10px;
+  padding:5px;min-width:150px;box-shadow:0 8px 24px rgba(0,0,0,.5);font-size:13px;color:#b6bdc7;display:none}
+#wrapMenu .wm-it{padding:6px 10px;border-radius:6px;cursor:pointer}
+#wrapMenu .wm-it:hover,#wrapMenu .wm-it.on{background:#2c313a;color:#dbdfe5}
+#wrapMenu .wm-custom{display:flex;align-items:center;gap:6px;padding:6px 10px;border-top:1px solid #2c313a;margin-top:3px}
+#wrapMenu .wm-custom input{width:52px;background:#20242b;color:#dbdfe5;border:1px solid #3f3f46;
+  border-radius:4px;padding:2px 5px;font-size:12px;font-family:inherit}
 #sbLint.err{color:#e06c75}
 #sbLint.ok{color:#98c379}
 #morePop{position:fixed;top:40px;right:10px;z-index:400;background:#1b1f26;
@@ -405,7 +410,14 @@ function __ct(){try{return JSON.parse(localStorage.getItem('claudeTargetV1')||'n
   <span id="sbPos">Ln 1, Col 1</span>
   <span id="sbMode"></span>
   <span id="sbWrap" title="Cliquer pour changer le retour à la ligne"></span>
-  <input id="sbWrapCustom" type="number" min="20" max="400" step="1" placeholder="cols" title="Colonne de wrap">
+  <div id="wrapMenu">
+    <div class="wm-it" data-wrap="win">Window</div>
+    <div class="wm-it" data-wrap="off">Off</div>
+    <div class="wm-it" data-wrap="80">80</div>
+    <div class="wm-it" data-wrap="100">100</div>
+    <div class="wm-it" data-wrap="120">120</div>
+    <div class="wm-custom"><span>Autre :</span><input id="wrapMenuInput" type="number" min="20" max="400" step="1" placeholder="cols" title="Colonne de wrap"></div>
+  </div>
   <span id="sbLint" style="display:none"></span>
   <span style="flex:1"></span>
   <span id="sbSaved"></span>
@@ -1867,8 +1879,8 @@ document.getElementById("diffRestore").onclick = async () => {
   sbMode.textContent = ({stex:"LaTeX", python:"Python", r:"R", markdown:"Markdown",
     julia:"Julia", shell:"Shell"})[typeof __CM_MODE === "string" ? __CM_MODE : "javascript"]
     ?? (__EXT || "").toUpperCase() ?? "";
-  const WRAPS = ["win", "off", "80", "100", "120", "custom"];
-  const sbWrapCustom = document.getElementById("sbWrapCustom");
+  const wrapMenu = document.getElementById("wrapMenu");
+  const wrapMenuInput = document.getElementById("wrapMenuInput");
   function wrapLabel(){
     const v = localStorage.getItem("cmWrap") || "off";
     return "Wrap: " + (v === "win" ? "window" : v);
@@ -1877,37 +1889,47 @@ document.getElementById("diffRestore").onclick = async () => {
     sbWrap.textContent = wrapLabel();
     const mv = document.getElementById("moreWrapVal");
     if (mv) mv.textContent = wrapLabel().replace("Wrap: ", "");
-  }
-  function openWrapCustom(){
-    sbWrap.style.display = "none";
-    sbWrapCustom.style.display = "inline-block";
-    const cur = localStorage.getItem("cmWrap") || "";
-    sbWrapCustom.value = /^\d+$/.test(cur) ? cur : "";
-    sbWrapCustom.focus();
-    sbWrapCustom.select();
-  }
-  function commitWrapCustom(){
-    sbWrapCustom.style.display = "none";
-    sbWrap.style.display = "";
-    const n = parseInt(sbWrapCustom.value, 10);
-    if (n > 0) applyWrap(String(n));   // bypass wrapSel: it has no <option> for arbitrary columns
-    refreshWrap();
-  }
-  sbWrapCustom.addEventListener("keydown", e => {
-    if (e.key === "Enter") commitWrapCustom();
-    else if (e.key === "Escape") { sbWrapCustom.style.display = "none"; sbWrap.style.display = ""; }
-  });
-  sbWrapCustom.addEventListener("blur", commitWrapCustom);
-  sbWrapCustom.addEventListener("click", e => e.stopPropagation());
-  refreshWrap();
-  sbWrap.onclick = () => {
     const cur = localStorage.getItem("cmWrap") || "off";
-    const next = WRAPS[(WRAPS.indexOf(cur) + 1) % WRAPS.length];
-    if (next === "custom") { openWrapCustom(); return; }
+    wrapMenu.querySelectorAll(".wm-it").forEach(it => it.classList.toggle("on", it.dataset.wrap === cur));
+  }
+  function setWrap(v){
     const sel = document.getElementById("wrapSel");
-    if (sel) { sel.value = next; sel.onchange(); }
+    if (sel && sel.querySelector('option[value="' + v + '"]')) { sel.value = v; sel.onchange(); }
+    else applyWrap(v);   // arbitrary custom column: wrapSel has no matching <option>
     refreshWrap();
+  }
+  function closeWrapMenu(){ wrapMenu.style.display = "none"; }
+  function openWrapMenu(){
+    const r = sbWrap.getBoundingClientRect();
+    wrapMenu.style.left = r.left + "px";
+    wrapMenu.style.bottom = "";
+    wrapMenu.style.top = (r.bottom + 6) + "px";
+    wrapMenu.style.display = "block";
+    const cur = localStorage.getItem("cmWrap") || "";
+    wrapMenuInput.value = /^\d+$/.test(cur) && !["80","100","120"].includes(cur) ? cur : "";
+  }
+  refreshWrap();
+  sbWrap.onclick = (e) => {
+    e.stopPropagation();
+    if (wrapMenu.style.display === "block") { closeWrapMenu(); return; }
+    openWrapMenu();
   };
+  wrapMenu.onclick = (e) => {
+    e.stopPropagation();
+    const v = e.target.closest(".wm-it")?.dataset.wrap;
+    if (v){ setWrap(v); closeWrapMenu(); }
+  };
+  function commitWrapMenuInput(){
+    const n = parseInt(wrapMenuInput.value, 10);
+    if (n > 0){ setWrap(String(n)); closeWrapMenu(); }
+  }
+  wrapMenuInput.addEventListener("keydown", e => {
+    e.stopPropagation();
+    if (e.key === "Enter") commitWrapMenuInput();
+    else if (e.key === "Escape") closeWrapMenu();
+  });
+  wrapMenuInput.addEventListener("click", e => e.stopPropagation());
+  document.addEventListener("click", closeWrapMenu);
   // heure de sauvegarde (hook posé dans saveNow)
   window.__onSaved = function(){
     sbSaved.textContent = "sauvegardé " + new Date().toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"});
@@ -1927,7 +1949,7 @@ document.getElementById("diffRestore").onclick = async () => {
     if (act === "open") document.getElementById("openFile").click();
     if (act === "rewrap") document.getElementById("rewrapBtn").click();
     if (act === "help") document.getElementById("helpBtn").click();
-    if (act === "wrap") { sbWrap.onclick(); return; }
+    if (act === "wrap") { sbWrap.onclick(e); return; }
     if (act !== "wrap") morePop.style.display = "none";
   };
   const findBtn = document.getElementById("findBtn");
