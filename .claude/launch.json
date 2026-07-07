@@ -1,0 +1,45 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "figures-gallery",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "CLAUDE_PREVIEW=1 FIG_PORT=\"${PORT:-8790}\" GALLERY_ROOT=\"$PWD\" python3 fig_annotate_server.py"
+      ],
+      "port": 8790,
+      "autoPort": true
+    },
+    {
+      "name": "notes-editor",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "cd notes-src && npx vite --port \"${PORT:-5173}\""
+      ],
+      "port": 5173,
+      "autoPort": true
+    },
+    {
+      "name": "whiteboard-editor",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "cd whiteboard-src && npx vite --port \"${PORT:-5174}\""
+      ],
+      "port": 5174,
+      "autoPort": true
+    },
+    {
+      "name": "muxy-extension-panel",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "cd cmux-gallery/cmux-gallery && npx vite --port \"${PORT:-5175}\""
+      ],
+      "port": 5175,
+      "autoPort": true
+    }
+  ]
+}
