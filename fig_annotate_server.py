@@ -45,6 +45,220 @@ _CLAUDE_EVENTS_NEXT = [1]
 _SNIP_EXTS = {"py", "r", "jl", "sh", "tex", "md", "csv"}
 
 
+# ---------------------------------------------------------------------------
+# Bibliothèque Zotero — lecture directe de zotero.sqlite (copie fraîche, readonly :
+# fonctionne que Zotero soit ouvert ou non ; jamais d'écriture dans la base Zotero).
+# Port Python du sidecar Node d'Atelier Studio (zotero.mjs).
+ZOTERO_DIR = os.path.expanduser("~/Zotero")
+_ZOTERO_SRC = os.path.join(ZOTERO_DIR, "zotero.sqlite")
+_ZOTERO_CACHE = os.path.expanduser("~/Library/Application Support/cmux-gallery")
+_ZOTERO_COPY = os.path.join(_ZOTERO_CACHE, "zotero-read.sqlite")
+_ZOTERO_FAVS = os.path.join(_ZOTERO_CACHE, "zotero-favs.json")
+_ZOTERO_LOCK = threading.Lock()
+_ZOTERO_MTIME = [0.0]
+
+_ZOTERO_BASE_SQL = """
+  SELECT i.itemID, i.key, i.dateAdded,
+    (SELECT v.value FROM itemData d
+       JOIN fields f ON f.fieldID = d.fieldID AND f.fieldName = 'title'
+       JOIN itemDataValues v ON v.valueID = d.valueID
+     WHERE d.itemID = i.itemID) AS title,
+    (SELECT v.value FROM itemData d
+       JOIN fields f ON f.fieldID = d.fieldID AND f.fieldName = 'date'
+       JOIN itemDataValues v ON v.valueID = d.valueID
+     WHERE d.itemID = i.itemID) AS rawDate,
+    (SELECT v.value FROM itemData d
+       JOIN fields f ON f.fieldID = d.fieldID AND f.fieldName = 'publicationTitle'
+       JOIN itemDataValues v ON v.valueID = d.valueID
+     WHERE d.itemID = i.itemID) AS publication,
+    (SELECT v.value FROM itemData d
+       JOIN fields f ON f.fieldID = d.fieldID AND f.fieldName = 'DOI'
+       JOIN itemDataValues v ON v.valueID = d.valueID
+     WHERE d.itemID = i.itemID) AS doi,
+    (SELECT v.value FROM itemData d
+       JOIN fields f ON f.fieldID = d.fieldID AND f.fieldName = 'abstractNote'
+       JOIN itemDataValues v ON v.valueID = d.valueID
+     WHERE d.itemID = i.itemID) AS abstract,
+    (SELECT GROUP_CONCAT(c.lastName, ', ') FROM itemCreators ic
+       JOIN creators c ON c.creatorID = ic.creatorID
+     WHERE ic.itemID = i.itemID ORDER BY ic.orderIndex) AS creators,
+    (SELECT GROUP_CONCAT(t.name, char(31)) FROM itemTags it
+       JOIN tags t ON t.tagID = it.tagID WHERE it.itemID = i.itemID) AS tags,
+    (SELECT ia.path FROM itemAttachments ia
+     WHERE ia.parentItemID = i.itemID AND ia.contentType = 'application/pdf'
+       AND ia.path LIKE 'storage:%' LIMIT 1) AS pdfPath,
+    (SELECT ai.key FROM itemAttachments ia JOIN items ai ON ai.itemID = ia.itemID
+     WHERE ia.parentItemID = i.itemID AND ia.contentType = 'application/pdf'
+       AND ia.path LIKE 'storage:%' LIMIT 1) AS pdfKey
+  FROM items i
+  JOIN itemTypes t ON t.itemTypeID = i.itemTypeID
+  WHERE t.typeName NOT IN ('attachment', 'note', 'annotation')
+    AND i.itemID NOT IN (SELECT itemID FROM deletedItems)
+"""
+
+
+def _zotero_available():
+    return os.path.exists(_ZOTERO_SRC)
+
+
+def _zotero_db():
+    """Fresh readonly connection; recopy the DB when Zotero's file changed."""
+    import sqlite3
+    if not _zotero_available():
+        raise FileNotFoundError("Zotero introuvable (~/Zotero/zotero.sqlite)")
+    with _ZOTERO_LOCK:
+        mtime = os.path.getmtime(_ZOTERO_SRC)
+        if mtime != _ZOTERO_MTIME[0] or not os.path.exists(_ZOTERO_COPY):
+            os.makedirs(_ZOTERO_CACHE, exist_ok=True)
+            shutil.copyfile(_ZOTERO_SRC, _ZOTERO_COPY)
+            wal = _ZOTERO_SRC + "-wal"
+            if os.path.exists(wal):
+                try:
+                    shutil.copyfile(wal, _ZOTERO_COPY + "-wal")
+                except Exception:
+                    pass
+            _ZOTERO_MTIME[0] = mtime
+    con = sqlite3.connect(f"file:{_ZOTERO_COPY}?mode=ro", uri=True)
+    con.row_factory = sqlite3.Row
+    return con
+
+
+def _zotero_cite_key(creators, year):
+    first = re.sub(r"[^a-z]", "", (creators or "").split(",")[0].strip().lower()) or "ref"
+    return f"{first}{year or ''}"
+
+
+def _zotero_row_to_item(r):
+    m = re.search(r"(\d{4})", r["rawDate"] or "")
+    year = m.group(1) if m else ""
+    tags = [t for t in (r["tags"] or "").split(chr(31)) if t]
+    creators = r["creators"] or ""
+    pdf_path = r["pdfPath"] or ""
+    return {"key": r["key"], "dateAdded": r["dateAdded"] or "",
+            "title": r["title"] or "(sans titre)", "creators": creators,
+            "year": year, "publication": r["publication"] or "",
+            "doi": r["doi"] or "", "abstract": r["abstract"] or "", "tags": tags,
+            "hasPdf": bool(pdf_path), "pdfKey": r["pdfKey"],
+            "pdfFile": pdf_path[len("storage:"):] if pdf_path.startswith("storage:") else None,
+            "citeKey": _zotero_cite_key(creators, year)}
+
+
+def zotero_search(query="", collection_id=None, limit=400):
+    con = _zotero_db()
+    try:
+        sql, params = _ZOTERO_BASE_SQL, []
+        if collection_id:
+            sql += " AND i.itemID IN (SELECT itemID FROM collectionItems WHERE collectionID = ?)"
+            params.append(collection_id)
+        sql += " ORDER BY i.dateModified DESC LIMIT 2000"
+        rows = [_zotero_row_to_item(r) for r in con.execute(sql, params)]
+    finally:
+        con.close()
+    q = (query or "").strip().lower()
+    if q:
+        terms = q.split()
+        rows = [it for it in rows
+                if all(t in f"{it['title']} {it['creators']} {it['year']} {it['publication']} {' '.join(it['tags'])}".lower()
+                       for t in terms)]
+    favs = _zotero_favs_load()
+    for it in rows:
+        it["fav"] = it["key"] in favs
+    return rows[:limit]
+
+
+def zotero_collections():
+    con = _zotero_db()
+    try:
+        return [dict(r) for r in con.execute("""
+            SELECT collectionID AS id, collectionName AS name, parentCollectionID AS parent
+            FROM collections
+            WHERE collectionID NOT IN (SELECT collectionID FROM deletedCollections)
+            ORDER BY collectionName COLLATE NOCASE""")]
+    finally:
+        con.close()
+
+
+def _zotero_favs_load():
+    try:
+        with open(_ZOTERO_FAVS) as f:
+            return set(json.load(f))
+    except Exception:
+        return set()
+
+
+def _zotero_favs_save(favs):
+    os.makedirs(_ZOTERO_CACHE, exist_ok=True)
+    tmp = _ZOTERO_FAVS + f".tmp.{os.getpid()}"
+    with open(tmp, "w") as f:
+        json.dump(sorted(favs), f)
+    os.replace(tmp, _ZOTERO_FAVS)
+
+
+def zotero_find_duplicate(md5, fname):
+    """Titre du parent si un PDF identique (hash ou même nom) existe déjà, sinon None."""
+    con = _zotero_db()
+    try:
+        rows = con.execute("""
+            SELECT ia.path, ia.storageHash, ai.key AS attKey,
+              COALESCE((SELECT v.value FROM itemData dd
+                 JOIN fields f ON f.fieldID = dd.fieldID AND f.fieldName = 'title'
+                 JOIN itemDataValues v ON v.valueID = dd.valueID
+               WHERE dd.itemID = ia.parentItemID), ia.path) AS parentTitle
+            FROM itemAttachments ia
+            JOIN items ai ON ai.itemID = ia.itemID
+            WHERE ia.contentType = 'application/pdf' AND ia.path LIKE 'storage:%'
+              AND ai.itemID NOT IN (SELECT itemID FROM deletedItems)""").fetchall()
+    finally:
+        con.close()
+    base = (fname or "").lower()
+    for r in rows:
+        f = str(r["path"])[len("storage:"):]
+        if r["storageHash"] and r["storageHash"] == md5:
+            return str(r["parentTitle"])
+        stored = os.path.join(ZOTERO_DIR, "storage", r["attKey"], f)
+        if f.lower() == base:
+            if r["storageHash"]:
+                return str(r["parentTitle"])
+            try:
+                if os.path.exists(stored) and hashlib.md5(open(stored, "rb").read()).hexdigest() == md5:
+                    return str(r["parentTitle"])
+            except Exception:
+                pass
+            return str(r["parentTitle"])   # même nom, hash illisible : prudence
+        if not r["storageHash"]:
+            try:
+                if os.path.exists(stored) and hashlib.md5(open(stored, "rb").read()).hexdigest() == md5:
+                    return str(r["parentTitle"])
+            except Exception:
+                pass
+    return None
+
+
+def zotero_add_pdf(name, data):
+    """Envoie un PDF à Zotero via l'API locale du connecteur (port 23119).
+    Zotero doit tourner ; il importe le fichier puis reconnaît les métadonnées."""
+    import urllib.request
+    import urllib.error
+    import uuid
+    md5 = hashlib.md5(data).hexdigest()
+    dup = zotero_find_duplicate(md5, name)
+    if dup:
+        return {"name": name, "ok": False, "error": "duplicate", "match": dup}
+    req = urllib.request.Request(
+        "http://127.0.0.1:23119/connector/saveStandaloneAttachment", data=data, method="POST",
+        headers={"Content-Type": "application/pdf",
+                 "X-Metadata": json.dumps({"url": "file:///" + name, "title": name,
+                                           "sessionID": uuid.uuid4().hex[:8]})})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            return {"name": name, "ok": resp.status == 201, "status": resp.status}
+    except urllib.error.URLError:
+        return {"name": name, "ok": False, "error": "zotero-off"}
+    except Exception as e:
+        return {"name": name, "ok": False, "error": str(e)}
+# ---------------------------------------------------------------------------
+
+
 def _claude_event_row(full, rel):
     st = os.stat(full)
     ext = os.path.splitext(rel)[1].lstrip(".").lower()
@@ -792,8 +1006,8 @@ class Handler(SimpleHTTPRequestHandler):
         # Racine -> galerie (au lieu du directory listing), en preservant la query string
         if self.path == "/" or self.path.startswith("/?"):
             self.path = "/figures_index.html" + self.path[1:]
-        # PDFs Zotero (mode Studio seulement) : /zotero/<ITEMKEY>/<fichier>.pdf
-        if STUDIO and self.path.startswith("/zotero/"):
+        # PDFs Zotero (mode Studio ou Claude preview) : /zotero/<ITEMKEY>/<fichier>.pdf
+        if (STUDIO or CLAUDE_PREVIEW) and self.path.startswith("/zotero/"):
             import re as _re
             from urllib.parse import unquote, urlparse
             parts = urlparse(self.path).path.split("/")
@@ -913,6 +1127,24 @@ class Handler(SimpleHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(body)
                 return
+            except Exception as e:
+                return self._respond(500, {"error": str(e)})
+        if self.path.startswith("/zotero-items"):
+            from urllib.parse import urlparse, parse_qs
+            q = parse_qs(urlparse(self.path).query)
+            try:
+                items = zotero_search(query=(q.get("q") or [""])[0],
+                                      collection_id=(q.get("collection") or [None])[0] or None)
+                return self._respond(200, {"items": items})
+            except FileNotFoundError as e:
+                return self._respond(200, {"items": [], "error": str(e)})
+            except Exception as e:
+                return self._respond(500, {"error": str(e)})
+        if self.path == "/zotero-collections":
+            try:
+                return self._respond(200, {"collections": zotero_collections()})
+            except FileNotFoundError as e:
+                return self._respond(200, {"collections": [], "error": str(e)})
             except Exception as e:
                 return self._respond(500, {"error": str(e)})
         if self.path.startswith("/claude-events"):
@@ -1785,6 +2017,34 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._respond(200, {"ok": True})
             except (KeyError, ValueError, json.JSONDecodeError) as e:
                 return self._respond(400, {"error": "bad request: " + str(e)})
+            except Exception as e:
+                return self._respond(500, {"error": str(e)})
+        if self.path == "/zotero-fav":
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+                req = json.loads(self.rfile.read(length))
+                key = (req.get("key") or "").strip()
+                if not re.fullmatch(r"[A-Za-z0-9]{8}", key):
+                    return self._respond(400, {"error": "bad key"})
+                with _ZOTERO_LOCK:
+                    favs = _zotero_favs_load()
+                    (favs.add if req.get("on") else favs.discard)(key)
+                    _zotero_favs_save(favs)
+                return self._respond(200, {"key": key, "fav": bool(req.get("on"))})
+            except Exception as e:
+                return self._respond(500, {"error": str(e)})
+        if self.path.startswith("/zotero-add"):
+            try:
+                from urllib.parse import urlparse, parse_qs, unquote
+                q = parse_qs(urlparse(self.path).query)
+                name = os.path.basename(unquote((q.get("name") or ["document.pdf"])[0]))
+                if not name.lower().endswith(".pdf"):
+                    return self._respond(400, {"error": "PDF only"})
+                length = int(self.headers.get("Content-Length", 0))
+                if length <= 0 or length > 200 * 1024 * 1024:
+                    return self._respond(400, {"error": "bad size"})
+                data = self.rfile.read(length)
+                return self._respond(200, zotero_add_pdf(name, data))
             except Exception as e:
                 return self._respond(500, {"error": str(e)})
         if self.path == "/claude-event":
