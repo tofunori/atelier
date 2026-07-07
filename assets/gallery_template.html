@@ -267,6 +267,10 @@
   #tgMenu .hd{font-size:11px;color:#9aa3b2;text-transform:uppercase;letter-spacing:.05em;padding:5px 9px 3px}
   #lb.annot #annotCv{display:block;cursor:crosshair}
   #lbClose{position:fixed;top:10px;right:14px;width:34px;height:34px;display:flex;align-items:center;justify-content:center;font-size:24px;color:var(--muted);cursor:pointer;z-index:101}
+  /* Claude Code desktop preview : sa pilule « send to chat » flotte en haut à droite
+     de l'iframe — décaler nos contrôles sous elle pour éviter le recouvrement. */
+  body.cpv #lbClose,body.cpv #lbFs,body.cpv #lbAnnot{top:54px}
+  body.cpv #cmpBar{padding-right:160px}
   #cmp{position:fixed;inset:0;z-index:120;background:#0b0b0d;display:none;flex-direction:column}
   #cmp.show{display:flex}
   #cmpBar{display:flex;gap:8px;align-items:center;padding:7px 14px;background:var(--bg);border-bottom:1px solid var(--border);font-size:13px;color:var(--muted);flex-shrink:0}
@@ -780,6 +784,8 @@ function buildCollectionChip(){
   if(inp) inp.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); applyCollectionToSel(inp.value); inp.value=''; buildCollectionChip(); } };
 }
 let healthStatus = null;
+// Claude Code desktop preview : décaler les contrôles haut-droite sous la pilule « send to chat »
+fetch('/ping').then(r=>r.json()).then(j=>{ if(j&&j.claudePreview) document.body.classList.add('cpv'); }).catch(()=>{});
 function healthRows(data){
   const ok=data&&data.ok;
   const project=data&&data.project?data.project:'checking...';

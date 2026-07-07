@@ -1411,7 +1411,8 @@ class Handler(SimpleHTTPRequestHandler):
             return self._respond(200, {"annots": store.get(rel, [])})
         if self.path == "/ping":
             return self._respond(200, {"ok": True, "service": "fig-annotate",
-                                       "project": os.path.realpath(PROJECT)})
+                                       "project": os.path.realpath(PROJECT),
+                                       "claudePreview": CLAUDE_PREVIEW})
         if self.path == "/rev":
             # build revision = mtime of the generated index; bumps on every rescan/rebuild,
             # so the open gallery can auto-reload after Claude edits + rescans
