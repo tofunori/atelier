@@ -413,7 +413,11 @@ function __ct(){try{return JSON.parse(localStorage.getItem('claudeTargetV1')||'n
   <div id="wrapMenu">
     <div class="wm-it" data-wrap="win">Window</div>
     <div class="wm-it" data-wrap="off">Off</div>
+    <div class="wm-it" data-wrap="50">50</div>
+    <div class="wm-it" data-wrap="60">60</div>
+    <div class="wm-it" data-wrap="70">70</div>
     <div class="wm-it" data-wrap="80">80</div>
+    <div class="wm-it" data-wrap="90">90</div>
     <div class="wm-it" data-wrap="100">100</div>
     <div class="wm-it" data-wrap="120">120</div>
     <div class="wm-custom"><span>Autre :</span><input id="wrapMenuInput" type="number" min="20" max="400" step="1" placeholder="cols" title="Colonne de wrap"></div>
@@ -608,6 +612,9 @@ function applyWrap(v){
 }
 wrapSel.value = localStorage.getItem("cmWrap") || "off";
 wrapSel.onchange = () => applyWrap(wrapSel.value);
+// colonne custom (ex. 55) : aucune <option> ne matche → wrapSel.value = "" ;
+// applyWrap doit alors relire la vraie valeur stockée, pas le select.
+function wrapValue(){ return wrapSel.value || localStorage.getItem("cmWrap") || "off"; }
 
 const LATEX_GHOST_COMMANDS = [
   "abstract", "author", "begin", "bibliography", "bibliographystyle", "caption",
@@ -911,15 +918,17 @@ async function load(){
       }
     }, 200);
   });
-  applyWrap(wrapSel.value);
+  applyWrap(wrapValue());
   // Rewrap façon VS Code (extension Rewrap, Alt+Q) : reformate RÉELLEMENT le
   // paragraphe courant (ou la sélection) à 80 colonnes — chaque ligne visible
   // redevient une vraie ligne numérotée.
   function rewrapPar(){
-    // colonne = largeur visible du panneau (moins gutter/marge), bornée 40-120 :
+    // colonne = le wrap choisi s'il est numérique (Wrap: 55 → rewrap à 55) ;
+    // sinon largeur visible du panneau (moins gutter/marge), bornée 40-120 :
     // après rewrap, chaque ligne rentre dans le panneau → un numéro par ligne
+    const chosen = parseInt(localStorage.getItem("cmWrap"), 10);
     const gutter = cm.getGutterElement().offsetWidth;
-    const col = Math.max(40, Math.min(120,
+    const col = chosen > 0 ? chosen : Math.max(40, Math.min(120,
       Math.floor((cm.getWrapperElement().clientWidth - gutter - 16) / cm.defaultCharWidth())));
     let from, to;
     if(cm.somethingSelected()){
@@ -1906,7 +1915,7 @@ document.getElementById("diffRestore").onclick = async () => {
     wrapMenu.style.top = (r.bottom + 6) + "px";
     wrapMenu.style.display = "block";
     const cur = localStorage.getItem("cmWrap") || "";
-    wrapMenuInput.value = /^\d+$/.test(cur) && !["80","100","120"].includes(cur) ? cur : "";
+    wrapMenuInput.value = /^\d+$/.test(cur) && !["50","60","70","80","90","100","120"].includes(cur) ? cur : "";
   }
   refreshWrap();
   sbWrap.onclick = (e) => {
