@@ -24,7 +24,12 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 PROJECT = os.path.realpath(os.environ.get("GALLERY_ROOT") or os.getcwd())
 OUT_DIR = os.path.join(PROJECT, "annotations")
 STUDIO = bool(os.environ.get("ATELIER_STUDIO"))  # embarqué dans Atelier Studio : zéro push cmux/muxy/orca
-PORT = int(os.environ.get("FIG_PORT", 8790))
+# Claude Code desktop preview: pas de push cmux/muxy/orca (aucun terminal à viser),
+# mais garde le canal fichier (~/.claude/fig-last-quote.txt, fig-selection.json) + clipboard.
+CLAUDE_PREVIEW = bool(os.environ.get("CLAUDE_PREVIEW"))
+NO_PUSH = STUDIO or CLAUDE_PREVIEW
+# FIG_PORT prioritaire ; sinon PORT (assigné par les harness de preview, ex. Claude Code desktop)
+PORT = int(os.environ.get("FIG_PORT") or os.environ.get("PORT") or 8790)
 
 # /thumb spawns a rasteriser per request on the threaded server, so cap concurrency:
 # cheap tools (sips/rsvg) share _THUMB_SEM; heavy headless-Chrome HTML renders get their
@@ -286,7 +291,7 @@ def find_tex_root(p):
 
 
 def find_muxy_claude_pane():
-    if STUDIO:
+    if NO_PUSH:
         return None
     """Muxy fallback: pane id of a Claude Code session, preferring this project.
 
@@ -322,7 +327,7 @@ def find_muxy_claude_pane():
 
 
 def find_orca_claude_terminal():
-    if STUDIO:
+    if NO_PUSH:
         return None
     """Orca fallback: handle of a live Claude terminal in this project's worktree."""
     exe = shutil.which("orca") or ("/usr/local/bin/orca" if os.path.exists("/usr/local/bin/orca") else None)
@@ -407,7 +412,7 @@ def _oneline(msg):
 
 
 def send_to_target(target, msg, direct):
-    if STUDIO:
+    if NO_PUSH:
         return False
     """Push msg to an explicit {app, id} target. Returns True on success."""
     try:
@@ -523,7 +528,7 @@ def _cmux_visible_claude_surfaces():
 
 
 def find_claude_surface():
-    if STUDIO:
+    if NO_PUSH:
         return None
     """Target Claude Code panel surface.
 
@@ -765,6 +770,9 @@ class Handler(SimpleHTTPRequestHandler):
                 remaining -= len(chunk)
 
     def do_GET(self):
+        # Racine -> galerie (au lieu du directory listing), en preservant la query string
+        if self.path == "/" or self.path.startswith("/?"):
+            self.path = "/figures_index.html" + self.path[1:]
         # PDFs Zotero (mode Studio seulement) : /zotero/<ITEMKEY>/<fichier>.pdf
         if STUDIO and self.path.startswith("/zotero/"):
             import re as _re
@@ -1039,7 +1047,7 @@ class Handler(SimpleHTTPRequestHandler):
             except Exception as e:
                 return self._respond(500, {"error": str(e)})
         if self.path == "/claude-targets":
-            if STUDIO:
+            if NO_PUSH:
                 return self._respond(200, {"targets": []})
             try:
                 return self._respond(200, {"targets": list_claude_targets()})
@@ -1219,10 +1227,10 @@ class Handler(SimpleHTTPRequestHandler):
             # Open the whiteboard/notes as a new embedded-browser tab (window.open
             # is swallowed inside embedded surfaces, so the page asks us to do it).
             try:
-                if STUDIO:
-                    # pas de push cmux/muxy/orca en mode Studio : la page ouvre
-                    # l'onglet elle-même (postMessage) ; 500 => fallback lightbox
-                    return self._respond(500, {"ok": False, "error": "studio mode"})
+                if NO_PUSH:
+                    # pas de push cmux/muxy/orca (mode Studio / Claude preview) : la page
+                    # ouvre l'onglet elle-même (postMessage) ; 500 => fallback lightbox
+                    return self._respond(500, {"ok": False, "error": "no-push mode"})
                 page = "whiteboard" if self.path.startswith("/board") else "notes"
                 url = f"http://127.0.0.1:{PORT}/.fig_thumbs/{page}/index.html"
                 host = ""                                           # optional hint from the gallery page
