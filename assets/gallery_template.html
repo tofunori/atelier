@@ -12,15 +12,15 @@
   body{margin:0;font-family:var(--ui-font);
        background:var(--bg);color:var(--txt);font-size:13px}
   header{position:sticky;top:0;z-index:10;background:var(--card);background:color-mix(in srgb,var(--card) 92%,transparent);backdrop-filter:blur(8px);
-         border-bottom:1px solid var(--border);padding:6px 12px 5px}
-  .brand{display:flex;align-items:center;gap:8px;margin-bottom:5px;flex-wrap:wrap}
+         border-bottom:1px solid var(--border);padding:10px 16px 9px}
+  .brand{display:flex;align-items:center;gap:9px;margin-bottom:9px;flex-wrap:wrap}
   .brand-sp{flex:1}
   .chip.dest{background:transparent;border-color:transparent}
   .chip.dest:hover{background:var(--card2);border-color:var(--border)}
   #searchChip{display:none}
   #q.collapsed{width:auto;flex:1;min-width:170px;max-width:340px;opacity:1;pointer-events:auto}
   /* selects custom : le popup natif macOS est remplacé par un menu maison */
-  .csel-btn{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 24px 0 9px;
+  .csel-btn{display:inline-flex;align-items:center;gap:7px;height:30px;padding:0 26px 0 11px;
     border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--txt);
     font-size:13px;cursor:pointer;position:relative;white-space:nowrap}
   .csel-btn::after{content:"";position:absolute;right:10px;top:50%;width:8px;height:5px;transform:translateY(-40%);
@@ -54,30 +54,30 @@
   .brand .wm{font-size:15px;font-weight:600;letter-spacing:-.01em}
   .brand .proj{font-size:12px;color:var(--muted);font-family:var(--code-font)}
   .brand .stat{margin-left:4px;font-size:12px;color:var(--faint);font-variant-numeric:tabular-nums}
-  .controls{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+  .controls{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
   /* mode embarqué (iframe Atelier) : header compact sur une rangée —
      la marque/projet/stat sont déjà dans le chrome de l'app */
   html.emb .brand{display:none}
   html.emb header{padding:6px 10px}
   html.emb .controls .ctrl-sp{flex:1}
-  input[type=search]{flex:1;min-width:150px;padding:0 10px;border-radius:6px;border:1px solid var(--border);
-        background:var(--bg);color:var(--txt);font-size:13px;height:26px}
+  input[type=search]{flex:1;min-width:190px;padding:0 12px;border-radius:6px;border:1px solid var(--border);
+        background:var(--bg);color:var(--txt);font-size:13px;height:30px}
   input[type=search]:focus{outline:none;border-color:var(--accent)}
   input[type=search].collapsed{display:block} /* recherche toujours visible (design pass) */
   #searchChip.on{border-color:var(--accent);color:var(--accent)}
-  select,button{padding:0 9px;border-radius:6px;border:1px solid var(--border);background:var(--card);
-        color:var(--txt);font-size:12px;font-weight:500;font-family:inherit;cursor:pointer;height:26px;line-height:1.2}
+  select,button{padding:0 11px;border-radius:6px;border:1px solid var(--border);background:var(--card);
+        color:var(--txt);font-size:12px;font-weight:500;font-family:inherit;cursor:pointer;height:30px;line-height:1.2}
   select:hover,button:hover{border-color:var(--border-strong)}
   select:focus-visible,button:focus-visible,.chip:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
   #sort{max-width:180px;color:var(--muted)}
   #folder{max-width:150px;color:var(--muted)}   /* keep it compact; long folder paths would otherwise stretch it to its own line */
-  .chip{display:inline-flex;align-items:center;gap:5px;padding:0 9px;border-radius:6px;
+  .chip{display:inline-flex;align-items:center;gap:5px;padding:0 11px;border-radius:6px;
         border:1px solid var(--border);background:var(--card);cursor:pointer;user-select:none;
-        font-size:12px;font-weight:500;height:26px}
+        font-size:12px;font-weight:500;height:30px}
   .chip:hover{border-color:var(--border-strong)}
   .chip.off{opacity:.45}
   #sort,#folder{flex:0 1 auto;min-width:90px}
-  #rescan{width:28px;padding:0;display:inline-flex;align-items:center;justify-content:center;
+  #rescan{width:32px;padding:0;display:inline-flex;align-items:center;justify-content:center;
         color:var(--muted)}
   #rescan:hover{color:var(--txt)}
   #rescan svg{display:block}
