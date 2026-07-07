@@ -11,7 +11,8 @@
   *{box-sizing:border-box}
   html,body{height:100%}
   body{margin:0;font-family:var(--ui-font);background:var(--bg);color:var(--txt);font-size:13px;overflow:hidden}
-  #app{display:grid;grid-template-columns:300px 4px minmax(0,1fr);height:100vh}
+  #app{display:grid;grid-template-columns:300px 4px minmax(0,1fr);grid-template-rows:minmax(0,100%);height:100vh}
+  #left,#reader{min-height:0}
   #app.no-reader{grid-template-columns:1fr}
   #app.no-list{grid-template-columns:0 0 minmax(0,1fr)}
 
@@ -60,7 +61,7 @@
   #cite:hover{border-color:var(--accent);color:var(--accent)}
   #cite.ok{color:#7fd8a3;border-color:#7fd8a3}
   #cite:disabled{opacity:.4;cursor:default}
-  #frameWrap{flex:1;position:relative;background:#0f1113}
+  #frameWrap{flex:1;min-height:0;position:relative;background:#0f1113}
   #frame{position:absolute;inset:0;width:100%;height:100%;border:none}
   .placeholder{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--faint);font-size:13px}
 </style>
@@ -260,19 +261,25 @@ $('addInput').onchange=async e=>{
 };
 
 /* liste repliable + divider redimensionnable */
+let listW=Number(localStorage.getItem(LS+'listW'))||300;
+if(listW<220||listW>560)listW=300;
+function applyCols(){
+  const app=$('app');
+  // le style inline écraserait .no-list : ne le poser que liste visible
+  app.style.gridTemplateColumns=app.classList.contains('no-list')?'':listW+'px 4px minmax(0,1fr)';
+}
 $('toggleList').onclick=()=>{
   const app=$('app'); app.classList.toggle('no-list');
   localStorage.setItem(LS+'list',app.classList.contains('no-list')?'0':'1');
+  applyCols();
 };
 if(localStorage.getItem(LS+'list')==='0')$('app').classList.add('no-list');
-let listW=Number(localStorage.getItem(LS+'listW'))||300;
-if(listW>=220&&listW<=560)$('app').style.gridTemplateColumns=listW+'px 4px minmax(0,1fr)';
+applyCols();
 $('divider').addEventListener('mousedown',e=>{
   e.preventDefault();
   const startX=e.clientX, startW=listW;
   document.body.classList.add('dragging');
-  const move=ev=>{ listW=Math.min(560,Math.max(220,startW+ev.clientX-startX));
-    $('app').style.gridTemplateColumns=listW+'px 4px minmax(0,1fr)'; };
+  const move=ev=>{ listW=Math.min(560,Math.max(220,startW+ev.clientX-startX)); applyCols(); };
   const up=()=>{ localStorage.setItem(LS+'listW',String(listW));
     document.body.classList.remove('dragging');
     window.removeEventListener('mousemove',move); window.removeEventListener('mouseup',up); };
