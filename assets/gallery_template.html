@@ -305,10 +305,13 @@
     max-width:210px;user-select:none;font-size:12.5px;font-weight:500;white-space:nowrap;flex:none;
     transition:background .12s,color .12s}
   .gtab:hover{background:color-mix(in srgb,var(--card2) 70%,transparent);color:var(--txt)}
-  .gtab.on{background:var(--card2);color:var(--txt);border-color:var(--border);
-    box-shadow:0 1px 2px rgba(0,0,0,.15)}
-  .gtab .gic{flex:none;width:14px;height:14px;opacity:.75}
-  .gtab.on .gic{opacity:1;color:var(--accent)}
+  .gtab.on{background:var(--card2);color:var(--txt);border-color:var(--border)}
+  .gtab .gic{flex:none;width:14px;height:14px;opacity:.7}
+  .gtab.on .gic{opacity:1}
+  /* logo + wordmark = bouton retour galerie */
+  body.tabs-on .brand .logo,body.tabs-on .brand .wm,body.tabs-on .brand .proj{cursor:pointer}
+  body.tab-doc .brand .logo,body.tab-doc .brand .wm{opacity:.82;transition:opacity .12s}
+  body.tab-doc .brand .logo:hover,body.tab-doc .brand .wm:hover{opacity:1}
   .gtab .lb2{overflow:hidden;text-overflow:ellipsis;max-width:160px}
   .gtab .x{flex:none;width:16px;height:16px;border-radius:5px;display:flex;align-items:center;
     justify-content:center;font-size:11px;color:var(--muted);visibility:hidden;margin-right:-5px}
@@ -984,8 +987,8 @@ if(window.self!==window.top){
 const USE_TABS = !((window.self!==window.top) && (()=>{try{return !!sessionStorage.getItem('atelier_nonce');}catch(e){return false;}})());
 const TabShell = (function(){
   const KEY='figTabsV1';
-  let tabs=[{id:'gallery', title:'Galerie', pinned:true}], active='gallery', seq=1;
-  function save(){ try{ localStorage.setItem(KEY, JSON.stringify({tabs:tabs.filter(t=>!t.pinned), active})); }catch(e){} }
+  let tabs=[], active='gallery', seq=1;   // pas d'onglet « Galerie » : le logo Atelier = retour galerie
+  function save(){ try{ localStorage.setItem(KEY, JSON.stringify({tabs, active})); }catch(e){} }
   function restore(){
     try{
       const j=JSON.parse(localStorage.getItem(KEY)||'null');
@@ -1015,7 +1018,7 @@ const TabShell = (function(){
   }
   function render(){
     const bar=document.getElementById('tabbar');
-    document.body.classList.toggle('tabs-on', USE_TABS && tabs.length>1);
+    document.body.classList.toggle('tabs-on', USE_TABS && tabs.length>0);
     bar.innerHTML=tabs.map(t=>
       `<span class="gtab ${t.id===active?'on':''} ${t.pinned?'pinned':''}" data-tab="${t.id}">`+
       iconFor(t)+`<span class="lb2">${esc(t.title)}</span>`+(t.pinned?'':'<span class="x" data-x="'+t.id+'">&#10005;</span>')+`</span>`).join('');
@@ -1030,10 +1033,10 @@ const TabShell = (function(){
   }
   function activate(id){ active=id; render(); }
   function close(id){
-    const i=tabs.findIndex(t=>t.id===id); if(i<0||tabs[i].pinned) return;
+    const i=tabs.findIndex(t=>t.id===id); if(i<0) return;
     document.querySelector('#tabPanes iframe[data-tab="'+id+'"]')?.remove();
     tabs.splice(i,1);
-    if(active===id) active=tabs[Math.max(0,i-1)].id;
+    if(active===id) active = tabs.length ? tabs[Math.max(0,i-1)].id : 'gallery';
     render();
   }
   function open(url, title, singleton){
@@ -1044,6 +1047,11 @@ const TabShell = (function(){
     activate(t.id);
     return true;
   }
+  // logo + wordmark + nom de projet = retour galerie
+  ['.brand .logo','.brand .wm','.brand .proj'].forEach(sel=>{
+    const el=document.querySelector(sel);
+    if(el){ el.title='Retour à la galerie'; el.addEventListener('click', ()=>{ if(USE_TABS) activate('gallery'); }); }
+  });
   restore(); render();
   window.addEventListener('resize', ()=>{ if(active!=='gallery') hdrH(); });
   window.addEventListener('message', e=>{
