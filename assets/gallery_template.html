@@ -17,6 +17,7 @@
   .brand-sp{flex:1}
   .chip.dest{background:transparent;border-color:transparent}
   .chip.dest:hover{background:var(--card2);border-color:var(--border)}
+  .chip.dest.on{background:var(--card2);border-color:var(--border);color:var(--txt)}
   #searchChip{display:none}
   #q.collapsed{width:auto;flex:1;min-width:170px;max-width:340px;opacity:1;pointer-events:auto}
   /* selects custom : le popup natif macOS est remplacé par un menu maison */
@@ -317,7 +318,6 @@
     justify-content:center;font-size:11px;color:var(--muted);visibility:hidden;margin-right:-5px}
   .gtab:hover .x,.gtab.on .x{visibility:visible}
   .gtab .x:hover{background:var(--border);color:var(--txt)}
-  .gtab.pinned .x{display:none}
   #tabPanes{display:none}
   body.tab-doc #tabPanes{display:block}
   body.tab-doc main#grid,body.tab-doc footer{display:none}
@@ -987,47 +987,52 @@ if(window.self!==window.top){
 const USE_TABS = !((window.self!==window.top) && (()=>{try{return !!sessionStorage.getItem('atelier_nonce');}catch(e){return false;}})());
 const TabShell = (function(){
   const KEY='figTabsV1';
-  let tabs=[], active='gallery', seq=1;   // pas d'onglet « Galerie » : le logo Atelier = retour galerie
+  // Deux natures d'objets, UN seul contrôle chacun (pas de doublon) :
+  //  · les VUES (galerie/library/board/notes) = les chips en haut à droite ;
+  //  · les DOCUMENTS ouverts (fichiers, PDF) = les onglets de la barre.
+  const VIEWS={
+    lib:  {chip:'biblioChip', url:'/.fig_thumbs/biblio.html'},
+    board:{chip:'boardChip',  url:'/.fig_thumbs/whiteboard/index.html'},
+    notes:{chip:'notesChip',  url:'/.fig_thumbs/notes/index.html'}
+  };
+  const paneUrl={};  // id -> url (vues + docs)
+  let tabs=[], active='gallery', seq=1;
   function save(){ try{ localStorage.setItem(KEY, JSON.stringify({tabs, active})); }catch(e){} }
   function restore(){
     try{
       const j=JSON.parse(localStorage.getItem(KEY)||'null');
-      if(j && Array.isArray(j.tabs)){ j.tabs.forEach(t=>{ t.id='t'+(seq++); tabs.push(t); }); }
+      if(j && Array.isArray(j.tabs)){ j.tabs.forEach(t=>{ const id='t'+(seq++); paneUrl[id]=t.url;
+        tabs.push({id, title:t.title, url:t.url}); }); }
     }catch(e){}
   }
   function hdrH(){ document.body.style.setProperty('--hdrH', document.querySelector('header').offsetHeight+'px'); }
-  function pane(t){
-    let f=document.querySelector('#tabPanes iframe[data-tab="'+t.id+'"]');
-    if(!f){ f=document.createElement('iframe'); f.dataset.tab=t.id; f.src=t.url;
+  function pane(id){
+    let f=document.querySelector('#tabPanes iframe[data-tab="'+id+'"]');
+    if(!f){ f=document.createElement('iframe'); f.dataset.tab=id; f.src=paneUrl[id];
             document.getElementById('tabPanes').appendChild(f); }
     return f;
   }
   const ICO={
-    gallery:'<svg class="gic" viewBox="0 0 24 24" fill="currentColor"><rect x="2" y="2" width="9.5" height="13.5" rx="1.6"/><rect x="2" y="17" width="9.5" height="5" rx="1.6"/><rect x="13.5" y="2" width="8.5" height="5" rx="1.6"/><rect x="13.5" y="9" width="8.5" height="13" rx="1.6"/></svg>',
-    lib:'<svg class="gic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 2h7.5L13 4.5V14H3z"/><path d="M5.5 6.5h5M5.5 9h5M5.5 11.5h3"/></svg>',
-    notes:'<svg class="gic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M11 2l3 3-8 8H3v-3z"/></svg>',
-    board:'<svg class="gic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2" y="3" width="12" height="9" rx="1"/><path d="M5.5 14h5"/></svg>',
     pdf:'<svg class="gic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4 1.5h5.5L13 5v9.5H4z"/><path d="M9.5 1.5V5H13"/></svg>',
     doc:'<svg class="gic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4 1.5h5.5L13 5v9.5H4z"/><path d="M9.5 1.5V5H13M6 8h5M6 10.5h5"/></svg>'
   };
   function iconFor(t){
-    if(t.id==='gallery') return ICO.gallery;
-    if(t.singleton && ICO[t.singleton]) return ICO[t.singleton];
-    if(/\.pdf$/i.test(t.title)||/ — PDF$/.test(t.title)) return ICO.pdf;
-    return ICO.doc;
+    return (/\.pdf$/i.test(t.title)||/ — PDF$/.test(t.title)) ? ICO.pdf : ICO.doc;
   }
   function render(){
     const bar=document.getElementById('tabbar');
     document.body.classList.toggle('tabs-on', USE_TABS && tabs.length>0);
     bar.innerHTML=tabs.map(t=>
-      `<span class="gtab ${t.id===active?'on':''} ${t.pinned?'pinned':''}" data-tab="${t.id}">`+
-      iconFor(t)+`<span class="lb2">${esc(t.title)}</span>`+(t.pinned?'':'<span class="x" data-x="'+t.id+'">&#10005;</span>')+`</span>`).join('');
+      `<span class="gtab ${t.id===active?'on':''}" data-tab="${t.id}">`+
+      iconFor(t)+`<span class="lb2">${esc(t.title)}</span><span class="x" data-x="${t.id}">&#10005;</span></span>`).join('');
+    // chips-vues : état actif (un seul « Library », etc.)
+    for(const v in VIEWS) document.getElementById(VIEWS[v].chip).classList.toggle('on', active===v);
     document.body.classList.toggle('tab-doc', active!=='gallery');
     document.querySelectorAll('#tabPanes iframe').forEach(f=>f.classList.toggle('on', f.dataset.tab===active));
-    if(active!=='gallery'){ const t=tabs.find(x=>x.id===active); if(t) pane(t).classList.add('on'); hdrH(); }
+    if(active!=='gallery'){ pane(active).classList.add('on'); hdrH(); }
     bar.querySelectorAll('.gtab').forEach(el=>{
       el.onclick=e=>{ const x=e.target.closest('[data-x]'); if(x){ close(x.dataset.x); return; } activate(el.dataset.tab); };
-      el.onauxclick=e=>{ if(e.button===1 && !tabs.find(t=>t.id===el.dataset.tab)?.pinned) close(el.dataset.tab); };
+      el.onauxclick=e=>{ if(e.button===1) close(el.dataset.tab); };
     });
     save();
   }
@@ -1035,17 +1040,20 @@ const TabShell = (function(){
   function close(id){
     const i=tabs.findIndex(t=>t.id===id); if(i<0) return;
     document.querySelector('#tabPanes iframe[data-tab="'+id+'"]')?.remove();
-    tabs.splice(i,1);
+    delete paneUrl[id]; tabs.splice(i,1);
     if(active===id) active = tabs.length ? tabs[Math.max(0,i-1)].id : 'gallery';
     render();
   }
-  function open(url, title, singleton){
+  function openView(v){          // chip Library/Board/Notes : bascule la vue, pas d'onglet
     if(!USE_TABS) return false;
-    let t = singleton ? tabs.find(x=>x.singleton===singleton)
-                      : tabs.find(x=>x.url===url);
-    if(!t){ t={id:'t'+(seq++), title:title||url.split('/').pop(), url, singleton}; tabs.push(t); }
-    activate(t.id);
-    return true;
+    if(active===v){ activate('gallery'); return true; }   // recliquer le chip actif = retour galerie
+    paneUrl[v]=VIEWS[v].url; activate(v); return true;
+  }
+  function open(url, title){     // document (fichier/PDF) : onglet dédié
+    if(!USE_TABS) return false;
+    let t=tabs.find(x=>x.url===url);
+    if(!t){ const id='t'+(seq++); paneUrl[id]=url; t={id, title:title||url.split('/').pop(), url}; tabs.push(t); }
+    activate(t.id); return true;
   }
   // logo + wordmark + nom de projet = retour galerie
   ['.brand .logo','.brand .wm','.brand .proj'].forEach(sel=>{
@@ -1057,19 +1065,17 @@ const TabShell = (function(){
   window.addEventListener('message', e=>{
     const d=e.data;
     if(d && d.type==='gallery-open-tab' && typeof d.url==='string' && d.url.startsWith('/'))
-      open(d.url, d.title||'', d.singleton||null);
+      open(d.url, d.title||'');
   });
   document.addEventListener('keydown', e=>{
     if(!(e.metaKey||e.ctrlKey)) return;
-    if(e.key==='w' && active!=='gallery'){ e.preventDefault(); close(active); }
-    const n=parseInt(e.key,10);
-    if(n>=1 && n<=9 && tabs[n-1]){ e.preventDefault(); activate(tabs[n-1].id); }
+    if(e.key==='w' && active!=='gallery' && tabs.find(t=>t.id===active)){ e.preventDefault(); close(active); }
   });
-  return {open, activate, close};
+  return {open, openView, activate, close};
 })();
-document.getElementById('biblioChip').onclick=()=>{ if(!TabShell.open('/.fig_thumbs/biblio.html','Library','lib')) toolOpenLightbox('biblio.html'); };
-document.getElementById('boardChip').onclick=()=>{ if(!TabShell.open('/.fig_thumbs/whiteboard/index.html','Board','board')) toolOpenTab('/board/open-surface','whiteboard'); };
-document.getElementById('notesChip').onclick=()=>{ if(!TabShell.open('/.fig_thumbs/notes/index.html','Notes','notes')) toolOpenTab('/notes/open-surface','notes'); };
+document.getElementById('biblioChip').onclick=()=>{ if(!TabShell.openView('lib')) toolOpenLightbox('biblio.html'); };
+document.getElementById('boardChip').onclick=()=>{ if(!TabShell.openView('board')) toolOpenTab('/board/open-surface','whiteboard'); };
+document.getElementById('notesChip').onclick=()=>{ if(!TabShell.openView('notes')) toolOpenTab('/notes/open-surface','notes'); };
 document.getElementById('collChip').onclick=e=>{ e.stopPropagation(); buildCollectionChip(); menuToggle(document.getElementById('collMenu'), e.currentTarget); };
 document.getElementById('viewChip').onclick=e=>{ e.stopPropagation(); buildViewMenu(); menuToggle(document.getElementById('viewMenu'), e.currentTarget); };
 document.getElementById('exportSel').onclick=e=>{ e.stopPropagation(); buildExportMenu(); menuToggle(document.getElementById('exportMenu'), e.currentTarget); };
