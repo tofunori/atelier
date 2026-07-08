@@ -13,11 +13,19 @@
        background:var(--bg);color:var(--txt);font-size:13px}
   header{position:sticky;top:0;z-index:10;background:var(--card);background:color-mix(in srgb,var(--card) 92%,transparent);backdrop-filter:blur(8px);
          border-bottom:1px solid var(--border);padding:10px 16px 9px}
-  .brand{display:flex;align-items:center;gap:9px;margin-bottom:9px;flex-wrap:wrap}
-  .brand-sp{flex:1}
+  .brand{display:flex;align-items:center;gap:9px;margin-bottom:9px;flex-wrap:nowrap}
+  .brand-sp{flex:1;min-width:8px}
+  /* la rangée reste sur une seule ligne : le nom de projet et le compteur
+     se tronquent / disparaissent avant que les boutons ne passent à la ligne */
+  .brand .logo,.brand .wm,.chip.dest{flex:none}
+  .brand .proj{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:3}
+  .brand .stat{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:5}
   .chip.dest{background:transparent;border-color:transparent}
   .chip.dest:hover{background:var(--card2);border-color:var(--border)}
   .chip.dest.on{background:var(--card2);border-color:var(--border);color:var(--txt)}
+  .icon-chip{padding:0;width:30px;justify-content:center;color:var(--muted)}
+  .icon-chip:hover{color:var(--txt)}
+  .icon-chip svg{display:block}
   #searchChip{display:none}
   #q.collapsed{width:auto;flex:1;min-width:170px;max-width:340px;opacity:1;pointer-events:auto}
   /* selects custom : le popup natif macOS est remplacé par un menu maison */
@@ -346,7 +354,7 @@
     <span class="chip dest" id="biblioChip" title="Open the Zotero library (list, search, PDF reader)">Library</span>
     <span class="chip dest" id="boardChip" title="Open the project whiteboard (tldraw)">Board</span>
     <span class="chip dest" id="notesChip" title="Open the project notes (markdown)">Notes</span>
-    <span class="chip dest" id="viewChip" title="Settings — server health, theme, archives, hidden, auto-hide rules">Settings &#9662;</span>
+    <span class="chip dest icon-chip" id="viewChip" title="Settings — server health, theme, archives, hidden, auto-hide rules" aria-label="Settings"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
   </div>
   <div id="tabbar"></div>
   <div class="controls">
