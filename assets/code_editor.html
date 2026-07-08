@@ -48,6 +48,20 @@
   #pickerList div{padding:7px 14px;font-size:13px;cursor:pointer;display:flex;gap:8px}
   #pickerList div:hover{background:var(--border)}
   #pickerList .d{color:var(--accent)}
+  /* ---- mode « IDE » : navigateur de fichiers inline (browse=1) ---- */
+  #browser{display:none;flex:1;overflow:auto;padding:14px 18px 40px}
+  body.browse #ed{display:none!important}
+  body.browse #browser{display:block}
+  body.browse #wrapSel,body.browse #wrapCustom,body.browse #state{display:none}
+  #browser .bcrumb{color:var(--muted);font-size:12px;margin:0 0 12px;font-family:var(--code-font)}
+  #browser .bgrid{display:flex;flex-direction:column;gap:1px;max-width:720px}
+  #browser .brow{display:flex;align-items:center;gap:9px;padding:7px 10px;border-radius:7px;cursor:pointer;font-size:13px;color:var(--txt)}
+  #browser .brow:hover{background:var(--card2)}
+  #browser .brow .bic{flex:none;width:15px;height:15px;opacity:.7;color:var(--muted)}
+  #browser .brow.dir .bic{color:var(--accent);opacity:.9}
+  #browser .brow .bsub{color:var(--muted);font-size:11px;margin-left:auto}
+  #browser .bhd{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:14px 2px 5px}
+  #browser .bhd:first-child{margin-top:0}
 
   /* ===== thème code « atelier » (surcharge material-darker) ===== */
   .cm-s-material-darker.CodeMirror{background:#1e2126;color:#d8d3c8}
@@ -86,6 +100,7 @@
   <span style="margin-left:auto;color:var(--muted)">Cmd+S: save · selection visible to Claude</span>
 </header>
 <div id="ed" style="flex:1;display:flex;flex-direction:column;min-height:0;background:#212121"></div>
+<div id="browser"></div>
 <div id="picker"><div id="pickerBox">
   <div id="pickerPath"></div>
   <div id="pickerList"></div>
@@ -258,7 +273,14 @@ setInterval(async () => {
   }catch(e){}
 }, 2000);
 
+const BROWSE = new URLSearchParams(location.search).get("browse") === "1";
 if(path) load();
+else if(BROWSE){
+  document.body.classList.add("browse");
+  document.getElementById("fname").textContent = "IDE — fichiers";
+  document.title = "IDE";
+  renderBrowser("");
+}
 
 
 // recent files (shared between studio and editor via localStorage)
@@ -270,8 +292,45 @@ function recentsAdd(p){
 }
 function openTarget(target){
   const page = target.endsWith(".tex") ? "latex_studio.html" : "code_editor.html";
-  location.href = "/.fig_thumbs/" + page + "?path=" + encodeURIComponent(target);
+  const url = "/.fig_thumbs/" + page + "?path=" + encodeURIComponent(target);
+  // embarqué dans la galerie (onglets) : ouvrir le fichier dans un onglet, garder l'IDE
+  if(window.parent !== window){
+    try{ window.parent.postMessage({type:'gallery-open-tab', url, title: target.split("/").pop()}, '*'); return; }catch(e){}
+  }
+  location.href = url;
 }
+// ---- mode IDE : navigateur de fichiers inline (browse=1, aucun path) ----
+async function renderBrowser(dir){
+  const r = await fetch("/ls?dir=" + encodeURIComponent(dir || ""));
+  const j = await r.json();
+  if(j.error) return;
+  const b = document.getElementById("browser");
+  const home = j.path.replace(/^\/Users\/[^/]+/, "~");
+  let html = '<div class="bcrumb">' + esc(home) + '</div><div class="bgrid">';
+  const rec = recentsGet();
+  if(rec.length && !dir){
+    html += '<div class="bhd">Récents</div>';
+    rec.slice(0,6).forEach(p => {
+      html += '<div class="brow" data-file="' + escA(p) + '"><span class="bic">' + ICO_FILE + '</span>' +
+        esc(p.split("/").pop()) + '<span class="bsub">' +
+        esc(p.replace(/^\/Users\/[^/]+\/Documents\//, "").replace(/\/[^/]*$/, "")) + '</span></div>';
+    });
+    html += '<div class="bhd">Dossier</div>';
+  }
+  if(j.parent) html += '<div class="brow dir" data-dir="' + escA(j.parent) + '"><span class="bic">' + ICO_UP + '</span>..</div>';
+  j.items.filter(i => i.dir).forEach(i =>
+    html += '<div class="brow dir" data-dir="' + escA(j.path + "/" + i.name) + '"><span class="bic">' + ICO_DIR + '</span>' + esc(i.name) + '</div>');
+  j.items.filter(i => !i.dir && EDITABLE.test(i.name)).forEach(i =>
+    html += '<div class="brow" data-file="' + escA(j.path + "/" + i.name) + '"><span class="bic">' + ICO_FILE + '</span>' + esc(i.name) + '</div>');
+  html += '</div>';
+  b.innerHTML = html;
+  b.querySelectorAll('[data-dir]').forEach(el => el.onclick = () => renderBrowser(el.dataset.dir));
+  b.querySelectorAll('[data-file]').forEach(el => el.onclick = () => openTarget(el.dataset.file));
+}
+const ICO_DIR = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M1.5 4.5v8h13v-7H7L5.5 4z"/></svg>';
+const ICO_UP  = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M8 12V4M4.5 7.5L8 4l3.5 3.5"/></svg>';
+const ICO_FILE= '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M4 1.5h5.5L13 5v9.5H4z"/><path d="M9.5 1.5V5H13"/></svg>';
+const escA = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 // --- mini file explorer (Open button) ---
 const EDITABLE = /\.(tex|sty|bib|py|r|R|md|jl|sh|bash|txt|csv|json|yaml|yml|toml)$/;
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));

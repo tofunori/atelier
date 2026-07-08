@@ -23,6 +23,9 @@
   .chip.dest{background:transparent;border-color:transparent}
   .chip.dest:hover{background:var(--card2);border-color:var(--border)}
   .chip.dest.on{background:var(--card2);border-color:var(--border);color:var(--txt)}
+  /* mode onglets : le chip IDE n'existe que quand le shell d'onglets est actif */
+  #ideChip{display:none}
+  body.use-tabs #ideChip{display:inline-flex}
   .icon-chip{padding:0;width:30px;justify-content:center;color:var(--muted)}
   .icon-chip:hover{color:var(--txt)}
   .icon-chip svg{display:block}
@@ -74,7 +77,7 @@
   .brand .logo{color:var(--txt);align-self:center;display:block}
   .brand .wm{font-size:15px;font-weight:600;letter-spacing:-.01em}
   .brand .proj{font-size:12px;color:var(--muted);font-family:var(--code-font)}
-  .brand .stat{margin-left:4px;font-size:12px;color:var(--faint);font-variant-numeric:tabular-nums}
+  .brand .stat{display:none}
   .controls{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
   /* mode embarqué (iframe Atelier) : header compact sur une rangée —
      la marque/projet/stat sont déjà dans le chrome de l'app */
@@ -354,6 +357,7 @@
     <span class="chip dest" id="biblioChip" title="Open the Zotero library (list, search, PDF reader)">Library</span>
     <span class="chip dest" id="boardChip" title="Open the project whiteboard (tldraw)">Board</span>
     <span class="chip dest" id="notesChip" title="Open the project notes (markdown)">Notes</span>
+    <span class="chip dest" id="ideChip" title="IDE — fichiers code &amp; LaTeX du projet">IDE</span>
     <span class="chip dest icon-chip" id="viewChip" title="Settings — server health, theme, archives, hidden, auto-hide rules" aria-label="Settings"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
   </div>
   <div id="tabbar"></div>
@@ -1002,13 +1006,19 @@ const TabShell = (function(){
   // Deux natures d'objets, UN seul contrôle chacun (pas de doublon) :
   //  · les VUES (galerie/library/board/notes) = les chips en haut à droite ;
   //  · les DOCUMENTS ouverts (fichiers, PDF) = les onglets de la barre.
-  const VIEWS={
+  // Design : les SECTIONS (Library/Board/Notes/IDE) = chips de la barre du haut.
+  // La rangée d'onglets n'existe qu'en territoire IDE : « Fichiers » (l'explorateur)
+  // + les fichiers de code/LaTeX ouverts. Le home (galerie) et les autres sections
+  // ne montrent jamais d'onglets de fichiers.
+  const SECTIONS={
     lib:  {chip:'biblioChip', url:'/.fig_thumbs/biblio.html'},
     board:{chip:'boardChip',  url:'/.fig_thumbs/whiteboard/index.html'},
-    notes:{chip:'notesChip',  url:'/.fig_thumbs/notes/index.html'}
+    notes:{chip:'notesChip',  url:'/.fig_thumbs/notes/index.html'},
+    ide:  {chip:'ideChip',    url:'/.fig_thumbs/code_editor.html?browse=1'}
   };
-  const paneUrl={};  // id -> url (vues + docs)
-  let tabs=[], active='gallery', seq=1;
+  const paneUrl={}; for(const s in SECTIONS) paneUrl[s]=SECTIONS[s].url;  // id -> url (sections + docs)
+  let tabs=[], active='gallery', seq=1;   // tabs = fichiers ouverts (territoire IDE)
+  const inIde = () => active==='ide' || tabs.some(t=>t.id===active);
   function save(){ try{ localStorage.setItem(KEY, JSON.stringify({tabs, active})); }catch(e){} }
   function restore(){
     try{
@@ -1033,33 +1043,42 @@ const TabShell = (function(){
   }
   function render(){
     const bar=document.getElementById('tabbar');
-    document.body.classList.toggle('tabs-on', USE_TABS && tabs.length>0);
-    bar.innerHTML=tabs.map(t=>
-      `<span class="gtab ${t.id===active?'on':''}" data-tab="${t.id}">`+
-      iconFor(t)+`<span class="lb2">${esc(t.title)}</span><span class="x" data-x="${t.id}">&#10005;</span></span>`).join('');
-    // chips-vues : état actif (un seul « Library », etc.)
-    for(const v in VIEWS) document.getElementById(VIEWS[v].chip).classList.toggle('on', active===v);
+    document.body.classList.toggle('tabs-on', USE_TABS);
+    // chips-sections : la section active s'allume ; IDE s'allume aussi quand un fichier est actif
+    for(const s in SECTIONS){
+      const c=document.getElementById(SECTIONS[s].chip);
+      if(c) c.classList.toggle('on', s==='ide' ? inIde() : active===s);
+    }
+    // rangée d'onglets : seulement en territoire IDE (« Fichiers » + fichiers ouverts)
+    if(inIde()){
+      const files='<span class="gtab sec '+(active==='ide'?'on':'')+'" data-tab="ide">'+
+        '<svg class="gic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M1.5 4.5v8h13v-7H7L5.5 4z"/></svg>'+
+        '<span class="lb2">Fichiers</span></span>';
+      bar.innerHTML = files + tabs.map(t=>
+        `<span class="gtab ${t.id===active?'on':''}" data-tab="${t.id}">`+
+        iconFor(t)+`<span class="lb2">${esc(t.title)}</span><span class="x" data-x="${t.id}">&#10005;</span></span>`).join('');
+      bar.style.display='';
+    } else { bar.innerHTML=''; bar.style.display='none'; }
     document.body.classList.toggle('tab-doc', active!=='gallery');
     document.querySelectorAll('#tabPanes iframe').forEach(f=>f.classList.toggle('on', f.dataset.tab===active));
     if(active!=='gallery'){ pane(active).classList.add('on'); hdrH(); }
     bar.querySelectorAll('.gtab').forEach(el=>{
       el.onclick=e=>{ const x=e.target.closest('[data-x]'); if(x){ close(x.dataset.x); return; } activate(el.dataset.tab); };
-      el.onauxclick=e=>{ if(e.button===1) close(el.dataset.tab); };
+      el.onauxclick=e=>{ if(e.button===1 && !el.classList.contains('sec')) close(el.dataset.tab); };
     });
     save();
   }
   function activate(id){ active=id; render(); }
   function close(id){
-    const i=tabs.findIndex(t=>t.id===id); if(i<0) return;
+    const i=tabs.findIndex(t=>t.id===id); if(i<0) return;   // sections : jamais fermables
     document.querySelector('#tabPanes iframe[data-tab="'+id+'"]')?.remove();
     delete paneUrl[id]; tabs.splice(i,1);
-    if(active===id) active = tabs.length ? tabs[Math.max(0,i-1)].id : 'gallery';
+    if(active===id) active='ide';   // fermer un fichier ramène à l'explorateur, pas au home
     render();
   }
-  function openView(v){          // chip Library/Board/Notes : bascule la vue, pas d'onglet
+  function openView(v){          // ouvre/active une section (Library/Board/Notes/IDE)
     if(!USE_TABS) return false;
-    if(active===v){ activate('gallery'); return true; }   // recliquer le chip actif = retour galerie
-    paneUrl[v]=VIEWS[v].url; activate(v); return true;
+    activate(v); return true;
   }
   function open(url, title){     // document (fichier/PDF) : onglet dédié
     if(!USE_TABS) return false;
@@ -1086,9 +1105,18 @@ const TabShell = (function(){
   });
   return {open, openView, activate, close};
 })();
-document.getElementById('biblioChip').onclick=()=>{ if(!TabShell.openView('lib')) toolOpenLightbox('biblio.html'); };
-document.getElementById('boardChip').onclick=()=>{ if(!TabShell.openView('board')) toolOpenTab('/board/open-surface','whiteboard'); };
-document.getElementById('notesChip').onclick=()=>{ if(!TabShell.openView('notes')) toolOpenTab('/notes/open-surface','notes'); };
+// point d'entrée unique pour les vues (chips masqués + entrées du menu Settings)
+function openDest(name){
+  if(name==='ide')  { if(!TabShell.openView('ide'))   window.open('/.fig_thumbs/code_editor.html?browse=1','_blank'); return; }
+  if(name==='lib')  { if(!TabShell.openView('lib'))   toolOpenLightbox('biblio.html'); return; }
+  if(name==='board'){ if(!TabShell.openView('board')) toolOpenTab('/board/open-surface','whiteboard'); return; }
+  if(name==='notes'){ if(!TabShell.openView('notes')) toolOpenTab('/notes/open-surface','notes'); return; }
+}
+window.openDest = openDest;
+document.getElementById('biblioChip').onclick=()=>openDest('lib');
+document.getElementById('boardChip').onclick=()=>openDest('board');
+document.getElementById('notesChip').onclick=()=>openDest('notes');
+document.getElementById('ideChip').onclick=()=>openDest('ide');
 document.getElementById('collChip').onclick=e=>{ e.stopPropagation(); buildCollectionChip(); menuToggle(document.getElementById('collMenu'), e.currentTarget); };
 document.getElementById('viewChip').onclick=e=>{ e.stopPropagation(); buildViewMenu(); menuToggle(document.getElementById('viewMenu'), e.currentTarget); };
 document.getElementById('exportSel').onclick=e=>{ e.stopPropagation(); buildExportMenu(); menuToggle(document.getElementById('exportMenu'), e.currentTarget); };
