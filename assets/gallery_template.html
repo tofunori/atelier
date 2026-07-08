@@ -310,9 +310,8 @@
   .gtab .gic{flex:none;width:14px;height:14px;opacity:.7}
   .gtab.on .gic{opacity:1}
   /* logo + wordmark = bouton retour galerie */
-  body.tabs-on .brand .logo,body.tabs-on .brand .wm,body.tabs-on .brand .proj{cursor:pointer}
-  body.tab-doc .brand .logo,body.tab-doc .brand .wm{opacity:.82;transition:opacity .12s}
-  body.tab-doc .brand .logo:hover,body.tab-doc .brand .wm:hover{opacity:1}
+  body.use-tabs .brand .logo,body.use-tabs .brand .wm,body.use-tabs .brand .proj{cursor:pointer;user-select:none}
+  body.use-tabs .brand .logo:hover,body.use-tabs .brand .wm:hover{opacity:.72;transition:opacity .12s}
   .gtab .lb2{overflow:hidden;text-overflow:ellipsis;max-width:160px}
   .gtab .x{flex:none;width:16px;height:16px;border-radius:5px;display:flex;align-items:center;
     justify-content:center;font-size:11px;color:var(--muted);visibility:hidden;margin-right:-5px}
@@ -1055,7 +1054,8 @@ const TabShell = (function(){
     if(!t){ const id='t'+(seq++); paneUrl[id]=url; t={id, title:title||url.split('/').pop(), url}; tabs.push(t); }
     activate(t.id); return true;
   }
-  // logo + wordmark + nom de projet = retour galerie
+  // logo + wordmark + nom de projet = retour galerie (curseur main via body.use-tabs)
+  if(USE_TABS) document.body.classList.add('use-tabs');
   ['.brand .logo','.brand .wm','.brand .proj'].forEach(sel=>{
     const el=document.querySelector(sel);
     if(el){ el.title='Retour à la galerie'; el.addEventListener('click', ()=>{ if(USE_TABS) activate('gallery'); }); }
