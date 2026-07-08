@@ -295,6 +295,28 @@
   #confirmOk{background:#5c1f1f;border-color:#7a2a2a;color:#fff}
   #confirmOk:hover{background:#6e2626}
   footer{padding:20px;text-align:center;color:var(--muted);font-size:11px}
+  /* ---- onglets internes (option A) : galerie épinglée + documents/outils ---- */
+  #tabbar{display:none;align-items:flex-end;gap:2px;padding:6px 10px 0;margin:8px -14px -9px;
+    background:var(--card2,#1f1f23);border-top:1px solid var(--border)}
+  body.tabs-on #tabbar{display:flex}
+  .gtab{display:flex;align-items:center;gap:7px;padding:6px 12px 7px;border-radius:8px 8px 0 0;
+    color:var(--muted);cursor:pointer;border:1px solid transparent;border-bottom:none;
+    max-width:200px;user-select:none;font-size:12px;position:relative;white-space:nowrap}
+  .gtab:hover{color:var(--txt);background:color-mix(in srgb,var(--card) 55%,transparent)}
+  .gtab.on{background:var(--bg);color:var(--txt);border-color:var(--border)}
+  .gtab.on::before{content:"";position:absolute;left:10px;right:10px;top:0;height:2px;
+    border-radius:0 0 2px 2px;background:var(--accent)}
+  .gtab .lb2{overflow:hidden;text-overflow:ellipsis;max-width:150px}
+  .gtab .x{flex:none;width:15px;height:15px;border-radius:4px;display:flex;align-items:center;
+    justify-content:center;font-size:12px;color:var(--muted);visibility:hidden}
+  .gtab:hover .x,.gtab.on .x{visibility:visible}
+  .gtab .x:hover{background:var(--border);color:var(--txt)}
+  .gtab.pinned .x{display:none}
+  #tabPanes{display:none}
+  body.tab-doc #tabPanes{display:block}
+  body.tab-doc main#grid,body.tab-doc footer{display:none}
+  #tabPanes iframe{display:none;width:100%;border:0;height:calc(100vh - var(--hdrH,96px))}
+  #tabPanes iframe.on{display:block}
   body.fs-mode{overflow:hidden;background:#000}
   body.fs-mode header,body.fs-mode main,body.fs-mode footer{display:none!important}
   @media (max-width:700px){
@@ -351,8 +373,10 @@
     <button id="exportSel" style="display:none" title="Export selected: folder / zip / contact sheet">Export (0) &#9662;</button>
     <div id="exportMenu" class="menu"></div>
   </div>
+  <div id="tabbar"></div>
 </header>
 <main id="grid"></main>
+<div id="tabPanes"></div>
 <div id="lb">
   <span id="lbClose">&#10005;</span>
   <span id="lbFs" title="Plein écran (f ou double-clic)">&#9974;</span>
@@ -950,9 +974,76 @@ if(window.self!==window.top){
   const sp=document.createElement('span'); sp.className='ctrl-sp'; ctr.appendChild(sp);
   for(const id of ['biblioChip','boardChip','notesChip','viewChip']) ctr.appendChild(document.getElementById(id));
 }
-document.getElementById('biblioChip').onclick=()=>toolOpenLightbox('biblio.html');
-document.getElementById('boardChip').onclick=()=>toolOpenTab('/board/open-surface','whiteboard');
-document.getElementById('notesChip').onclick=()=>toolOpenTab('/notes/open-surface','notes');
+// ---- Onglets internes (option A) ----------------------------------------
+// Actifs partout SAUF quand la galerie est hébergée par Atelier Studio (muxy),
+// qui a déjà son propre système d'onglets via postMessage+nonce.
+const USE_TABS = !((window.self!==window.top) && (()=>{try{return !!sessionStorage.getItem('atelier_nonce');}catch(e){return false;}})());
+const TabShell = (function(){
+  const KEY='figTabsV1';
+  let tabs=[{id:'gallery', title:'Galerie', pinned:true}], active='gallery', seq=1;
+  function save(){ try{ localStorage.setItem(KEY, JSON.stringify({tabs:tabs.filter(t=>!t.pinned), active})); }catch(e){} }
+  function restore(){
+    try{
+      const j=JSON.parse(localStorage.getItem(KEY)||'null');
+      if(j && Array.isArray(j.tabs)){ j.tabs.forEach(t=>{ t.id='t'+(seq++); tabs.push(t); }); }
+    }catch(e){}
+  }
+  function hdrH(){ document.body.style.setProperty('--hdrH', document.querySelector('header').offsetHeight+'px'); }
+  function pane(t){
+    let f=document.querySelector('#tabPanes iframe[data-tab="'+t.id+'"]');
+    if(!f){ f=document.createElement('iframe'); f.dataset.tab=t.id; f.src=t.url;
+            document.getElementById('tabPanes').appendChild(f); }
+    return f;
+  }
+  function render(){
+    const bar=document.getElementById('tabbar');
+    document.body.classList.toggle('tabs-on', USE_TABS && tabs.length>1);
+    bar.innerHTML=tabs.map(t=>
+      `<span class="gtab ${t.id===active?'on':''} ${t.pinned?'pinned':''}" data-tab="${t.id}">`+
+      `<span class="lb2">${esc(t.title)}</span>`+(t.pinned?'':'<span class="x" data-x="'+t.id+'">&#10005;</span>')+`</span>`).join('');
+    document.body.classList.toggle('tab-doc', active!=='gallery');
+    document.querySelectorAll('#tabPanes iframe').forEach(f=>f.classList.toggle('on', f.dataset.tab===active));
+    if(active!=='gallery'){ const t=tabs.find(x=>x.id===active); if(t) pane(t).classList.add('on'); hdrH(); }
+    bar.querySelectorAll('.gtab').forEach(el=>{
+      el.onclick=e=>{ const x=e.target.closest('[data-x]'); if(x){ close(x.dataset.x); return; } activate(el.dataset.tab); };
+      el.onauxclick=e=>{ if(e.button===1 && !tabs.find(t=>t.id===el.dataset.tab)?.pinned) close(el.dataset.tab); };
+    });
+    save();
+  }
+  function activate(id){ active=id; render(); }
+  function close(id){
+    const i=tabs.findIndex(t=>t.id===id); if(i<0||tabs[i].pinned) return;
+    document.querySelector('#tabPanes iframe[data-tab="'+id+'"]')?.remove();
+    tabs.splice(i,1);
+    if(active===id) active=tabs[Math.max(0,i-1)].id;
+    render();
+  }
+  function open(url, title, singleton){
+    if(!USE_TABS) return false;
+    let t = singleton ? tabs.find(x=>x.singleton===singleton)
+                      : tabs.find(x=>x.url===url);
+    if(!t){ t={id:'t'+(seq++), title:title||url.split('/').pop(), url, singleton}; tabs.push(t); }
+    activate(t.id);
+    return true;
+  }
+  restore(); render();
+  window.addEventListener('resize', ()=>{ if(active!=='gallery') hdrH(); });
+  window.addEventListener('message', e=>{
+    const d=e.data;
+    if(d && d.type==='gallery-open-tab' && typeof d.url==='string' && d.url.startsWith('/'))
+      open(d.url, d.title||'', d.singleton||null);
+  });
+  document.addEventListener('keydown', e=>{
+    if(!(e.metaKey||e.ctrlKey)) return;
+    if(e.key==='w' && active!=='gallery'){ e.preventDefault(); close(active); }
+    const n=parseInt(e.key,10);
+    if(n>=1 && n<=9 && tabs[n-1]){ e.preventDefault(); activate(tabs[n-1].id); }
+  });
+  return {open, activate, close};
+})();
+document.getElementById('biblioChip').onclick=()=>{ if(!TabShell.open('/.fig_thumbs/biblio.html','Library','lib')) toolOpenLightbox('biblio.html'); };
+document.getElementById('boardChip').onclick=()=>{ if(!TabShell.open('/.fig_thumbs/whiteboard/index.html','Board','board')) toolOpenTab('/board/open-surface','whiteboard'); };
+document.getElementById('notesChip').onclick=()=>{ if(!TabShell.open('/.fig_thumbs/notes/index.html','Notes','notes')) toolOpenTab('/notes/open-surface','notes'); };
 document.getElementById('collChip').onclick=e=>{ e.stopPropagation(); buildCollectionChip(); menuToggle(document.getElementById('collMenu'), e.currentTarget); };
 document.getElementById('viewChip').onclick=e=>{ e.stopPropagation(); buildViewMenu(); menuToggle(document.getElementById('viewMenu'), e.currentTarget); };
 document.getElementById('exportSel').onclick=e=>{ e.stopPropagation(); buildExportMenu(); menuToggle(document.getElementById('exportMenu'), e.currentTarget); };
@@ -980,13 +1071,14 @@ async function lbShow(i){
   const isTex=f.ext==='tex', isPdf=f.ext==='pdf', isMd=f.ext==='md', isCode=codeExt(f.ext), isSvg=f.ext==='svg', isVid=videoExt(f.ext);
   // Embarqué dans Atelier Studio : les fichiers texte/code s'ouvrent dans un
   // ONGLET Studio (la galerie reste navigable), pas dans la lightbox.
-  if((window.self!==window.top) && (isTex||isMd||isCode||isPdf)){
+  if((isTex||isMd||isCode||isPdf) && (USE_TABS || window.self!==window.top)){
     // Studio : latex_studio pour tex/code ; éditeur WYSIWYG pour markdown
     let u;
     if(isPdf) u='/.fig_thumbs/pdf_viewer.html?file='+encodeURIComponent(f.rel)+'&v=__VER__';
     else if(isMd) u='/.fig_thumbs/md_studio.html?path='+encodeURIComponent('__ROOT__/'+f.rel)+'&v=__VER__';
     else u='/.fig_thumbs/latex_studio.html?path='+encodeURIComponent('__ROOT__/'+f.rel)+'&v=__VER__';
-    __atelierPost({type:'atelier-open-tab', url:u, title:f.name});
+    // onglet interne si dispo, sinon onglet de l'hôte Atelier Studio
+    if(!TabShell.open(u, f.name)) __atelierPost({type:'atelier-open-tab', url:u, title:f.name});
     lbIdx=-1;
     return;
   }
