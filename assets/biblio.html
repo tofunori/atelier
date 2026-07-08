@@ -65,6 +65,28 @@
   #frame{position:absolute;inset:0;width:100%;height:100%;border:none}
   .placeholder{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--faint);font-size:13px}
 </style>
+<script>(function(){
+  // thème partagé avec la galerie (figTheme) ; les extras --faint/--accent-soft/
+  // --border-strong sont dérivés par interpolation depuis la palette de base.
+  var T={'Encre':{bg:'#1a1917',card:'#232220',card2:'#121110',txt:'#e8e5db',muted:'#948f85',accent:'#cc785c',border:'#332f2a'},
+    'Profond':{bg:'#1e1d1b',card:'#292724',card2:'#161513',txt:'#ece9e1',muted:'#9a968c',accent:'#d97757',border:'#37342e'},
+    'Charbon':{bg:'#211f1c',card:'#2b2926',card2:'#1a1815',txt:'#eae7de',muted:'#9d988d',accent:'#e08a63',border:'#38352f'},
+    'Neutre chaud':{bg:'#1c1c1a',card:'#272623',card2:'#151513',txt:'#e9e7df',muted:'#98958c',accent:'#d97757',border:'#34322d'},
+    'Très foncé':{bg:'#171614',card:'#201f1c',card2:'#100f0d',txt:'#e6e3d9',muted:'#8f8b81',accent:'#d97757',border:'#2e2b26'},
+    'Default':{bg:'#141619',card:'#1c1f23',card2:'#22262b',txt:'#dbdfe5',muted:'#9aa1ab',accent:'#7fa3d8',border:'#2a2e34'},
+    'Codex One':{bg:'#202024',card:'#2f343f',card2:'#21252b',txt:'#abb2bf',muted:'#7f848e',accent:'#4d78cc',border:'#3e4451'},
+    'Dracula':{bg:'#282a36',card:'#343746',card2:'#21222c',txt:'#f8f8f2',muted:'#9aa0b3',accent:'#bd93f9',border:'#44475a'},
+    'Nord':{bg:'#2e3440',card:'#3b4252',card2:'#272c36',txt:'#e5e9f0',muted:'#9aa3b2',accent:'#88c0d0',border:'#434c5e'}};
+  function hx(h){h=h.replace('#','');return [parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)];}
+  function toHex(a){return '#'+a.map(function(n){return ('0'+Math.round(Math.max(0,Math.min(255,n))).toString(16)).slice(-2);}).join('');}
+  function mix(a,b,t){var x=hx(a),y=hx(b);return toHex([x[0]+(y[0]-x[0])*t,x[1]+(y[1]-x[1])*t,x[2]+(y[2]-x[2])*t]);}
+  var name;try{name=localStorage.getItem('figTheme');}catch(e){}
+  var c=T[name]||T['Encre'],r=document.documentElement.style;
+  for(var k in c)r.setProperty('--'+k,c[k]);
+  r.setProperty('--faint', mix(c.muted,c.bg,0.42));
+  r.setProperty('--accent-soft', mix(c.accent,c.bg,0.82));
+  r.setProperty('--border-strong', mix(c.border,c.txt,0.28));
+})();</script>
 </head>
 <body>
 <div id="app">
