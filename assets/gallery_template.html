@@ -563,6 +563,7 @@ SEED_FAVS.forEach(f=>favs.add(f));
 const saveFavs = ()=>localStorage.setItem('figFavs', JSON.stringify([...favs]));
 saveFavs();
 const THEMES = {
+  'Claude':    {bg:'#262624',card:'#30302e',card2:'#1e1d1b',txt:'#f0eee7',muted:'#a8a49a',accent:'#d97757',border:'#3c3a35',arch:'#3a2f1a'},
   'Default':   {bg:'#202024',card:'#27272a',card2:'#1f1f23',txt:'#dbdfe5',muted:'#a1a1aa',accent:'#5b9dff',border:'#3f3f46',arch:'#3a2f1a'},
   'Codex One': {bg:'#202024',card:'#2f343f',card2:'#21252b',txt:'#abb2bf',muted:'#7f848e',accent:'#4d78cc',border:'#3e4451',arch:'#3a2f1a'},
   'Dracula':   {bg:'#282a36',card:'#343746',card2:'#21222c',txt:'#f8f8f2',muted:'#9aa0b3',accent:'#bd93f9',border:'#44475a',arch:'#3a2f1a'},
