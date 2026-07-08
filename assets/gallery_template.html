@@ -295,26 +295,30 @@
   #confirmOk{background:#5c1f1f;border-color:#7a2a2a;color:#fff}
   #confirmOk:hover{background:#6e2626}
   footer{padding:20px;text-align:center;color:var(--muted);font-size:11px}
-  /* ---- onglets internes (option A) : galerie épinglée + documents/outils ---- */
-  #tabbar{display:none;align-items:flex-end;gap:2px;padding:6px 10px 0;margin:8px -14px -9px;
-    background:var(--card2,#1f1f23);border-top:1px solid var(--border)}
+  /* ---- onglets internes (option A) : rangée dédiée sous le titre, pleine largeur ---- */
+  #tabbar{display:none;align-items:center;gap:3px;margin-top:9px;padding-top:9px;
+    border-top:1px solid var(--border);overflow-x:auto;scrollbar-width:none}
+  #tabbar::-webkit-scrollbar{display:none}
   body.tabs-on #tabbar{display:flex}
-  .gtab{display:flex;align-items:center;gap:7px;padding:6px 12px 7px;border-radius:8px 8px 0 0;
-    color:var(--muted);cursor:pointer;border:1px solid transparent;border-bottom:none;
-    max-width:200px;user-select:none;font-size:12px;position:relative;white-space:nowrap}
-  .gtab:hover{color:var(--txt);background:color-mix(in srgb,var(--card) 55%,transparent)}
-  .gtab.on{background:var(--bg);color:var(--txt);border-color:var(--border)}
-  .gtab.on::before{content:"";position:absolute;left:10px;right:10px;top:0;height:2px;
-    border-radius:0 0 2px 2px;background:var(--accent)}
-  .gtab .lb2{overflow:hidden;text-overflow:ellipsis;max-width:150px}
-  .gtab .x{flex:none;width:15px;height:15px;border-radius:4px;display:flex;align-items:center;
-    justify-content:center;font-size:12px;color:var(--muted);visibility:hidden}
+  .gtab{display:inline-flex;align-items:center;gap:7px;padding:0 12px;height:28px;border-radius:7px;
+    color:var(--muted);cursor:pointer;border:1px solid transparent;background:transparent;
+    max-width:210px;user-select:none;font-size:12.5px;font-weight:500;white-space:nowrap;flex:none;
+    transition:background .12s,color .12s}
+  .gtab:hover{background:color-mix(in srgb,var(--card2) 70%,transparent);color:var(--txt)}
+  .gtab.on{background:var(--card2);color:var(--txt);border-color:var(--border);
+    box-shadow:0 1px 2px rgba(0,0,0,.15)}
+  .gtab .gic{flex:none;width:14px;height:14px;opacity:.75}
+  .gtab.on .gic{opacity:1;color:var(--accent)}
+  .gtab .lb2{overflow:hidden;text-overflow:ellipsis;max-width:160px}
+  .gtab .x{flex:none;width:16px;height:16px;border-radius:5px;display:flex;align-items:center;
+    justify-content:center;font-size:11px;color:var(--muted);visibility:hidden;margin-right:-5px}
   .gtab:hover .x,.gtab.on .x{visibility:visible}
   .gtab .x:hover{background:var(--border);color:var(--txt)}
   .gtab.pinned .x{display:none}
   #tabPanes{display:none}
   body.tab-doc #tabPanes{display:block}
   body.tab-doc main#grid,body.tab-doc footer{display:none}
+  body.tab-doc header .controls{display:none}
   #tabPanes iframe{display:none;width:100%;border:0;height:calc(100vh - var(--hdrH,96px))}
   #tabPanes iframe.on{display:block}
   body.fs-mode{overflow:hidden;background:#000}
@@ -342,6 +346,7 @@
     <span class="chip dest" id="notesChip" title="Open the project notes (markdown)">Notes</span>
     <span class="chip dest" id="viewChip" title="Settings — server health, theme, archives, hidden, auto-hide rules">Settings &#9662;</span>
   </div>
+  <div id="tabbar"></div>
   <div class="controls">
     <span class="chip" id="searchChip" title="Search by name or folder (press /)" tabindex="0"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.6"/><path d="M11 11l3.2 3.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> Search</span>
     <input type="search" id="q" class="collapsed" placeholder="Search by name or folder… (Esc to close)">
@@ -373,7 +378,6 @@
     <button id="exportSel" style="display:none" title="Export selected: folder / zip / contact sheet">Export (0) &#9662;</button>
     <div id="exportMenu" class="menu"></div>
   </div>
-  <div id="tabbar"></div>
 </header>
 <main id="grid"></main>
 <div id="tabPanes"></div>
@@ -995,12 +999,26 @@ const TabShell = (function(){
             document.getElementById('tabPanes').appendChild(f); }
     return f;
   }
+  const ICO={
+    gallery:'<svg class="gic" viewBox="0 0 24 24" fill="currentColor"><rect x="2" y="2" width="9.5" height="13.5" rx="1.6"/><rect x="2" y="17" width="9.5" height="5" rx="1.6"/><rect x="13.5" y="2" width="8.5" height="5" rx="1.6"/><rect x="13.5" y="9" width="8.5" height="13" rx="1.6"/></svg>',
+    lib:'<svg class="gic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 2h7.5L13 4.5V14H3z"/><path d="M5.5 6.5h5M5.5 9h5M5.5 11.5h3"/></svg>',
+    notes:'<svg class="gic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M11 2l3 3-8 8H3v-3z"/></svg>',
+    board:'<svg class="gic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2" y="3" width="12" height="9" rx="1"/><path d="M5.5 14h5"/></svg>',
+    pdf:'<svg class="gic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4 1.5h5.5L13 5v9.5H4z"/><path d="M9.5 1.5V5H13"/></svg>',
+    doc:'<svg class="gic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4 1.5h5.5L13 5v9.5H4z"/><path d="M9.5 1.5V5H13M6 8h5M6 10.5h5"/></svg>'
+  };
+  function iconFor(t){
+    if(t.id==='gallery') return ICO.gallery;
+    if(t.singleton && ICO[t.singleton]) return ICO[t.singleton];
+    if(/\.pdf$/i.test(t.title)||/ — PDF$/.test(t.title)) return ICO.pdf;
+    return ICO.doc;
+  }
   function render(){
     const bar=document.getElementById('tabbar');
     document.body.classList.toggle('tabs-on', USE_TABS && tabs.length>1);
     bar.innerHTML=tabs.map(t=>
       `<span class="gtab ${t.id===active?'on':''} ${t.pinned?'pinned':''}" data-tab="${t.id}">`+
-      `<span class="lb2">${esc(t.title)}</span>`+(t.pinned?'':'<span class="x" data-x="'+t.id+'">&#10005;</span>')+`</span>`).join('');
+      iconFor(t)+`<span class="lb2">${esc(t.title)}</span>`+(t.pinned?'':'<span class="x" data-x="'+t.id+'">&#10005;</span>')+`</span>`).join('');
     document.body.classList.toggle('tab-doc', active!=='gallery');
     document.querySelectorAll('#tabPanes iframe').forEach(f=>f.classList.toggle('on', f.dataset.tab===active));
     if(active!=='gallery'){ const t=tabs.find(x=>x.id===active); if(t) pane(t).classList.add('on'); hdrH(); }
