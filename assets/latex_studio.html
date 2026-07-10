@@ -45,6 +45,7 @@
 <script src="/.fig_thumbs/marked.min.js"></script>
 <script src="/.fig_thumbs/purify.min.js"></script>
 <script src="/.fig_thumbs/diff.min.js"></script>
+<script src="/.fig_thumbs/diff_versions.js"></script>
 <link rel="stylesheet" href="/.fig_thumbs/katex/katex.min.css">
 <script src="/.fig_thumbs/katex/katex.min.js"></script>
 <script src="/.fig_thumbs/texvisual.min.js"></script>
@@ -995,7 +996,7 @@ async function save(){
   diskMtime = j.mtime; dirty = false; ddot.style.display = "none"; setState("ok", "saved");
   // versionner AUSSI tes propres modifications (une version par sauvegarde)
   const savedNow = cm.getValue();
-  if(lastSavedText !== null && typeof diffPush === "function") diffPush(lastSavedText, savedNow);
+  if(lastSavedText !== null && typeof diffPush === "function") diffPush(lastSavedText, savedNow, {source:"user-save", status:"applied"});
   lastSavedText = savedNow;
   if (window.__onSaved) window.__onSaved();
   return true;
@@ -1701,21 +1702,56 @@ document.addEventListener("keydown", e => {
   if((e.metaKey || e.ctrlKey) && e.key === "j" && cm){ e.preventDefault(); synctexView(); }
 });
 
-// reload if Claude edits the .tex on disk
+// L'agent modifie le .tex sur le disque : buffer propre (ou dirty cosmétique
+// aux blancs près) → reload ; dirty réel → fusion trois-voies. En conflit on
+// versionne quand même l'écriture agent pour que la timeline grossisse.
+let __mergeConflictAt = 0;
+function __effectivelyClean(){
+  if(!dirty) return true;
+  if(typeof lastSavedText !== "string" || !cm) return false;
+  return __dv.isEquivalent(cm.getValue(), lastSavedText);
+}
 setInterval(async () => {
-  if(dirty || !cm) return;
+  if(!cm) return;
+  // vue historique du comparateur (± timeline) : le buffer affiché n'est pas le
+  // vrai — ne jamais recharger le disque par-dessus (restauré à la sortie)
+  if(__dv && __dv.isBusy && __dv.isBusy()) return;
   try{
     const r = await fetch("/code?path=" + encodeURIComponent(path));
     const j = await r.json();
-    if(j.mtime && Math.abs(j.mtime - diskMtime) > 0.001){
+    if(!(j.mtime && Math.abs(j.mtime - diskMtime) > 0.001)) return;
+    const diskText = j.text;
+    const cur = cm.getCursor(), s = cm.getScrollInfo();
+    if(__effectivelyClean()){
       diskMtime = j.mtime;
-      const before = cm.getValue();
-      const cur = cm.getCursor(), s = cm.getScrollInfo();
-      cm.setValue(j.text); cm.setCursor(cur); cm.scrollTo(s.left, s.top);
-      dirty = false; setState("ok", "reloaded (modified on disk)");
-      diffPush(before, j.text);
-      lastSavedText = j.text;
+      const before = (typeof lastSavedText === "string") ? lastSavedText : cm.getValue();
+      if(before === diskText && cm.getValue() === diskText){ lastSavedText = diskText; dirty = false; ddot.style.display = "none"; return; }
+      cm.setValue(diskText); cm.setCursor(cur); cm.scrollTo(s.left, s.top);
+      dirty = false; ddot.style.display = "none";
+      setState("ok", "reloaded (modified on disk)");
+      if(typeof diffPush === "function") diffPush(before, diskText, {source:"external-reload", status:"applied"});
+      lastSavedText = diskText;
+      return;
     }
+    // fusion trois-voies : appliquer le patch base→disque sur mon buffer
+    const base = (typeof lastSavedText === "string") ? lastSavedText : null;
+    const merged = base === null ? false
+      : window.Diff && Diff.applyPatch(cm.getValue(), Diff.structuredPatch("a", "b", base, diskText, "", ""), {fuzzFactor: 2});
+    if(merged === false || typeof merged !== "string"){
+      if(j.mtime !== __mergeConflictAt){
+        __mergeConflictAt = j.mtime;
+        if(base != null && typeof diffPush === "function" && base !== diskText) diffPush(base, diskText, {source:"external-conflict", status:"pending-conflict"});
+        setState("err", "l'agent a modifié le fichier et tes modifs non sauvegardées se superposent — ⌘S affichera le conflit · timeline : nouvelle intervention enregistrée");
+      }
+      return;
+    }
+    diskMtime = j.mtime;
+    const beforePush = base != null ? base : cm.getValue();
+    cm.setValue(merged); cm.setCursor(cur); cm.scrollTo(s.left, s.top);
+    dirty = true; ddot.style.display = "inline";
+    setState("ok", "modifs de l'agent fusionnées avec les tiennes (non sauvegardées)");
+    if(typeof diffPush === "function") diffPush(beforePush, diskText, {source:"external-merge", status:"applied"});
+    lastSavedText = diskText;
   }catch(e){}
 }, 2000);
 
@@ -1777,62 +1813,32 @@ document.addEventListener("keydown", e => { if(e.key === "Escape") document.getE
 document.getElementById("openFile").onclick = () => pickerShow();
 
 // ---- diff de versions (modifications de l'agent) : ± vN + ‹ › + Rétablir ----
-const DIFF_VERSIONS = []; // {before, after, ts}
-let diffIdx = -1, diffShown = false;
-const diffPane = document.getElementById("diffPane");
-const diffGrp = document.getElementById("diffGrp");
-function escH(x){ return x.replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])); }
-function diffPush(before, after){
-  if(before === after) return;
-  DIFF_VERSIONS.push({before, after, ts: Date.now()});
-  diffIdx = DIFF_VERSIONS.length - 1;
-  diffGrp.style.display = "";
-  const tg = document.getElementById("diffTag");
-  tg.disabled = false; tg.style.opacity = "";
-  ["diffPrev","diffNext","diffRestore"].forEach(id => document.getElementById(id).style.display = "");
-  updateDiffTag();
-  renderDiff();
-  if(!diffShown) toggleDiff(true);
-}
-function updateDiffTag(){
-  document.getElementById("diffTag").title = "Modifications — version " + (diffIdx + 2) + "/" + (DIFF_VERSIONS.length + 1) + " (cliquer : voir le diff)";
-  document.getElementById("diffPrev").disabled = diffIdx <= 0;
-  document.getElementById("diffNext").disabled = diffIdx >= DIFF_VERSIONS.length - 1;
-}
-function renderDiff(){
-  const v = DIFF_VERSIONS[diffIdx];
-  if(!v) return;
-  const parts = Diff.diffWordsWithSpace(v.before, v.after);
-  const body = parts.map(pt => {
-    if(pt.added)   return '<span class="dAdd">' + escH(pt.value) + "</span>";
-    if(pt.removed) return '<span class="dDel">' + escH(pt.value) + "</span>";
-    // passage identique long → replié (on ne montre que le voisinage des changements)
-    const lines = pt.value.split("\n");
-    if(lines.length > 12){
-      const head = lines.slice(0, 3).join("\n"), tail = lines.slice(-3).join("\n");
-      const hidden = lines.slice(3, -3).join("\n");
-      return escH(head) + '<span class="dFold" data-full="' + escH(hidden).replace(/"/g,"&quot;") + '">⋯ ' + (lines.length - 6) + ' lignes identiques — cliquer pour afficher ⋯</span>' + escH(tail);
-    }
-    return escH(pt.value);
-  }).join("");
-  const when = new Date(v.ts).toLocaleTimeString();
-  diffPane.innerHTML = '<div class="dHead"><b>Comparaison</b> v' + (diffIdx + 2) + "/" + (DIFF_VERSIONS.length + 1)
-    + ' · ' + when + ' · <span class="dDel">supprimé</span> <span class="dAdd">ajouté</span>'
-    + '<button class="dx">Fermer — retour à l\u2019éditeur</button></div><div class="dBody">' + body + "</div>";
-  diffPane.querySelector(".dx").onclick = () => toggleDiff(false);
-  diffPane.querySelectorAll(".dFold").forEach(f => f.onclick = () => {
-    const t = document.createTextNode(f.dataset.full ? f.dataset.full.replace(/&quot;/g,"\"") : "");
-    const pre = document.createElement("span"); pre.textContent = f.getAttribute("data-full") ?? "";
-    f.replaceWith(pre);
-  });
-}
-function toggleDiff(show){
-  diffShown = show ?? !diffShown;
-  diffPane.style.display = diffShown ? "block" : "none";
-  document.getElementById("diffTag").classList.toggle("on", diffShown);
-  if(!diffShown && cm) cm.refresh();
-}
-document.getElementById("diffTag").onclick = () => toggleDiff();
+// ---- historique de versions + comparaison in-editor : module partagé ----
+// (assets/diff_versions.js — utilisé aussi par code_editor.html ; persiste côté
+// serveur dans .fig_thumbs/dv_versions/ et intègre git : pseudo-version HEAD,
+// gouttière des changements, Comparer/Rétablir depuis l'historique des commits)
+const __dv = DiffVersions({
+  getCm: () => cm,
+  path,
+  notify: (m) => setState("ok", m),
+  els: {
+    group: document.getElementById("diffGrp"),
+    tag: document.getElementById("diffTag"),
+    prev: document.getElementById("diffPrev"),
+    next: document.getElementById("diffNext"),
+    restore: document.getElementById("diffRestore"),
+  },
+  restoreText: async (text) => {
+    const r = await fetch("/codesave", {method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({path, text, mtime: diskMtime})});
+    const j = await r.json();
+    if(j.error) return false;
+    diskMtime = j.mtime; cm.setValue(text); dirty = false; lastSavedText = text;
+    ddot.style.display = "none"; setState("ok", "version restaur\u00e9e");
+    return true;
+  },
+});
+const diffPush = (before, after, meta) => __dv.push(before, after, meta);
 // Add to chat sur sélection DANS le panneau diff (mode Studio)
 if(window.self !== window.top){
   const __fn = document.getElementById("fname"); if(__fn) __fn.style.display = "none"; // nom déjà dans l onglet Studio
@@ -1854,7 +1860,7 @@ if(window.self !== window.top){
     dPill.style.display = "none";
     try{ window.getSelection().removeAllRanges(); }catch(err){}
   });
-  diffPane.addEventListener("mouseup", () => {
+  document.getElementById("left").addEventListener("mouseup", () => {
     setTimeout(() => {
       const sel = window.getSelection();
       const t = sel ? String(sel).trim() : "";
@@ -1867,18 +1873,6 @@ if(window.self !== window.top){
     }, 0);
   });
 }
-document.getElementById("diffPrev").onclick = () => { if(diffIdx > 0){ diffIdx--; updateDiffTag(); renderDiff(); toggleDiff(true); } };
-document.getElementById("diffNext").onclick = () => { if(diffIdx < DIFF_VERSIONS.length - 1){ diffIdx++; updateDiffTag(); renderDiff(); toggleDiff(true); } };
-document.getElementById("diffRestore").onclick = async () => {
-  const v = DIFF_VERSIONS[diffIdx];
-  if(!v) return;
-  const r = await fetch("/codesave", {method:"POST", headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({path, text: v.before, mtime: diskMtime})});
-  const j = await r.json();
-  if(!j.error){ diskMtime = j.mtime; cm.setValue(v.before); dirty = false;
-    toggleDiff(false); setState("ok", "version restaurée"); }
-};
-
 // ===== option B : status bar, menu ⋯, lint ruff =====
 (function(){
   const sbMode = document.getElementById("sbMode");

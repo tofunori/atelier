@@ -919,6 +919,247 @@ def _rebuild_if_stale():
             _REBUILD_LOCK.release()
     threading.Thread(target=run, daemon=True).start()
 
+# ---- Historique de versions + git (parité avec le serveur Node d'Atelier
+# Studio, gallery/server/routes/editors.mjs). Même layout de stockage
+# (.fig_thumbs/dv_versions/<md5(realpath)>.json, gzip, .bak) : un projet
+# ouvert tour à tour dans Studio et ici partage ses journaux. ----
+VERSION_SOURCES = {"user-save", "external-reload", "external-merge",
+                   "external-conflict", "restore", "legacy"}
+VERSION_STATUSES = {"applied", "pending-conflict"}
+VERSION_TEXT_LIMIT = 8 * 1024 * 1024
+
+def _text_hash(text):
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+def _versions_file(p):
+    real = os.path.realpath(p)
+    return os.path.join(PROJECT, ".fig_thumbs", "dv_versions",
+                        hashlib.md5(real.encode("utf-8")).hexdigest() + ".json")
+
+def _empty_version_state(p):
+    return {"v": 2, "path": p, "revision": 0, "base": None, "texts": {},
+            "interventions": [], "legacySnapshots": [], "current": None}
+
+def _valid_hash(h):
+    return isinstance(h, str) and re.fullmatch(r"[a-f0-9]{64}", h) is not None
+
+def _num_ok(v):
+    """Parité Number(v) côté Node : null→0 (valide), nombres finis valides,
+    chaînes numériques valides — NaN/objets invalides."""
+    if v is None or isinstance(v, bool):
+        return v is None
+    if isinstance(v, (int, float)):
+        return v == v and v not in (float("inf"), float("-inf"))
+    if isinstance(v, str):
+        try:
+            float(v)
+            return True
+        except ValueError:
+            return False
+    return False
+
+def _validate_version_state(state):
+    if (not isinstance(state, dict) or state.get("v") != 2
+            or not isinstance(state.get("path"), str)
+            or not isinstance(state.get("revision"), int) or state["revision"] < 0
+            or not isinstance(state.get("texts"), dict)
+            or not isinstance(state.get("interventions"), list)
+            or not isinstance(state.get("legacySnapshots"), list)):
+        raise ValueError("invalid versions state")
+    total = 0
+    for h, text in state["texts"].items():
+        if not _valid_hash(h) or not isinstance(text, str) or _text_hash(text) != h:
+            raise ValueError("invalid text hash")
+        total += len(text.encode("utf-8"))
+    if total > VERSION_TEXT_LIMIT:
+        raise ValueError("versions texts too large")
+    def has_text(h):
+        return _valid_hash(h) and h in state["texts"]
+    base = state.get("base")
+    if base and (not has_text(base.get("hash")) or base.get("kind") not in ("git", "session", "legacy")
+                 or not isinstance(base.get("sha"), str)
+                 or not _num_ok(base.get("ts"))):
+        raise ValueError("invalid base")
+    cur = state.get("current")
+    if cur and (not has_text(cur.get("hash")) or not _num_ok(cur.get("ts"))):
+        raise ValueError("invalid current")
+    ids = set()
+    for item in state["interventions"]:
+        if (not isinstance(item, dict) or not isinstance(item.get("id"), str) or not item["id"]
+                or item["id"] in ids or not has_text(item.get("fromHash")) or not has_text(item.get("toHash"))
+                or not _num_ok(item.get("ts"))
+                or item.get("source") not in VERSION_SOURCES
+                or item.get("status") not in VERSION_STATUSES):
+            raise ValueError("invalid intervention")
+        ids.add(item["id"])
+    for snap in state["legacySnapshots"]:
+        if (not isinstance(snap, dict) or not has_text(snap.get("hash"))
+                or not _num_ok(snap.get("ts")) or not isinstance(snap.get("label"), str)):
+            raise ValueError("invalid legacy snapshot")
+    return state
+
+def _migrate_version_v1(data, p):
+    allowed = {"v", "path", "items", "last"}
+    if (not isinstance(data, dict) or any(k not in allowed for k in data)
+            or data.get("v", 1) != 1
+            or ("path" in data and not isinstance(data["path"], str))
+            or not isinstance(data.get("items"), list)
+            or not (isinstance(data.get("last"), str) or data.get("last") is None)
+            or any(not isinstance(it, dict) or not isinstance(it.get("b"), str)
+                   or ("t" in it and not isinstance(it["t"], (int, float)))
+                   or any(k not in ("b", "t") for k in it) for it in data["items"])):
+        raise ValueError("invalid versions v1 schema")
+    state = _empty_version_state(p)
+    snaps = [{"text": it["b"], "ts": it.get("t") or i, "label": "snapshot v1 %d" % (i + 1)}
+             for i, it in enumerate(data["items"])]
+    if isinstance(data.get("last"), str):
+        snaps.append({"text": data["last"], "ts": snaps[-1]["ts"] if snaps else 0, "label": "dernier connu v1"})
+    for snap in snaps:
+        h = _text_hash(snap["text"]); state["texts"][h] = snap["text"]
+        state["legacySnapshots"].append({"hash": h, "ts": snap["ts"], "label": snap["label"]})
+    if snaps:
+        first = snaps[0]
+        state["base"] = {"hash": _text_hash(first["text"]), "kind": "legacy", "sha": "", "ts": first["ts"]}
+        for i in range(1, len(snaps)):
+            before, after = snaps[i - 1], snaps[i]
+            if before["text"] == after["text"]:
+                continue
+            state["interventions"].append({
+                "id": "legacy-%d-%s-%s" % (i, _text_hash(before["text"])[:8], _text_hash(after["text"])[:8]),
+                "fromHash": _text_hash(before["text"]), "toHash": _text_hash(after["text"]),
+                "ts": after["ts"], "source": "legacy", "status": "applied"})
+        last = snaps[-1]
+        state["current"] = {"hash": _text_hash(last["text"]), "ts": last["ts"]}
+    return _validate_version_state(state)
+
+def _decode_version_file(file, p):
+    import gzip
+    with open(file, "rb") as f:
+        raw = f.read()
+    try:
+        parsed = json.loads(gzip.decompress(raw).decode("utf-8"))
+    except Exception:
+        parsed = json.loads(raw.decode("utf-8"))
+    if isinstance(parsed, dict) and parsed.get("v") == 2:
+        return _validate_version_state(parsed)
+    return _migrate_version_v1(parsed, p)
+
+def _read_version_state_result(file, p):
+    if not os.path.exists(file):
+        try:
+            return _decode_version_file(file + ".bak", p), True
+        except Exception:
+            return _empty_version_state(p), False
+    try:
+        return _decode_version_file(file, p), False
+    except Exception:
+        try:
+            return _decode_version_file(file + ".bak", p), True
+        except Exception:
+            raise
+
+def _write_file_atomic(file, data, backup=False):
+    d = os.path.dirname(file)
+    os.makedirs(d, exist_ok=True)
+    nonce = "%d.%d.%s" % (os.getpid(), int(time.time() * 1000), os.urandom(6).hex())
+    tmp = os.path.join(d, ".%s.%s.tmp" % (os.path.basename(file), nonce))
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        os.write(fd, data)
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+    if backup and os.path.exists(file):
+        bak_tmp = os.path.join(d, ".%s.%s.bak.tmp" % (os.path.basename(file), nonce))
+        shutil.copyfile(file, bak_tmp)
+        os.replace(bak_tmp, file + ".bak")
+    os.replace(tmp, file)
+
+def _add_version_texts(state, texts):
+    if not isinstance(texts, dict):
+        raise ValueError("invalid texts")
+    for h, text in texts.items():
+        if not _valid_hash(h) or not isinstance(text, str) or _text_hash(text) != h:
+            raise ValueError("invalid text hash")
+        state["texts"][h] = text
+
+def _apply_version_ops(current, ops):
+    import copy as _copy
+    if not isinstance(ops, list) or len(ops) > 500:
+        raise ValueError("invalid ops")
+    state = _copy.deepcopy(current)
+    for op in ops:
+        if not isinstance(op, dict) or not isinstance(op.get("type"), str):
+            raise ValueError("invalid op")
+        _add_version_texts(state, op.get("texts") or {})
+        if op["type"] == "init":
+            if state["base"] and json.dumps(state["base"], sort_keys=True) != json.dumps(op.get("base"), sort_keys=True):
+                raise ValueError("base-conflict")
+            if not state["base"]:
+                state["base"] = _copy.deepcopy(op["base"])
+            if op.get("current"):
+                state["current"] = _copy.deepcopy(op["current"])
+            for snap in (op.get("legacySnapshots") or []):
+                key = json.dumps([snap.get("hash"), snap.get("ts"), snap.get("label")])
+                if not any(json.dumps([it["hash"], it["ts"], it["label"]]) == key
+                           for it in state["legacySnapshots"]):
+                    state["legacySnapshots"].append(_copy.deepcopy(snap))
+        elif op["type"] == "append":
+            item = _copy.deepcopy(op.get("intervention"))
+            existing = next((it for it in state["interventions"] if it["id"] == (item or {}).get("id")), None)
+            if existing and json.dumps(existing, sort_keys=True) != json.dumps(item, sort_keys=True):
+                raise ValueError("intervention-id-conflict")
+            if not existing:
+                state["interventions"].append(item)
+            if op.get("current"):
+                state["current"] = _copy.deepcopy(op["current"])
+        elif op["type"] == "set-current":
+            state["current"] = _copy.deepcopy(op["current"])
+        else:
+            raise ValueError("invalid op type")
+    state["interventions"].sort(key=lambda it: (float(it["ts"] or 0), it["id"]))
+    refs = set()
+    if state["base"]:
+        refs.add(state["base"]["hash"])
+    if state["current"]:
+        refs.add(state["current"]["hash"])
+    for it in state["interventions"]:
+        refs.add(it["fromHash"]); refs.add(it["toHash"])
+    for snap in state["legacySnapshots"]:
+        refs.add(snap["hash"])
+    for h in list(state["texts"].keys()):
+        if h not in refs:
+            del state["texts"][h]
+    return _validate_version_state(state)
+
+def _git_out(args, cwd):
+    """stdout de git, ou None si git absent / code non nul (dégradation silencieuse)."""
+    try:
+        r = subprocess.run(["git"] + args, cwd=cwd, capture_output=True,
+                           text=True, timeout=10)
+        return r.stdout if r.returncode == 0 else None
+    except Exception:
+        return None
+
+def _git_root_rel(p):
+    """(racine du dépôt, chemin relatif posix) pour un fichier, ou (None, None)."""
+    top = _git_out(["rev-parse", "--show-toplevel"], os.path.dirname(p))
+    if not top:
+        return None, None
+    root = top.strip()
+    rel = os.path.relpath(p, root).replace(os.sep, "/")
+    return root, rel
+
+def _git_base(root):
+    """Dernier commit significatif (saute les « auto: … » de session)."""
+    out = _git_out(["log", "-100", "--format=%h\t%s"], root)
+    if out:
+        for line in out.splitlines():
+            sha, _, subject = line.partition("\t")
+            if sha and not subject.startswith("auto: "):
+                return sha
+    return "HEAD"
+
 class Handler(SimpleHTTPRequestHandler):
     def end_headers(self):
         # webviews (Studio) : ne jamais servir de JS/HTML périmé
@@ -1308,6 +1549,128 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._respond(200, {"available": True, "diagnostics": out})
             except Exception as e:
                 return self._respond(200, {"available": False, "error": str(e)})
+        if self.path.startswith("/githead?"):
+            # version committée (HEAD/base) d'un fichier suivi — gouttière et
+            # pseudo-version « HEAD » du comparateur. ok:false = dégradation douce.
+            try:
+                from urllib.parse import parse_qs, urlparse
+                q = parse_qs(urlparse(self.path).query)
+                p = self._safe_path(q.get("path", [""])[0])
+                if not p:
+                    return self._respond(200, {"ok": False})
+                root, rel = _git_root_rel(p)
+                if not root:
+                    return self._respond(200, {"ok": False})
+                base = _git_base(root)
+                text = _git_out(["show", "%s:%s" % (base, rel)], root)
+                if text is None:
+                    return self._respond(200, {"ok": False})
+                sha = (_git_out(["rev-parse", "--short", base], root) or "").strip()
+                ts = (_git_out(["show", "-s", "--format=%ct", base], root) or "").strip()
+                return self._respond(200, {"ok": True, "text": text, "sha": sha,
+                                           "ts": int(ts) if ts.isdigit() else 0})
+            except Exception:
+                return self._respond(200, {"ok": False})
+        if self.path.startswith("/versions?"):
+            try:
+                from urllib.parse import parse_qs, urlparse
+                import gzip
+                q = parse_qs(urlparse(self.path).query)
+                p = self._safe_path(q.get("path", [""])[0])
+                if not p:
+                    return self._respond(200, {"ok": False})
+                file = _versions_file(p)
+                state, recovered = _read_version_state_result(file, p)
+                if recovered:
+                    _write_file_atomic(file, gzip.compress(json.dumps(state).encode("utf-8")))
+                elif os.path.exists(file):
+                    with open(file, "rb") as f:
+                        prefix = f.read(2)
+                    if prefix[:2] != b"\x1f\x8b":
+                        _write_file_atomic(file, gzip.compress(json.dumps(state).encode("utf-8")), backup=True)
+                return self._respond(200, dict({"ok": True}, **state))
+            except Exception:
+                return self._respond(200, {"ok": False})
+        if self.path.startswith("/gitlog?"):
+            try:
+                from urllib.parse import parse_qs, urlparse
+                q = parse_qs(urlparse(self.path).query)
+                p = self._safe_path(q.get("path", [""])[0])
+                if not p:
+                    return self._respond(200, {"ok": False})
+                root, rel = _git_root_rel(p)
+                if not root:
+                    return self._respond(200, {"ok": False})
+                out = _git_out(["log", "--follow", "-100", "--format=%h\t%ct\t%s", "--", rel], root)
+                if out is None:
+                    return self._respond(200, {"ok": False})
+                items = []
+                for line in out.splitlines():
+                    if not line:
+                        continue
+                    parts = line.split("\t")
+                    items.append({"sha": parts[0],
+                                  "ts": int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 0,
+                                  "msg": "\t".join(parts[2:])})
+                return self._respond(200, {"ok": True, "items": items})
+            except Exception:
+                return self._respond(200, {"ok": False})
+        if self.path.startswith("/gitshow?"):
+            try:
+                from urllib.parse import parse_qs, urlparse
+                q = parse_qs(urlparse(self.path).query)
+                p = self._safe_path(q.get("path", [""])[0])
+                sha = q.get("sha", [""])[0]
+                if not p or not re.fullmatch(r"[0-9a-fA-F]{4,40}", sha):
+                    return self._respond(200, {"ok": False})
+                root, rel = _git_root_rel(p)
+                if not root:
+                    return self._respond(200, {"ok": False})
+                text = _git_out(["show", "%s:%s" % (sha, rel)], root)
+                if text is None:
+                    return self._respond(200, {"ok": False})
+                return self._respond(200, {"ok": True, "text": text})
+            except Exception:
+                return self._respond(200, {"ok": False})
+        if self.path.startswith("/commitmsg?"):
+            # message de commit proposé par Haiku depuis le diff vs base.
+            # ok:false = pas de diff / pas de claude : le client garde son message auto.
+            try:
+                from urllib.parse import parse_qs, urlparse
+                q = parse_qs(urlparse(self.path).query)
+                p = self._safe_path(q.get("path", [""])[0])
+                if not p:
+                    return self._respond(200, {"ok": False})
+                root, rel = _git_root_rel(p)
+                if not root:
+                    return self._respond(200, {"ok": False})
+                base = _git_base(root)
+                diff = _git_out(["diff", base, "--", rel], root)
+                if not diff or not diff.strip():
+                    return self._respond(200, {"ok": False})
+                claude = shutil.which("claude")
+                if not claude:
+                    return self._respond(200, {"ok": False})
+                sys_prompt = ("Tu écris des messages de commit git. Réponds UNIQUEMENT avec le "
+                              "message : une seule ligne, impérative, concise (max 72 caractères), "
+                              "en français, sans guillemets, sans préfixe conventionnel, sans explication.")
+                env = dict(os.environ, MAX_THINKING_TOKENS="0")
+                try:
+                    r = subprocess.run(
+                        [claude, "-p", "--model", "haiku", "--setting-sources", "project",
+                         "--system-prompt", sys_prompt,
+                         "--disallowedTools", "Bash,Edit,Write,Read,Grep,Glob,Task,WebFetch,WebSearch,NotebookEdit"],
+                        input="Fichier : %s\n\nDiff :\n%s" % (rel, diff[:8000]),
+                        cwd=root, env=env, capture_output=True, text=True, timeout=20)
+                    text = r.stdout.strip() if r.returncode == 0 else ""
+                except Exception:
+                    text = ""
+                if not text:
+                    return self._respond(200, {"ok": False})
+                msg = re.sub(r"^[\"'`]+|[\"'`]+$", "", text.splitlines()[0])[:100]
+                return self._respond(200, {"ok": True, "msg": msg})
+            except Exception:
+                return self._respond(200, {"ok": False})
         if self.path.startswith("/code?"):
             try:
                 from urllib.parse import parse_qs, urlparse
@@ -2038,6 +2401,69 @@ class Handler(SimpleHTTPRequestHandler):
                         if ln.startswith("Input:"):
                             out["input"] = ln.split(":", 1)[1]
                     return self._respond(200, out or {"error": "no match"})
+            except (KeyError, ValueError, json.JSONDecodeError) as e:
+                return self._respond(400, {"error": "bad request: " + str(e)})
+            except Exception as e:
+                return self._respond(500, {"error": str(e)})
+        if self.path == "/versions":
+            # Le serveur est l'autorité de révision : ops appliquées seulement si
+            # expectedRevision correspond, sinon 409 avec l'état courant.
+            try:
+                import gzip
+                length = int(self.headers.get("Content-Length", 0))
+                if length > 8 * 1024 * 1024:
+                    return self._respond(400, {"error": "payload too large"})
+                req = json.loads(self.rfile.read(length))
+                p = self._safe_path(req.get("path") or "")
+                if not p:
+                    return self._respond(403, {"error": "outside the project"})
+                file = _versions_file(p)
+                current, _ = _read_version_state_result(file, p)
+                if not isinstance(req.get("expectedRevision"), int) or req["expectedRevision"] != current["revision"]:
+                    return self._respond(409, {"ok": False, "error": "revision-conflict",
+                                               "revision": current["revision"], "state": current})
+                nxt = _apply_version_ops(current, req.get("ops"))
+                nxt["path"] = p
+                nxt["revision"] = current["revision"] + 1
+                _validate_version_state(nxt)
+                if os.path.exists(file):
+                    try:
+                        _decode_version_file(file, p)
+                    except Exception:
+                        os.remove(file)
+                _write_file_atomic(file, gzip.compress(json.dumps(nxt).encode("utf-8")), backup=True)
+                return self._respond(200, {"ok": True, "revision": nxt["revision"]})
+            except (KeyError, ValueError, json.JSONDecodeError) as e:
+                return self._respond(400, {"error": "bad request: " + str(e)})
+            except Exception as e:
+                return self._respond(500, {"error": str(e)})
+        if self.path == "/gitcommit":
+            # commit du fichier courant SEUL (jamais -A) — bouton commit de l'éditeur
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+                req = json.loads(self.rfile.read(length))
+                p = self._safe_path(req.get("path") or "")
+                msg = str(req.get("message") or "").strip()
+                if not p:
+                    return self._respond(403, {"error": "outside the project"})
+                if not msg:
+                    return self._respond(400, {"error": "message vide"})
+                root, rel = _git_root_rel(p)
+                if not root:
+                    return self._respond(200, {"ok": False, "error": "hors dépôt git"})
+                if _git_out(["add", "--", rel], root) is None:
+                    return self._respond(200, {"ok": False, "error": "git add a échoué"})
+                if _git_out(["commit", "--no-verify", "-m", msg, "--", rel], root) is None:
+                    # arbre propre ? l'auto-commit de fond a déjà enregistré — si le
+                    # fichier a bougé depuis la base, poser un jalon (commit vide)
+                    base = _git_base(root)
+                    clean = _git_out(["diff", "--quiet", base, "HEAD", "--", rel], root)
+                    if clean is not None:  # exit 0 = identique à la base : rien à committer
+                        return self._respond(200, {"ok": False, "error": "git commit a échoué (rien à committer ?)"})
+                    if _git_out(["commit", "--no-verify", "--allow-empty", "-m", msg], root) is None:
+                        return self._respond(200, {"ok": False, "error": "git commit a échoué"})
+                sha = (_git_out(["rev-parse", "--short", "HEAD"], root) or "").strip()
+                return self._respond(200, {"ok": True, "sha": sha})
             except (KeyError, ValueError, json.JSONDecodeError) as e:
                 return self._respond(400, {"error": "bad request: " + str(e)})
             except Exception as e:
