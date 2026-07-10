@@ -2,16 +2,6 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "figures-gallery",
-      "runtimeExecutable": "sh",
-      "runtimeArgs": [
-        "-c",
-        "CLAUDE_PREVIEW=1 FIG_PORT=\"${PORT:-8790}\" GALLERY_ROOT=\"$PWD\" python3 fig_annotate_server.py"
-      ],
-      "port": 8790,
-      "autoPort": true
-    },
-    {
       "name": "notes-editor",
       "runtimeExecutable": "sh",
       "runtimeArgs": [
@@ -36,9 +26,19 @@
       "runtimeExecutable": "sh",
       "runtimeArgs": [
         "-c",
-        "cd cmux-gallery/cmux-gallery && npx vite --port \"${PORT:-5175}\""
+        "cd cmux-gallery && npx vite --port \"${PORT:-5175}\""
       ],
       "port": 5175,
+      "autoPort": true
+    },
+    {
+      "name": "figures-gallery",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "CLAUDE_PREVIEW=1 FIG_PORT=\"${PORT:-9359}\" GALLERY_ROOT=\"$PWD\" /opt/homebrew/opt/python@3.14/bin/python3.14 /Users/tofunori/Documents/cmux-gallery/fig_annotate_server.py"
+      ],
+      "port": 9359,
       "autoPort": true
     }
   ]
