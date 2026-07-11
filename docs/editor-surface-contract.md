@@ -95,7 +95,8 @@ Voir aussi `docs/plan-ide-unifie-cm6-runtime-rust.md`.
 ## Reproductibilité (P0 — 2026-07-11)
 
 - Commit `094d033` tracke `assets/editor/**`, `assets/cm6/**`, `assets/editor_factory.js`, `cm6-src/{facade,build,package*}`, tests/contracts, tests/e2e shell, fixtures.
-- Preuve : `git worktree` détaché sur HEAD → `npm --prefix cm6-src ci && npm run build` → 29 contrats + 15 e2e editor verts.
+- `scripts/verify-ide-checkout.sh` fait **`npm ci` racine** (Playwright) + `npm ci` cm6-src + rebuild, sans réutiliser un `node_modules` parent.
+- Preuve isolée : worktree `/tmp` détaché → `bash scripts/verify-ide-checkout.sh` → 29 contrats + 15 e2e editor + zéro-Python.
 - Script : `npm run test:editor` / `bash scripts/verify-ide-checkout.sh`
 
 ## Corrections cycle de vie / état
