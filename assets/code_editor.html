@@ -3,32 +3,47 @@
 <head>
 <meta charset="utf-8">
 <title>Editor</title>
-<!-- Editor: CM6 by default via factory (?editor=cm5 for legacy fallback) -->
+<!-- Unified IDE shell (CM6) — bootstrap page for the code surface -->
 <script src="/.fig_thumbs/editor_factory.js"></script>
 <script src="/.fig_thumbs/diff.min.js"></script>
 <script src="/.fig_thumbs/diff_versions.js"></script>
+<script src="/.fig_thumbs/editor/prefs.js"></script>
+<script src="/.fig_thumbs/editor/languages.js"></script>
+<script src="/.fig_thumbs/editor/status.js"></script>
+<script src="/.fig_thumbs/editor/commands.js"></script>
+<script src="/.fig_thumbs/editor/rewrap.js"></script>
+<script src="/.fig_thumbs/editor/core.js"></script>
+<script src="/.fig_thumbs/editor/toolbar.js"></script>
+<script src="/.fig_thumbs/editor/session.js"></script>
+<script src="/.fig_thumbs/editor/persistence.js"></script>
+<script src="/.fig_thumbs/editor/selection.js"></script>
+<script src="/.fig_thumbs/editor/history.js"></script>
+<script src="/.fig_thumbs/editor/modules/code.js"></script>
+<script src="/.fig_thumbs/editor/modules/latex.js"></script>
+<script src="/.fig_thumbs/editor/modules/markdown.js"></script>
+<script src="/.fig_thumbs/editor/shell.js"></script>
 <style>
 :root{--ui-font:-apple-system,'SF Pro Text','Inter Variable',sans-serif;--code-font:ui-monospace,'SF Mono',Menlo,monospace;--bg:#202024;--card:#27272a;--card2:#1f1f23;--txt:#dbdfe5;--muted:#a1a1aa;--accent:#5b9dff;--border:#3f3f46}
   html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);
             font-family:var(--ui-font);display:flex;flex-direction:column}
   header{background:var(--card);border-bottom:1px solid var(--border);padding:8px 14px;
-         display:flex;gap:12px;align-items:center;font-size:13px;flex-shrink:0}
+         display:flex;gap:12px;align-items:center;font-size:13px;flex-shrink:0;flex-wrap:wrap}
   #fname{font-weight:600}
-  #state{color:var(--muted)}
-  #state.dirty{color:#ffd54a}
-  #state.saved{color:#7ec97e}
-  #state.conflict{color:#ff6b6b}
-  .CodeMirror{flex:1;height:auto;font-size:13px;
-              font-family:var(--code-font);line-height:1.5}
-  /* breathing room between line numbers and code (esp. 3-digit lines) */
+  #state{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:6px;color:var(--muted);font-size:0;flex:none}
+  #state::before{font-size:13px;line-height:1;content:'·'}
+  #state.dirty{color:#d9a441;background:rgba(217,164,65,.08)}
+  #state.dirty::before{content:'●';font-size:8px}
+  #state.saved{color:#75b995}
+  #state.saved::before{content:'✓'}
+  #state.conflict{color:#e06c75;background:rgba(224,108,117,.09)}
+  #state.conflict::before{content:'!';font-weight:700}
+  .CodeMirror,.cm-editor{flex:1;height:auto;font-size:13px;font-family:var(--code-font);line-height:1.5}
   .CodeMirror-linenumber{padding:0 14px 0 22px !important;color:#5b6270}
   .CodeMirror-gutters{background:transparent;border-right:1px solid #2a2f3a}
   .CodeMirror-lines{padding-left:4px}
-  /* selection hugs the text (mark-selection) instead of filling the whole line */
   .CodeMirror .CodeMirror-selected{background:transparent !important}
   .CodeMirror-focused .CodeMirror-selected{background:transparent !important}
   .CodeMirror-selectedtext{background:rgba(91,157,255,.45) !important;box-shadow:none !important;border-radius:2px}
-  /* last selection sent to Claude: persistent marker */
   .cm-clsel{background:rgba(91,157,255,.28);border-radius:2px}
   #picker{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;z-index:200;
           align-items:flex-start;justify-content:center;padding-top:8vh}
@@ -46,15 +61,22 @@
          padding:3px 8px;font-size:12px;cursor:pointer}
   .dvBtn:hover{color:var(--txt)}
   .dvBtn:disabled{cursor:default}
+  #rewrapBtn{width:28px;height:28px;padding:0;display:inline-grid;place-items:center;font-size:15px;line-height:1}
+  #rewrapBtn.fb-ok{color:#75b995;border-color:#75b995}
+  #rewrapBtn.fb-noop{color:#d9a441;border-color:#d9a441}
+  #rewrapBtn.fb-err{color:#e06c75;border-color:#e06c75}
+  .rewrapCtl{box-sizing:border-box;width:28px;height:28px;display:inline-grid;place-items:center;border:1px solid var(--border);border-radius:6px;color:var(--muted);cursor:pointer;flex:none}
+  .rewrapCtl input{position:absolute;opacity:0;pointer-events:none}
+  .rewrapCtl::before{content:'↻';font-size:14px;line-height:1}
+  .rewrapCtl:has(input:checked){color:var(--txt);background:var(--border)}
+  .rewrapCtl:hover,#rewrapBtn:hover{color:var(--txt);background:rgba(255,255,255,.04)}
   #diffTag.on{background:var(--border);color:var(--txt)}
-  /* état visible (le masquage initial est inline ; le module l'efface pour armer) */
   #diffGrp{display:inline-flex;align-items:center;gap:4px}
   body.browse #diffGrp{display:none}
-  /* ---- mode « IDE » : navigateur de fichiers inline (browse=1) ---- */
   #browser{display:none;flex:1;overflow:auto;padding:14px 18px 40px}
-  body.browse #ed{display:none!important}
+  body.browse #workspace{display:none!important}
   body.browse #browser{display:block}
-  body.browse #wrapSel,body.browse #wrapCustom,body.browse #state{display:none}
+  body.browse #wrapSel,body.browse #wrapCustom,body.browse #state,body.browse #rewrapBtn,body.browse .rewrapCtl{display:none}
   #browser .bcrumb{color:var(--muted);font-size:12px;margin:0 0 12px;font-family:var(--code-font)}
   #browser .bgrid{display:flex;flex-direction:column;gap:1px;max-width:720px}
   #browser .brow{display:flex;align-items:center;gap:9px;padding:7px 10px;border-radius:7px;cursor:pointer;font-size:13px;color:var(--txt)}
@@ -64,23 +86,14 @@
   #browser .brow .bsub{color:var(--muted);font-size:11px;margin-left:auto}
   #browser .bhd{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:14px 2px 5px}
   #browser .bhd:first-child{margin-top:0}
-
-  /* ===== thème code « atelier » (surcharge material-darker) ===== */
+  #workspace{flex:1;display:flex;flex-direction:column;min-height:0}
+  #moduleHost{flex:1;display:flex;flex-direction:column;min-height:0}
+  #ed{flex:1;display:flex;flex-direction:column;min-height:0;background:#212121}
+  @media (max-width:375px){
+    header{gap:6px;padding:6px 8px}
+    #fname{max-width:40vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  }
   .cm-s-material-darker.CodeMirror{background:#1e2126;color:#d8d3c8}
-  .cm-s-material-darker .cm-keyword{color:#e8823a}
-  .cm-s-material-darker .cm-def{color:#d8d3c8}
-  .cm-s-material-darker .cm-variable{color:#d8d3c8}
-  .cm-s-material-darker .cm-variable-2{color:#c9c3b6}
-  .cm-s-material-darker .cm-property{color:#c9c3b6}
-  .cm-s-material-darker .cm-string{color:#5fb0a5}
-  .cm-s-material-darker .cm-string-2{color:#5fb0a5}
-  .cm-s-material-darker .cm-number{color:#5fb0a5}
-  .cm-s-material-darker .cm-atom{color:#5fb0a5}
-  .cm-s-material-darker .cm-builtin{color:#7fbcb2}
-  .cm-s-material-darker .cm-operator{color:#9a958a}
-  .cm-s-material-darker .cm-comment{color:#868d9a;font-style:italic}
-  .cm-s-material-darker .cm-meta{color:#9a958a}
-  .cm-s-material-darker .cm-qualifier{color:#7fbcb2}
 </style>
 <script>(function(){var T={'Encre':{bg:'#1a1917',card:'#232220',card2:'#121110',txt:'#e8e5db',muted:'#948f85',accent:'#cc785c',border:'#332f2a'},'Profond':{bg:'#1e1d1b',card:'#292724',card2:'#161513',txt:'#ece9e1',muted:'#9a968c',accent:'#d97757',border:'#37342e'},'Charbon':{bg:'#211f1c',card:'#2b2926',card2:'#1a1815',txt:'#eae7de',muted:'#9d988d',accent:'#e08a63',border:'#38352f'},'Neutre chaud':{bg:'#1c1c1a',card:'#272623',card2:'#151513',txt:'#e9e7df',muted:'#98958c',accent:'#d97757',border:'#34322d'},'Très foncé':{bg:'#171614',card:'#201f1c',card2:'#100f0d',txt:'#e6e3d9',muted:'#8f8b81',accent:'#d97757',border:'#2e2b26'},'Default':{bg:'#202024',card:'#27272a',card2:'#1f1f23',txt:'#dbdfe5',muted:'#a1a1aa',accent:'#5b9dff',border:'#3f3f46'},'Codex':{bg:'#282c34',card:'#2f343f',card2:'#21252b',txt:'#abb2bf',muted:'#7f848e',accent:'#4d78cc',border:'#3e4451'},'Dracula':{bg:'#282a36',card:'#343746',card2:'#21222c',txt:'#f8f8f2',muted:'#9aa0b3',accent:'#bd93f9',border:'#44475a'},'Nord':{bg:'#2e3440',card:'#3b4252',card2:'#272c36',txt:'#e5e9f0',muted:'#9aa3b2',accent:'#88c0d0',border:'#434c5e'}};var t;try{t=T[localStorage.getItem('figTheme')];}catch(e){}t=t||T['Encre'];var r=document.documentElement.style;for(var k in t)r.setProperty('--'+k,t[k]);})();</script>
 </head>
@@ -99,6 +112,9 @@
   </select>
   <input id="wrapCustom" type="number" min="20" max="400" step="1" placeholder="cols" title="Wrap column"
          style="display:none;width:56px;background:var(--card);color:var(--txt);border:1px solid var(--border);border-radius:6px;padding:3px 6px;font-size:12px">
+  <button id="rewrapBtn" class="dvBtn" aria-label="Rewrap" title="Rewrap le paragraphe ou la sélection (⌥Q)">↵</button>
+  <label class="rewrapCtl" aria-label="Rewrap automatique" title="Rewrap automatique à la sauvegarde"><input id="autoRewrap" type="checkbox"><span hidden>Auto</span></label>
+  <span id="moduleActions" style="display:inline-flex;gap:4px;align-items:center"></span>
   <span id="diffGrp" style="display:none">
     <button id="diffPrev" class="dvBtn" style="display:none" title="Version précédente">&#8249;</button>
     <button id="diffTag" class="dvBtn" disabled style="opacity:.4" title="Historique des modifications — vide pour l’instant (⌘S ou une modif de l’agent crée une version)"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><rect x="2.5" y="1.5" width="11" height="13" rx="2"/><path d="M8 5.2v4M6 7.2h4M6 11h4"/></svg></button>
@@ -106,315 +122,77 @@
     <button id="diffRestore" class="dvBtn" style="display:none" title="Rétablir la version affichée sur le disque">Rétablir</button>
   </span>
   <span id="state"></span>
-  <span style="margin-left:auto;color:var(--muted)">Cmd+S: save · selection visible to Claude</span>
 </header>
-<div id="ed" style="flex:1;display:flex;flex-direction:column;min-height:0;background:#212121"></div>
+<div id="workspace">
+  <div id="moduleHost"><div id="ed"></div></div>
+</div>
 <div id="browser"></div>
 <div id="picker"><div id="pickerBox">
   <div id="pickerPath"></div>
   <div id="pickerList"></div>
 </div></div>
 <script>
-const path = new URLSearchParams(location.search).get("path");
-document.getElementById("fname").textContent = path ? path.split("/").pop() : "(no file)";
-document.title = path ? path.split("/").pop() : "Editor";
+const params = new URLSearchParams(location.search);
+const path = params.get("path");
+const BROWSE = params.get("browse") === "1";
+const forceSurface = params.get("surface"); // optional: code|latex|markdown
+const shellFlag = params.get("editorShell"); // v2 forces shell modules (default on for this page)
 
-const MODES = {tex:"stex", sty:"stex", bib:"stex", py:"python", r:"r", R:"r",
-               md:"markdown", jl:"julia", sh:"shell", bash:"shell"};
-const ext = path ? path.split(".").pop() : "";
-let cm = null, diskMtime = 0, dirty = false;
+const EDITABLE = /\.(tex|sty|bib|py|r|R|md|jl|sh|bash|txt|csv|json|yaml|yml|toml|rs|js|jsx|ts|tsx|mjs|cjs)$/i;
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const escA = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const ICO_DIR = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M1.5 4.5v8h13v-7H7L5.5 4z"/></svg>';
+const ICO_UP  = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M8 12V4M4.5 7.5L8 4l3.5 3.5"/></svg>';
+const ICO_FILE= '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M4 1.5h5.5L13 5v9.5H4z"/><path d="M9.5 1.5V5H13"/></svg>';
 
-const stateEl = document.getElementById("state");
-function setState(cls, txt){ stateEl.className = cls; stateEl.textContent = txt; }
-
-// word wrap (VS Code-style): off | window | fixed column (any positive integer)
-const wrapSel = document.getElementById("wrapSel");
-const wrapCustom = document.getElementById("wrapCustom");
-function ensureWrapOption(v){
-  // built-in fixed values already have <option>s; anything else (custom columns,
-  // or a value restored from a previous session) gets one inserted before "custom…"
-  if(!wrapSel.querySelector('option[value="' + v + '"]')){
-    const opt = document.createElement("option");
-    opt.value = v; opt.textContent = "Wrap: " + v;
-    wrapSel.insertBefore(opt, wrapSel.querySelector('option[value="custom"]'));
+function openTarget(target) {
+  const info = AtelierLanguages.resolve(target);
+  // Keep latex on dedicated studio unless shell v2 latex is requested
+  let page = info.page;
+  if (info.surface === "latex" && shellFlag !== "v2") page = "latex_studio.html";
+  if (info.surface === "markdown" && shellFlag !== "v2") page = "md_viewer.html";
+  if (info.surface === "code" || shellFlag === "v2") {
+    if (info.surface === "code") page = "code_editor.html";
   }
-}
-function applyWrap(v){
-  localStorage.setItem("cmWrap", v);
-  const fixed = /^\d+$/.test(v);
-  if(cm){
-    const w = cm.getWrapperElement();
-    // cap the editor itself (not the container) so the gap beside it stays
-    // the editor's own colour (#212121) instead of a black panel; thin guide marks the column
-    w.style.maxWidth = fixed ? ("calc(" + v + "ch + 70px)") : "";
-    w.style.borderRight = fixed ? "1px solid #33384a" : "";
-    cm.setOption("lineWrapping", v !== "off");
-    cm.refresh();
-  }
-}
-{
-  const saved = localStorage.getItem("cmWrap") || "win";
-  if(/^\d+$/.test(saved)) ensureWrapOption(saved);
-  wrapSel.value = saved;
-}
-wrapSel.onchange = () => {
-  if(wrapSel.value === "custom"){
-    wrapCustom.style.display = "";
-    wrapCustom.value = /^\d+$/.test(localStorage.getItem("cmWrap")) ? localStorage.getItem("cmWrap") : "";
-    wrapCustom.focus();
-    wrapCustom.select();
-    return;
-  }
-  wrapCustom.style.display = "none";
-  applyWrap(wrapSel.value);
-};
-function commitWrapCustom(){
-  const n = parseInt(wrapCustom.value, 10);
-  if(n > 0){
-    ensureWrapOption(String(n));
-    wrapSel.value = String(n);
-    applyWrap(String(n));
-  }
-  wrapCustom.style.display = "none";
-}
-wrapCustom.addEventListener("keydown", e => {
-  if(e.key === "Enter") commitWrapCustom();
-  else if(e.key === "Escape"){ wrapCustom.style.display = "none"; wrapSel.value = localStorage.getItem("cmWrap") || "win"; }
-});
-wrapCustom.addEventListener("blur", commitWrapCustom);
-
-// historique de versions + comparaison in-editor (module partagé diff_versions.js,
-// même mécanique que latex_studio : ⌘S ou modif externe crée une version)
-let lastSavedText = null;
-const __dv = path ? DiffVersions({
-  getCm: () => cm,
-  path,
-  notify: (m) => setState("saved", m),
-  els: {
-    group: document.getElementById("diffGrp"),
-    tag: document.getElementById("diffTag"),
-    prev: document.getElementById("diffPrev"),
-    next: document.getElementById("diffNext"),
-    restore: document.getElementById("diffRestore"),
-  },
-  restoreText: async (text) => {
-    const r = await fetch("/codesave", {method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({path, text, mtime: diskMtime})});
-    const j = await r.json();
-    if(j.error) return false;
-    diskMtime = j.mtime; cm.setValue(text); dirty = false; lastSavedText = text;
-    setState("saved", "version restaurée");
-    return true;
-  },
-}) : null;
-
-async function load(){
-  await AtelierEditor.ready;
-  const r = await fetch("/code?path=" + encodeURIComponent(path));
-  const j = await r.json();
-  if(j.error){ setState("conflict", j.error); return; }
-  recentsAdd(path);
-  diskMtime = j.mtime;
-  if(!cm){
-  let __rsT=null;
-  window.addEventListener("resize", () => { clearTimeout(__rsT); __rsT=setTimeout(() => { if(cm) cm.refresh(); }, 120); });
-    cm = AtelierEditor.create(document.getElementById("ed"), {
-      value: j.text, mode: MODES[ext] || null, theme: "material-darker",
-      lineNumbers: true, lineWrapping: true, viewportMargin: 50, styleSelectedText: true
-    });
-  // Rewrap façon VS Code (CM5 only — CM6 wraps via EditorView.lineWrapping)
-  if(AtelierEditor.engine() === "cm5" && typeof CodeMirror.countColumn === "function"){
-    const basePad = 4;
-    cm.on("renderLine", function(cm, line, elt){
-      const off = CodeMirror.countColumn(line.text, null, cm.getOption("tabSize")) * cm.defaultCharWidth();
-      elt.style.textIndent = "-" + off + "px";
-      elt.style.paddingLeft = (basePad + off) + "px";
-    });
-    cm.refresh();
-  }
-
-    cm.on("change", (_, ch) => { if(ch.origin !== "setValue"){ dirty = true; setState("dirty", "modified"); } });
-    let selT = null;
-    cm.on("cursorActivity", () => {
-      clearTimeout(selT);
-      selT = setTimeout(() => {
-        const sel = cm.getSelection();
-        if(sel && sel.trim()){
-          const f = cm.getCursor("from"), t = cm.getCursor("to");
-          if(window._clMark) window._clMark.clear();
-          window._clMark = cm.markText(f, t, {className: "cm-clsel"});
-          fetch("/selinfo", {method:"POST", headers:{"Content-Type":"application/json"},
-            body: JSON.stringify({
-              lines: t.line - f.line + 1,
-              words: sel.trim().split(/\s+/).length,
-              text: sel, rel: path, name: path.split("/").pop(),
-              page: "L" + (f.line+1) + "-" + (t.line+1)
-            })}).catch(()=>{});
-        }
-      }, 200);
-    });
-  } else {
-    const cur = cm.getCursor();
-    cm.setValue(j.text);
-    cm.setCursor(cur);
-  }
-  applyWrap(wrapSel.value);
-  lastSavedText = j.text;
-  dirty = false;
-  setState("saved", "saved");
-}
-
-async function save(){
-  if(!cm) return;
-  const r = await fetch("/codesave", {method:"POST", headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({path, text: cm.getValue(), mtime: diskMtime})});
-  const j = await r.json();
-  if(j.error === "conflit"){
-    setState("conflict", "conflict: the file changed on disk (Claude?) — reload or re-save to overwrite");
-    diskMtime = j.mtime;
-    return;
-  }
-  diskMtime = j.mtime;
-  dirty = false;
-  setState("saved", "saved " + new Date().toLocaleTimeString());
-  // versionner AUSSI tes propres modifications (une version par sauvegarde)
-  const savedNow = cm.getValue();
-  if(__dv && lastSavedText !== null) __dv.push(lastSavedText, savedNow, {source:"user-save", status:"applied"});
-  lastSavedText = savedNow;
-}
-
-document.addEventListener("keydown", e => {
-  if(e.key === "Escape"){
-    if(cm){ cm.setCursor(cm.getCursor()); }
-    if(window._clMark){ window._clMark.clear(); window._clMark = null; }
-    fetch("/selinfo", {method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({lines:0, words:0})}).catch(()=>{});
-    return;
-  }
-  if((e.metaKey || e.ctrlKey) && e.key === "s"){ e.preventDefault(); save(); }
-});
-
-// L'agent modifie le fichier sur le disque : buffer propre (ou dirty cosmétique
-// aux blancs près) → reload ; buffer dirty réel → fusion trois-voies. En conflit
-// on versionne quand même l'écriture agent pour que la timeline grossisse.
-let __mergeConflictAt = 0;
-function __effectivelyClean(){
-  if(!dirty) return true;
-  if(typeof lastSavedText !== "string" || !cm || !__dv) return false;
-  return __dv.isEquivalent(cm.getValue(), lastSavedText);
-}
-setInterval(async () => {
-  if(!cm || !path) return;
-  // vue historique du comparateur (± timeline) : buffer temporairement remplacé —
-  // ne pas recharger le disque par-dessus (restauré à la sortie de la vue)
-  if(__dv && __dv.isBusy && __dv.isBusy()) return;
-  try{
-    const r = await fetch("/code?path=" + encodeURIComponent(path));
-    const j = await r.json();
-    if(!(j.mtime && Math.abs(j.mtime - diskMtime) > 0.001)) return;
-    const diskText = j.text;
-    const cur = cm.getCursor(), scroll = cm.getScrollInfo();
-    if(__effectivelyClean()){
-      diskMtime = j.mtime;
-      const before = (typeof lastSavedText === "string") ? lastSavedText : cm.getValue();
-      if(before === diskText && cm.getValue() === diskText){ lastSavedText = diskText; dirty = false; return; }
-      cm.setValue(diskText);
-      cm.setCursor(cur);
-      cm.scrollTo(scroll.left, scroll.top);
-      dirty = false;
-      setState("saved", "reloaded (modified on disk) " + new Date().toLocaleTimeString());
-      if(__dv) __dv.push(before, diskText, {source:"external-reload", status:"applied"});
-      lastSavedText = diskText;
-      return;
-    }
-    const base = (typeof lastSavedText === "string") ? lastSavedText : null;
-    const merged = base === null ? false
-      : window.Diff && Diff.applyPatch(cm.getValue(), Diff.structuredPatch("a", "b", base, diskText, "", ""), {fuzzFactor: 2});
-    if(merged === false || typeof merged !== "string"){
-      if(j.mtime !== __mergeConflictAt){
-        __mergeConflictAt = j.mtime;
-        if(base != null && __dv && base !== diskText) __dv.push(base, diskText, {source:"external-conflict", status:"pending-conflict"});
-        setState("conflict", "modifs superposées avec l'agent — ⌘S affichera le conflit · timeline : intervention enregistrée");
-      }
-      return;
-    }
-    diskMtime = j.mtime;
-    const beforePush = base != null ? base : cm.getValue();
-    cm.setValue(merged);
-    cm.setCursor(cur);
-    cm.scrollTo(scroll.left, scroll.top);
-    dirty = true;
-    setState("saved", "modifs de l'agent fusionnées avec les tiennes (non sauvegardées)");
-    if(__dv) __dv.push(beforePush, diskText, {source:"external-merge", status:"applied"});
-    lastSavedText = diskText;
-  }catch(e){}
-}, 2000);
-
-const BROWSE = new URLSearchParams(location.search).get("browse") === "1";
-if(path) load();
-else if(BROWSE){
-  document.body.classList.add("browse");
-  document.getElementById("fname").textContent = "IDE — fichiers";
-  document.title = "IDE";
-  renderBrowser("");
-}
-
-
-// recent files (shared between studio and editor via localStorage)
-function recentsGet(){ try{return JSON.parse(localStorage.getItem("studioRecents")||"[]")}catch(e){return []} }
-function recentsAdd(p){
-  let r = recentsGet().filter(x => x !== p);
-  r.unshift(p); r = r.slice(0, 10);
-  localStorage.setItem("studioRecents", JSON.stringify(r));
-}
-function openTarget(target){
-  const page = target.endsWith(".tex") ? "latex_studio.html" : "code_editor.html";
   const url = "/.fig_thumbs/" + page + "?path=" + encodeURIComponent(target);
-  // embarqué dans la galerie (onglets) : ouvrir le fichier dans un onglet, garder l'IDE
-  if(window.parent !== window){
-    try{ window.parent.postMessage({type:'gallery-open-tab', url, title: target.split("/").pop()}, '*'); return; }catch(e){}
+  if (window.parent !== window) {
+    try { window.parent.postMessage({ type: "gallery-open-tab", url, title: target.split("/").pop() }, "*"); return; } catch (e) {}
   }
   location.href = url;
 }
-// ---- mode IDE : navigateur de fichiers inline (browse=1, aucun path) ----
-async function renderBrowser(dir){
+
+async function renderBrowser(dir) {
   const r = await fetch("/ls?dir=" + encodeURIComponent(dir || ""));
   const j = await r.json();
-  if(j.error) return;
+  if (j.error) return;
   const b = document.getElementById("browser");
   const home = j.path.replace(/^\/Users\/[^/]+/, "~");
   let html = '<div class="bcrumb">' + esc(home) + '</div><div class="bgrid">';
-  const rec = recentsGet();
-  if(rec.length && !dir){
+  const rec = AtelierSession.recentsGet();
+  if (rec.length && !dir) {
     html += '<div class="bhd">Récents</div>';
-    rec.slice(0,6).forEach(p => {
+    rec.slice(0, 6).forEach(p => {
       html += '<div class="brow" data-file="' + escA(p) + '"><span class="bic">' + ICO_FILE + '</span>' +
         esc(p.split("/").pop()) + '<span class="bsub">' +
         esc(p.replace(/^\/Users\/[^/]+\/Documents\//, "").replace(/\/[^/]*$/, "")) + '</span></div>';
     });
     html += '<div class="bhd">Dossier</div>';
   }
-  if(j.parent) html += '<div class="brow dir" data-dir="' + escA(j.parent) + '"><span class="bic">' + ICO_UP + '</span>..</div>';
+  if (j.parent) html += '<div class="brow dir" data-dir="' + escA(j.parent) + '"><span class="bic">' + ICO_UP + '</span>..</div>';
   j.items.filter(i => i.dir).forEach(i =>
     html += '<div class="brow dir" data-dir="' + escA(j.path + "/" + i.name) + '"><span class="bic">' + ICO_DIR + '</span>' + esc(i.name) + '</div>');
   j.items.filter(i => !i.dir && EDITABLE.test(i.name)).forEach(i =>
     html += '<div class="brow" data-file="' + escA(j.path + "/" + i.name) + '"><span class="bic">' + ICO_FILE + '</span>' + esc(i.name) + '</div>');
   html += '</div>';
   b.innerHTML = html;
-  b.querySelectorAll('[data-dir]').forEach(el => el.onclick = () => renderBrowser(el.dataset.dir));
-  b.querySelectorAll('[data-file]').forEach(el => el.onclick = () => openTarget(el.dataset.file));
+  b.querySelectorAll("[data-dir]").forEach(el => el.onclick = () => renderBrowser(el.dataset.dir));
+  b.querySelectorAll("[data-file]").forEach(el => el.onclick = () => openTarget(el.dataset.file));
 }
-const ICO_DIR = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M1.5 4.5v8h13v-7H7L5.5 4z"/></svg>';
-const ICO_UP  = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M8 12V4M4.5 7.5L8 4l3.5 3.5"/></svg>';
-const ICO_FILE= '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M4 1.5h5.5L13 5v9.5H4z"/><path d="M9.5 1.5V5H13"/></svg>';
-const escA = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-// --- mini file explorer (Open button) ---
-const EDITABLE = /\.(tex|sty|bib|py|r|R|md|jl|sh|bash|txt|csv|json|yaml|yml|toml)$/;
-const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-async function pickerShow(dir){
+
+async function pickerShow(dir) {
   const r = await fetch("/ls?dir=" + encodeURIComponent(dir || (path ? path.replace(/\/[^/]*$/, "") : "")));
   const j = await r.json();
-  if(j.error) return;
+  if (j.error) return;
   document.getElementById("picker").classList.add("show");
   document.getElementById("pickerPath").textContent = j.path.replace(/^\/Users\/[^/]+/, "~");
   const list = document.getElementById("pickerList");
@@ -424,8 +202,8 @@ async function pickerShow(dir){
     d.innerHTML = label; d.className = cls; d.onclick = fn;
     list.appendChild(d);
   };
-  const rec = recentsGet().filter(p => p !== path);
-  if(rec.length){
+  const rec = AtelierSession.recentsGet().filter(p => p !== path);
+  if (rec.length) {
     rec.forEach(p => mk("&#128337; " + esc(p.split("/").pop()) +
       ' <span style="color:var(--muted);font-size:11px">' + esc(p.replace(/^\/Users\/[^/]+\/Documents\//, "").replace(/\/[^/]*$/, "")) + "</span>",
       "", () => openTarget(p)));
@@ -433,15 +211,68 @@ async function pickerShow(dir){
     sep.style.cssText = "border-bottom:1px solid var(--border);margin:4px 0;padding:0;height:1px;cursor:default";
     list.appendChild(sep);
   }
-  if(j.parent) mk("&#8617; ..", "d", () => pickerShow(j.parent));
+  if (j.parent) mk("&#8617; ..", "d", () => pickerShow(j.parent));
   j.items.filter(i => i.dir).forEach(i => mk("&#128193; " + esc(i.name), "d", () => pickerShow(j.path + "/" + i.name)));
   j.items.filter(i => !i.dir && EDITABLE.test(i.name)).forEach(i =>
     mk(esc(i.name), "", () => openTarget(j.path + "/" + i.name)));
 }
-document.getElementById("picker").onclick = e => { if(e.target.id === "picker") e.target.classList.remove("show"); };
-document.addEventListener("keydown", e => { if(e.key === "Escape") document.getElementById("picker").classList.remove("show"); });
+document.getElementById("picker").onclick = e => { if (e.target.id === "picker") e.target.classList.remove("show"); };
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") document.getElementById("picker").classList.remove("show");
+});
 
-document.getElementById("openFile").onclick = () => pickerShow();
+let shellHandle = null;
+
+(async function main() {
+  await AtelierEditor.ready;
+  AtelierPrefs.migrateOnce();
+
+  if (path) {
+    const surface = forceSurface || AtelierLanguages.resolve(path).surface || "code";
+    // This page is the code shell; latex/md may still open here with ?surface=
+    shellHandle = await AtelierShell.mount({
+      path,
+      surface: surface === "latex" || surface === "markdown" ? surface : "code",
+      browse: false,
+      els: {
+        fname: document.getElementById("fname"),
+        openFile: document.getElementById("openFile"),
+        wrapSel: document.getElementById("wrapSel"),
+        wrapCustom: document.getElementById("wrapCustom"),
+        rewrapBtn: document.getElementById("rewrapBtn"),
+        autoRewrap: document.getElementById("autoRewrap"),
+        state: document.getElementById("state"),
+        ed: document.getElementById("ed"),
+        moduleHost: document.getElementById("moduleHost"),
+        moduleActions: document.getElementById("moduleActions"),
+        diffGrp: document.getElementById("diffGrp"),
+        diffTag: document.getElementById("diffTag"),
+        diffPrev: document.getElementById("diffPrev"),
+        diffNext: document.getElementById("diffNext"),
+        diffRestore: document.getElementById("diffRestore"),
+      },
+      onOpen: () => pickerShow(),
+    });
+    window.__ATELIER_SHELL__ = shellHandle;
+  } else if (BROWSE) {
+    document.body.classList.add("browse");
+    document.getElementById("fname").textContent = "IDE — fichiers";
+    document.title = "IDE";
+    document.getElementById("openFile").onclick = () => pickerShow();
+    renderBrowser("");
+  } else {
+    document.getElementById("fname").textContent = "(no file)";
+    document.getElementById("openFile").onclick = () => pickerShow();
+  }
+})().catch(err => {
+  console.error(err);
+  const st = document.getElementById("state");
+  if (st) { st.className = "conflict"; st.textContent = String(err.message || err); }
+});
+
+window.addEventListener("pagehide", () => {
+  if (shellHandle && shellHandle.destroy) shellHandle.destroy();
+});
 </script>
 </body>
 </html>

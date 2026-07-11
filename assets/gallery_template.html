@@ -4,10 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>__TITLE__</title>
+<script src="/.fig_thumbs/cm6/editor.bundle.js"></script>
 <style>
   :root{--ui-font:-apple-system,'SF Pro Text','Inter Variable',sans-serif;--code-font:ui-monospace,'SF Mono',Menlo,monospace; --bg:#141619; --card:#1c1f23; --card2:#22262b; --txt:#dbdfe5; --muted:#9aa1ab; --faint:#6b727c;
          --accent:#7fa3d8; --accent-soft:#233246; --arch:#3a2f1a; --border:#2a2e34; --border-strong:#3a4048;
-         --shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.25); }
+         --shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.25);
+         --code-bg:#1e2126;--code-fg:#d8d3c8;--code-keyword:#e07a5f;--code-function:#61afef;
+         --code-string:#86c991;--code-number:#d19a66;--code-comment:#707985;--code-type:#c678dd;
+         --code-operator:#abb2bf;--code-property:#e6c07b; }
   *{box-sizing:border-box}
   body{margin:0;font-family:var(--ui-font);
        background:var(--bg);color:var(--txt);font-size:13px}
@@ -56,18 +60,24 @@
   .csel-menu div:hover{background:var(--card2)}
   .csel-menu div .ck{width:12px;flex:none;color:var(--accent);opacity:0}
   .csel-menu div.on .ck{opacity:1}
-  #fmtMenu{min-width:0;width:max-content;max-width:min(292px,calc(100vw - 16px));padding:8px 8px 9px}
-  #fmtMenu .mhd{padding:4px 8px 6px}
-  .fmt-cats{display:grid;grid-template-columns:repeat(2,max-content);gap:6px 7px;padding:5px 8px 9px;max-width:none}
-  .fmt-cat{border:1px solid var(--border);border-radius:999px;background:transparent;color:var(--muted);
-    font-size:11.5px;font-weight:500;height:28px;padding:0 10px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
-  .fmt-cat svg{width:13px;height:13px;display:block;flex:none;stroke:currentColor;stroke-width:1.45;
-    stroke-linecap:round;stroke-linejoin:round;fill:none;opacity:.82}
-  .fmt-cat span{line-height:1}
-  .fmt-cat:hover{border-color:var(--border-strong)}
-  .fmt-cat.on{background:var(--card2);color:var(--txt);border-color:var(--border-strong)}
-  .fmt-cat.mix{color:var(--txt);border-style:dashed}
-  #fmtMenu .fmt-actions{margin-top:5px;padding:7px 8px 1px}
+  #fmtMenu{min-width:0;width:min(340px,calc(100vw - 16px));max-height:min(520px,calc(100dvh - 18px));padding:0;overflow:hidden}
+  #fmtMenu .fmt-head{padding:12px 14px 10px;border-bottom:1px solid var(--border)}
+  #fmtMenu .fmt-title{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+  #fmtMenu .fmt-title strong{font-size:13px;font-weight:650;color:var(--txt)}
+  #fmtMenu .fmt-title span{font-size:11px;color:var(--muted)}
+  #fmtMenu .fmt-search{width:100%;height:30px;margin-top:9px;padding:0 9px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--txt);font:inherit;font-size:12px}
+  #fmtMenu .fmt-search:focus{outline:none;border-color:var(--accent)}
+  #fmtMenu .fmt-presets{display:flex;gap:5px;flex-wrap:wrap;margin-top:9px}
+  #fmtMenu .fmt-preset{height:25px;padding:0 9px;border-radius:999px;font-size:11px;color:var(--muted);background:transparent}
+  #fmtMenu .fmt-preset:hover{color:var(--txt);border-color:var(--border-strong)}
+  #fmtMenu .fmt-body{padding:8px 8px 6px;overflow:auto;max-height:290px}
+  #fmtMenu .fmt-section{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);padding:3px 7px 4px}
+  #fmtMenu .fmt-details{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:5px}
+  #fmtMenu .fmt-details .mi{min-width:0;padding:6px 7px}
+  #fmtMenu .fmt-details .lbl{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #fmtMenu .fmt-empty{padding:16px 8px;color:var(--muted);font-size:12px;text-align:center}
+  #fmtMenu .fmt-footer{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 14px 10px;border-top:1px solid var(--border)}
+  #fmtMenu .fmt-footer .mlink{font-size:11px}
   .seg{display:inline-flex;border:1px solid var(--border);border-radius:6px;overflow:hidden}
   .seg button{border:none;background:transparent;color:var(--muted);font-size:11px;padding:4px 9px;cursor:pointer}
   .seg button.on{background:var(--card2);color:var(--txt)}
@@ -130,6 +140,21 @@
   .menu input[type=checkbox]{accent-color:var(--accent);margin-right:6px;vertical-align:-1px}
   .menu .mhd.sep{border-top:1px solid var(--border);margin-top:4px;padding-top:7px}
   .menu label.lbl{display:flex;align-items:center}
+  .code-theme-grid{display:grid;gap:5px;padding:0 1px 2px}
+  .code-theme-option{height:auto;min-height:54px;width:100%;display:grid;grid-template-columns:92px minmax(0,1fr) 16px;
+        align-items:center;gap:8px;padding:6px;background:transparent;border:1px solid transparent;border-radius:7px;text-align:left}
+  .code-theme-option:hover{background:rgba(255,255,255,.035);border-color:var(--border)}
+  .code-theme-option:active{transform:scale(.98)}
+  .code-theme-option.on{background:rgba(255,255,255,.04);border-color:var(--border-strong)}
+  .code-theme-name{font-size:11px;color:var(--txt);line-height:1.25}
+  .code-theme-preview{display:block;min-width:0;overflow:hidden;padding:5px 7px;border-radius:5px;background:var(--code-bg);
+        color:var(--code-fg);font:9px/1.35 var(--code-font);white-space:pre;box-shadow:inset 0 0 0 1px rgba(255,255,255,.06)}
+  .code-theme-check{color:var(--accent);font-size:12px;text-align:center}
+  .tok-keyword{color:var(--code-keyword)} .tok-function{color:var(--code-function)}
+  .tok-string{color:var(--code-string)} .tok-number{color:var(--code-number)}
+  .tok-comment{color:var(--code-comment);font-style:italic} .tok-type{color:var(--code-type)}
+  .tok-operator{color:var(--code-operator)} .tok-property{color:var(--code-property)}
+  .tok-invalid{color:#ff6b6b;text-decoration:underline wavy}
   .playbtn{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:3;
         width:48px;height:48px;border-radius:50%;background:rgba(0,0,0,.5);color:#fff;
         display:flex;align-items:center;justify-content:center;font-size:18px;padding-left:3px;
@@ -153,7 +178,7 @@
   .ph .ext{font-size:30px;font-weight:600;letter-spacing:1px}
   .snip{height:var(--thumb-h,150px);overflow:hidden;background:var(--card2);padding:9px 11px;
         font-family:var(--code-font);font-size:10px;
-        line-height:1.4;color:#9aa6b6;white-space:pre;tab-size:2;
+        line-height:1.4;color:var(--code-fg);background:var(--code-bg);white-space:pre;tab-size:2;
         -webkit-mask-image:linear-gradient(#000 72%,transparent);mask-image:linear-gradient(#000 72%,transparent)}
   .meta{padding:9px 11px 10px;display:flex;flex-direction:column;gap:3px;flex:1}
   .nm{font-size:13px;font-weight:600;letter-spacing:-.005em;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -609,6 +634,23 @@ function applyTheme(name){
   for(const k in t) r.setProperty('--'+k, t[k]);
 }
 applyTheme(theme);
+const CODE_THEME_KEY='atelierCodeTheme';
+const CODE_THEMES=(window.AtelierCM6&&window.AtelierCM6.CODE_THEMES)||{};
+let codeTheme=localStorage.getItem(CODE_THEME_KEY)||'Atelier Dark';
+if(!CODE_THEMES[codeTheme]) codeTheme='Atelier Dark';
+function codeThemeStyle(name){
+  const p=CODE_THEMES[name]||CODE_THEMES['Atelier Dark']; if(!p)return '';
+  return `--code-bg:${p.bg};--code-fg:${p.fg};--code-keyword:${p.keyword};--code-function:${p.function};--code-string:${p.string};--code-number:${p.number};--code-comment:${p.comment};--code-type:${p.type};--code-operator:${p.operator};--code-property:${p.property}`;
+}
+function applyCodeTheme(name){
+  if(!CODE_THEMES[name])name='Atelier Dark';
+  codeTheme=name; try{localStorage.setItem(CODE_THEME_KEY,name);}catch(e){}
+  const p=CODE_THEMES[name],r=document.documentElement.style;
+  [['bg',p.bg],['fg',p.fg],['keyword',p.keyword],['function',p.function],['string',p.string],
+   ['number',p.number],['comment',p.comment],['type',p.type],['operator',p.operator],['property',p.property]]
+    .forEach(([k,v])=>r.setProperty('--code-'+k,v));
+}
+applyCodeTheme(codeTheme);
 let hidden = new Set(JSON.parse(localStorage.getItem('figHidden')||'[]'));
 let showHidden = false;
 const saveHidden = ()=>{localStorage.setItem('figHidden', JSON.stringify([...hidden]));pushState();};
@@ -886,8 +928,11 @@ function buildViewMenu(){
   const menu=document.getElementById('viewMenu'); if(!menu) return;
   updateViewChip();
   menu.innerHTML=
-    '<div class="mhd">Theme</div>'+
+    '<div class="mhd">Thème Atelier</div>'+
     Object.keys(THEMES).map(n=>`<div class="mi trow" data-theme="${n}"><span class="lbl">${n}</span>${n===theme?'<span class="tck">✓</span>':''}</div>`).join('')+
+    '<div class="mhd sep">Thème du code</div><div class="code-theme-grid">'+
+    Object.keys(CODE_THEMES).map(n=>`<button class="code-theme-option${n===codeTheme?' on':''}" type="button" data-code-theme="${escA(n)}" style="${codeThemeStyle(n)}" aria-pressed="${n===codeTheme}"><span class="code-theme-name">${esc(n)}</span><code class="code-theme-preview">${window.AtelierCM6.highlightCode('fn main() { let n = 42; }','rust')}</code><span class="code-theme-check">${n===codeTheme?'✓':''}</span></button>`).join('')+
+    '</div>'+
     '<div class="mhd sep">View</div>'+
     `<div class="mi"><label class="lbl"><input type="checkbox" id="vArch" ${showArch?'checked':''}> Include archives</label></div>`+
     `<div class="mi"><label class="lbl"><input type="checkbox" id="vHidden" ${showHidden?'checked':''}> Show hidden${hidden.size?(' ('+hidden.size+')'):''}</label></div>`+
@@ -897,6 +942,7 @@ function buildViewMenu(){
     healthRows(healthStatus);
   menu.onclick=e=>e.stopPropagation();
   menu.querySelectorAll('[data-theme]').forEach(el=>el.onclick=()=>{ applyTheme(el.dataset.theme); buildViewMenu(); });
+  menu.querySelectorAll('[data-code-theme]').forEach(el=>el.onclick=()=>{ applyCodeTheme(el.dataset.codeTheme); buildViewMenu(); render(); });
   menu.querySelector('#vArch').onchange=function(){ showArch=this.checked; updateViewChip(); render(); };
   menu.querySelector('#vHidden').onchange=function(){ showHidden=this.checked; updateViewChip(); render(); };
   menu.querySelectorAll('[data-rm]').forEach(el=>el.onclick=()=>{ hideRules=hideRules.filter(x=>x!==el.dataset.rm); saveRules(); buildViewMenu(); render(); });
@@ -1229,11 +1275,13 @@ async function lbShow(i){
   // Embarqué dans Atelier Studio : les fichiers texte/code s'ouvrent dans un
   // ONGLET Studio (la galerie reste navigable), pas dans la lightbox.
   if((isTex||isMd||isCode||isPdf) && (USE_TABS || window.self!==window.top)){
-    // Studio : latex_studio pour tex/code ; éditeur WYSIWYG pour markdown
+    // Routes canoniques unifiées : code → code_editor (shell CM6), TeX → latex_studio,
+    // Markdown source → md_viewer (shell). md_studio reste accessible via ?wysiwyg=1.
     let u;
     if(isPdf) u='/.fig_thumbs/pdf_viewer.html?file='+encodeURIComponent(f.rel)+'&v=__VER__';
-    else if(isMd) u='/.fig_thumbs/md_studio.html?path='+encodeURIComponent('__ROOT__/'+f.rel)+'&v=__VER__';
-    else u='/.fig_thumbs/latex_studio.html?path='+encodeURIComponent('__ROOT__/'+f.rel)+'&v=__VER__';
+    else if(isMd) u='/.fig_thumbs/md_viewer.html?path='+encodeURIComponent('__ROOT__/'+f.rel)+'&file='+encodeURIComponent(f.rel)+'&v=__VER__';
+    else if(isTex) u='/.fig_thumbs/latex_studio.html?path='+encodeURIComponent('__ROOT__/'+f.rel)+'&v=__VER__';
+    else u='/.fig_thumbs/code_editor.html?path='+encodeURIComponent('__ROOT__/'+f.rel)+'&v=__VER__';
     // onglet interne si dispo, sinon onglet de l'hôte Atelier Studio
     if(!TabShell.open(u, f.name)) __atelierPost({type:'atelier-open-tab', url:u, title:f.name});
     lbIdx=-1;
@@ -1434,7 +1482,9 @@ const fmtSize = b => b>1048576?(b/1048576).toFixed(1)+' MB':b>1024?(b/1024).toFi
 const imgExt = e => e==='png'||e==='jpg'||e==='jpeg'||e==='svg';
 const videoExt = e => e==='mp4'||e==='m4v'||e==='mov'||e==='webm';
 const appExt = e => e==='docx'||e==='xlsx'||e==='xls'||e==='csv';
-const codeExt = e => e==='py'||e==='r'||e==='jl'||e==='tex'||e==='sh'||e==='rs';
+// codeExt: programming languages only (tex is isTex, not code). Shared with AtelierLanguages.galleryCodeExt.
+const codeExt = e => e==='py'||e==='r'||e==='jl'||e==='sh'||e==='bash'||e==='rs'
+  ||e==='js'||e==='jsx'||e==='ts'||e==='tsx'||e==='json'||e==='toml'||e==='yaml'||e==='yml';
 // All file types live in this one menu (PNG/PDF/SVG/Video are no longer standalone chips).
 const TYPE_LIST = [['png','PNG'],['jpg','JPG'],['svg','SVG'],['mp4','Video (mp4/mov/webm)'],['pdf','PDF'],['html','HTML'],['docx','DOCX'],['xlsx','XLSX'],['csv','CSV'],['md','Markdown'],['py','Python'],['r','R'],['jl','Julia'],['tex','LaTeX'],['sh','Shell'],['rs','Rust']];
 const fmtMenu=document.getElementById('fmtMenu'), fmtChip=document.getElementById('fmtChip');
@@ -1444,7 +1494,7 @@ function fmtChipLabel(){
   fmtChip.innerHTML=(on.length===0?'Formats':on.length<=2?on.join(' + '):'Formats ('+on.length+')')+' &#9662;';
   fmtChip.classList.toggle('off',!on.length);
 }
-// 5 catégories au lieu de 15 lignes ; « Détail » déplie les types individuels
+// Presets + recherche gardent le filtre compact, même avec beaucoup d'extensions.
 const FMT_CATS = [
   ['Images',   ['png','jpg','jpeg','svg']],
   ['Vidéos',   ['mp4','m4v','mov','webm']],
@@ -1452,32 +1502,41 @@ const FMT_CATS = [
   ['Données',  ['csv','xlsx','xls']],
   ['Code',     ['py','r','jl','tex','sh','rs']],
 ];
-const FMT_ICONS = {
-  Images:'<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2.5" y="3" width="11" height="10" rx="1.8"/><circle cx="6" cy="6.2" r="1"/><path d="M3.5 11l3.1-3 2.2 2 1.4-1.3 2.3 2.3"/></svg>',
-  'Vidéos':'<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2.5" y="4" width="8" height="8" rx="1.8"/><path d="M10.5 6.5l3-1.7v6.4l-3-1.7z"/></svg>',
-  Documents:'<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5h5.2L12 5.3v8.2H4z"/><path d="M9.2 2.5v3H12"/><path d="M6 8.3h4M6 10.5h3"/></svg>',
-  'Données':'<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2.5" y="3" width="11" height="10" rx="1.6"/><path d="M2.5 6.5h11M2.5 9.5h11M6 3v10M10 3v10"/></svg>',
-  Code:'<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6.2 5L3.4 8l2.8 3M9.8 5l2.8 3-2.8 3"/></svg>',
-};
-let fmtDetail = false;
-const catState = (ks) => { const on = ks.filter(k=>exts[k]).length; return on===0?'off':on===ks.length?'on':'mix'; };
+const FMT_PRESETS = [
+  ['Visuels', ['png','jpg','jpeg','svg','mp4','m4v','mov','webm']],
+  ['Documents', ['pdf','html','docx','md']],
+  ['Code', ['py','r','jl','tex','sh','rs']],
+  ['Tout', Object.keys(DEFAULT_EXTS)],
+];
+const TYPE_LABELS = Object.fromEntries(TYPE_LIST);
+let fmtQuery = '';
+function applyFmtPreset(keys){
+  Object.keys(DEFAULT_EXTS).forEach(k=>exts[k]=false);
+  keys.forEach(k=>exts[k]=true);
+  saveExts(); buildFmtMenu(); fmtChipLabel(); render();
+}
 function buildFmtMenu(){
-  fmtMenu.innerHTML='<div class="mhd">Types de fichiers</div>'
-    + '<div class="fmt-cats">'
-    + FMT_CATS.map(([lab,ks],i)=>`<button class="fmt-cat ${catState(ks)}" data-cat="${i}">${FMT_ICONS[lab]||''}<span>${lab}</span></button>`).join('')
-    + '</div>'
-    + `<div class="madd fmt-actions" style="justify-content:space-between;gap:10px"><span class="mlink" data-fmt-detail>${fmtDetail?'Masquer le détail':'Détail…'}</span><span class="mlink" data-fmt-all="reset">Réinitialiser</span></div>`
-    + (fmtDetail ? TYPE_LIST.map(([e,lab])=>`<div class="mi"><label class="lbl"><input type="checkbox" data-fmt="${e}" ${exts[e]?'checked':''}> ${lab}</label></div>`).join('') : '');
+  const query=fmtQuery.trim().toLowerCase();
+  const types=TYPE_LIST.filter(([e,lab])=>!query || e.includes(query) || lab.toLowerCase().includes(query));
+  const active=Object.keys(exts).filter(k=>exts[k]).length;
+  fmtMenu.innerHTML='<div class="fmt-head">'
+    + `<div class="fmt-title"><strong>Formats</strong><span>${active} actifs</span></div>`
+    + `<input class="fmt-search" data-fmt-search type="search" value="${fmtQuery.replace(/[&<>\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[c]))}" placeholder="Rechercher une extension…" aria-label="Rechercher une extension">`
+    + '<div class="fmt-presets">'
+    + FMT_PRESETS.map(([lab,keys])=>`<button class="fmt-preset" type="button" data-fmt-preset="${lab}">${lab}</button>`).join('')
+    + '</div></div>'
+    + `<div class="fmt-body"><div class="fmt-section">Extensions</div><div class="fmt-details">${types.length ? types.map(([e,lab])=>`<div class="mi"><label class="lbl"><input type="checkbox" data-fmt="${e}" ${exts[e]?'checked':''}> ${lab} <span style="color:var(--muted);font-size:10px">.${e}</span></label></div>`).join('') : '<div class="fmt-empty">Aucun format trouvé.</div>'}</div></div>`
+    + '<div class="fmt-footer"><span class="mlink" data-fmt-all="reset">Réinitialiser</span><span class="mlink" data-fmt-close>Fermer</span></div>';
   fmtMenu.onclick=e=>e.stopPropagation();
-  fmtMenu.querySelectorAll('.fmt-cat').forEach(b=>{
-    b.onclick=()=>{ const ks=FMT_CATS[+b.dataset.cat][1]; const turnOn = catState(ks)!=='on';
-      ks.forEach(k=>exts[k]=turnOn); saveExts(); buildFmtMenu(); fmtChipLabel(); render(); };
+  fmtMenu.querySelectorAll('[data-fmt-preset]').forEach(b=>b.onclick=()=>{
+    const preset=FMT_PRESETS.find(([lab])=>lab===b.dataset.fmtPreset); if(preset) applyFmtPreset(preset[1]);
   });
   fmtMenu.querySelectorAll('input[data-fmt]').forEach(cb=>{
     cb.onchange=()=>{ typeGroup(cb.dataset.fmt).forEach(k=>exts[k]=cb.checked); saveExts(); fmtChipLabel(); buildFmtMenu(); render(); };
   });
-  const dt=fmtMenu.querySelector('[data-fmt-detail]'); if(dt) dt.onclick=()=>{ fmtDetail=!fmtDetail; buildFmtMenu(); };
+  const search=fmtMenu.querySelector('[data-fmt-search]'); if(search) search.oninput=()=>{ const p=search.selectionStart||search.value.length; fmtQuery=search.value; buildFmtMenu(); const next=fmtMenu.querySelector('[data-fmt-search]'); if(next){next.focus();next.setSelectionRange(p,p);} };
   const rs=fmtMenu.querySelector('[data-fmt-all="reset"]'); if(rs) rs.onclick=()=>{ Object.assign(exts, DEFAULT_EXTS); saveExts(); buildFmtMenu(); fmtChipLabel(); render(); };
+  const close=fmtMenu.querySelector('[data-fmt-close]'); if(close) close.onclick=()=>{ fmtMenu.style.display='none'; };
 }
 fmtChip.onclick=e=>{ e.stopPropagation(); buildFmtMenu(); menuToggle(fmtMenu, fmtChip); };
 fmtChipLabel();
@@ -1500,7 +1559,10 @@ const snipObserver = new IntersectionObserver((entries,obs)=>{
     if(!e.isIntersecting) continue;
     const el=e.target; obs.unobserve(el);
     fetch('/snippet?path='+encodeURIComponent('__ROOT__/'+el.dataset.snip)+'&n=10')
-      .then(r=>r.ok?r.text():'').then(t=>{el.textContent=t;}).catch(()=>{});
+      .then(r=>r.ok?r.text():'').then(t=>{
+        const highlighter=window.AtelierCM6&&window.AtelierCM6.highlightCode;
+        if(highlighter)el.innerHTML=highlighter(t,el.dataset.ext);else el.textContent=t;
+      }).catch(()=>{});
   }
 },{rootMargin:'250px'});
 function render(){
@@ -1528,7 +1590,7 @@ function render(){
     if(sort==='btime_asc') return a.btime-b.btime;
     return b.mtime-a.mtime;
   });
-  lbList = list.filter(f=>imgExt(f.ext)||videoExt(f.ext)||f.ext==='pdf'||f.ext==='md'||codeExt(f.ext));
+  lbList = list.filter(f=>imgExt(f.ext)||videoExt(f.ext)||f.ext==='pdf'||f.ext==='md'||f.ext==='tex'||codeExt(f.ext));
   const grid=document.getElementById('grid');
   if(!list.length){grid.innerHTML='<div class="empty">No matching files.</div>';renderedRels=[];return;}
   const MAX=600;
@@ -1546,7 +1608,7 @@ function render(){
       ? `<img loading="lazy" decoding="async" src="${escA(tsrc)}" alt="" onerror="this.onerror=null;this.remove()">`
       : `<img loading="lazy" decoding="async" src="${escA(tsrc)}" alt="">`;
     const thumb = f.code
-      ? `<div class="snip" data-snip="${escA(f.rel)}"></div>`
+      ? `<div class="snip" data-snip="${escA(f.rel)}" data-ext="${escA(f.ext)}"></div>`
       : tsrc
       ? `<div class="thumb">${imgTag}</div>`
       : `<div class="ph"><span class="ext">${esc(f.ext.toUpperCase())}</span><span style="font-size:11px">no preview</span></div>`;

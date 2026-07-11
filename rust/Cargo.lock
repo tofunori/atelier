@@ -120,6 +120,7 @@ name = "atelier-mcp"
 version = "0.1.0"
 dependencies = [
  "libc",
+ "md-5",
  "percent-encoding",
  "serde_json",
  "sha2 0.10.9",
