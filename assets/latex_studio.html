@@ -25,6 +25,7 @@
 <script src="/.fig_thumbs/editor/modules/latex/synctex.js"></script>
 <script src="/.fig_thumbs/editor/modules/latex/comments.js"></script>
 <script src="/.fig_thumbs/editor/modules/latex/ghost.js"></script>
+<script src="/.fig_thumbs/editor/modules/latex/errors.js"></script>
 <link rel="stylesheet" href="/.fig_thumbs/katex/katex.min.css">
 <script src="/.fig_thumbs/katex/katex.min.js"></script>
 <script src="/.fig_thumbs/texvisual.min.js"></script>
@@ -763,6 +764,12 @@ function ghostSuggestion(){
 
   let m = before.match(/\\(begin|end)\{([^}]*)$/);
   if(m){
+    // Shared env completion when available (same algorithm as shell module)
+    if (window.AtelierLatexGhost) {
+      const fullBefore = cm.getRange({line:0,ch:0}, cur);
+      const shared = AtelierLatexGhost.suggestion(cm.getValue(), fullBefore);
+      if (shared) return shared;
+    }
     const kind = m[1], raw = m[2];
     const envs = ghostEnvironmentNames();
     const first = kind === "end" ? ghostOpenEnvironment(ghostTextBeforeCursor()) : "";
@@ -1030,10 +1037,23 @@ async function save(){
 async function compile(){
   if(dirty && !(await save())) return;
   setState("dirty", "compiling…");
-  const r = await fetch("/compile", {method:"POST", headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({path})});
-  const j = await r.json();
+  let j;
+  if (window.AtelierLatexCompile) {
+    j = await AtelierLatexCompile.compile(path);
+  } else {
+    const r = await fetch("/compile", {method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({path})});
+    j = await r.json();
+  }
   showCompileLog(j);
+  // Shared error gutters (shell module parity)
+  if (window.AtelierLatexErrors && cm) {
+    AtelierLatexErrors.clearErrorGutters(cm);
+    if (!j.ok) {
+      const lines = AtelierLatexErrors.errorLinesFromLog(j.log || j.error || "");
+      AtelierLatexErrors.applyErrorGutters(cm, lines);
+    }
+  }
   if(!j.ok) return setState("err", "✗ compilation échouée — voir la console");
   if(j.pdf) pdfPath = j.pdf;
   setState("ok", "✓ compiled " + new Date().toLocaleTimeString());

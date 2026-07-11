@@ -195,8 +195,48 @@ describe("Gate C — studio wires shared helpers (no deletion of surface)", () =
 
   it("shared helper files exist under assets/editor/modules/latex", () => {
     const dir = join(assets, "editor", "modules", "latex");
-    for (const f of ["outline.js", "compile.js", "synctex.js", "comments.js", "ghost.js"]) {
+    for (const f of [
+      "outline.js",
+      "compile.js",
+      "synctex.js",
+      "comments.js",
+      "ghost.js",
+      "errors.js",
+    ]) {
       assert.ok(existsSync(join(dir, f)), f);
     }
+  });
+
+  it("latex module exports destroy-safe API surface", () => {
+    const mod = read("assets/editor/modules/latex.js");
+    for (const token of [
+      "synctexBackward",
+      "synctexForward",
+      "refreshOutline",
+      "loadAnnots",
+      "addCommentForSelection",
+      "removeEventListener",
+      "destroyUi",
+    ]) {
+      assert.ok(mod.includes(token), "module mentions " + token);
+    }
+    const err = read("assets/editor/modules/latex/errors.js");
+    assert.ok(err.includes("applyErrorGutters"));
+    assert.ok(err.includes("errorLinesFromLog"));
+  });
+});
+
+describe("Gate C — error line parser", () => {
+  const Errors = loadHelper(
+    "assets/editor/modules/latex/errors.js",
+    "AtelierLatexErrors"
+  );
+
+  it("extracts l.N markers from log", () => {
+    const lines = Errors.errorLinesFromLog(
+      "! Undefined control sequence.\nl.12 \\foo\nSomething\nl.12 again\nline 4: warn\n"
+    );
+    assert.ok(lines.includes(12));
+    assert.ok(lines.includes(4));
   });
 });

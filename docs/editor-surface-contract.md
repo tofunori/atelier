@@ -105,9 +105,28 @@ Voir aussi `docs/plan-ide-unifie-cm6-runtime-rust.md`.
 - Fusion externe : chrome `dirty` (pas `saved`) tant que non sauvegardé.
 - E2E réels : wrap win/off/80, rewrap commentaires, viewport 375 px, 2 instances CM6 indépendantes.
 
-## Restant (après Gate C / après P0)
+## Phase 4 LaTeX profonde (2026-07-11)
 
-- Phase 4 fin : retirer le monolithe `latex_studio` seulement après soak (studio délègue déjà aux helpers)
-- Phase 7 : LSP
-- Phase 8 : retrait CM5 (soak + approbation humaine)
-- Migration URLs de session historiques
+Shell surface : `code_editor.html?surface=latex` + `AtelierModuleLatex`
+
+| Capacité | Studio (`latex_studio.html`) | Shell module |
+| --- | --- | --- |
+| Compile + log | ✓ (via helper) | ✓ |
+| Error gutters | ✓ (via `errors.js`) | ✓ |
+| Outline | ✓ (via helper) | ✓ |
+| SyncTeX → PDF | ✓ | ✓ |
+| SyncTeX ← PDF | ✓ (canvas click) | ✓ API + postMessage |
+| Rewrap `%` + reanchor | ✓ | ✓ |
+| Commentaires ancrés | ✓ `/pdfannot` | ✓ load/save/add |
+| Ghost text | ✓ (env via helper) | ✓ |
+| PDF multi-page canvas | ✓ primaire | iframe `pdf_viewer` |
+| Diff/versions | ✓ | ✓ (shell history) |
+
+Galerie ouvre encore **`latex_studio.html`** par défaut (pas de bascule silent).
+Tests : `tests/e2e/latex-parity.spec.js` (studio + shell), contrats `latex-surface-contract`.
+
+## Restant
+
+- Soak réel puis bascule route galerie TeX → shell (optionnel)
+- PDF canvas SyncTeX reverse dans le shell (au-delà de l’iframe)
+- Phase 7 LSP / Phase 8 CM5

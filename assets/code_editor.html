@@ -19,6 +19,12 @@
 <script src="/.fig_thumbs/editor/selection.js"></script>
 <script src="/.fig_thumbs/editor/history.js"></script>
 <script src="/.fig_thumbs/editor/modules/code.js"></script>
+<script src="/.fig_thumbs/editor/modules/latex/outline.js"></script>
+<script src="/.fig_thumbs/editor/modules/latex/compile.js"></script>
+<script src="/.fig_thumbs/editor/modules/latex/synctex.js"></script>
+<script src="/.fig_thumbs/editor/modules/latex/comments.js"></script>
+<script src="/.fig_thumbs/editor/modules/latex/ghost.js"></script>
+<script src="/.fig_thumbs/editor/modules/latex/errors.js"></script>
 <script src="/.fig_thumbs/editor/modules/latex.js"></script>
 <script src="/.fig_thumbs/editor/modules/markdown.js"></script>
 <script src="/.fig_thumbs/editor/shell.js"></script>
@@ -45,6 +51,10 @@
   .CodeMirror-focused .CodeMirror-selected{background:transparent !important}
   .CodeMirror-selectedtext{background:rgba(91,157,255,.45) !important;box-shadow:none !important;border-radius:2px}
   .cm-clsel{background:rgba(91,157,255,.28);border-radius:2px}
+  .cm-ghost-suggest{color:#7d858f;opacity:.72;pointer-events:none}
+  .texc-hl{background:rgba(232,130,58,.22);border-radius:2px}
+  .cm-syncline,.cm-error-line{background:rgba(224,108,117,.12) !important}
+  .lint-gutter-err{color:#e06c75}
   #picker{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;z-index:200;
           align-items:flex-start;justify-content:center;padding-top:8vh}
   #picker.show{display:flex}

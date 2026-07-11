@@ -378,6 +378,130 @@ test.describe("Gate C — latex_studio browser surface", () => {
   });
 });
 
+test.describe("Phase 4 — shell LaTeX surface (code_editor?surface=latex)", () => {
+  test.skip(!HAS_LATEXMK, "latexmk not installed");
+
+  test("shell mounts compile, outline, log, and rewrap helpers", async ({ page }) => {
+    await withLatexProject(async ({ base, mainPath }) => {
+      const url =
+        `${base}/.fig_thumbs/code_editor.html?surface=latex&path=` +
+        encodeURIComponent(mainPath);
+      await page.goto(url);
+      await page.waitForFunction(() => window.__ATELIER_SHELL__ != null, null, {
+        timeout: 20000,
+      });
+      const info = await page.evaluate(() => {
+        const shell = window.__ATELIER_SHELL__;
+        return {
+          surface: shell.surface,
+          moduleId: shell.module && shell.module.id,
+          hasCompile: typeof shell.module?.compile === "function",
+          hasSyncFwd: typeof shell.module?.synctexForward === "function",
+          hasSyncBack: typeof shell.module?.synctexBackward === "function",
+          hasOutline: typeof shell.module?.refreshOutline === "function",
+          hasComments: typeof shell.module?.addCommentForSelection === "function",
+          hasErrors: !!window.AtelierLatexErrors,
+          hasCm: !!document.querySelector(".cm-editor"),
+          hasLog: !!document.getElementById("latexCompileLog"),
+        };
+      });
+      expect(info.surface).toBe("latex");
+      expect(info.moduleId).toBe("latex");
+      expect(info.hasCompile).toBe(true);
+      expect(info.hasSyncFwd).toBe(true);
+      expect(info.hasSyncBack).toBe(true);
+      expect(info.hasOutline).toBe(true);
+      expect(info.hasComments).toBe(true);
+      expect(info.hasErrors).toBe(true);
+      expect(info.hasCm).toBe(true);
+      expect(info.hasLog).toBe(true);
+
+      // Compile via module
+      const compiled = await page.evaluate(async () => {
+        return window.__ATELIER_SHELL__.module.compile();
+      });
+      expect(compiled.ok).toBe(true);
+      expect(compiled.pdf || compiled.root).toBeTruthy();
+
+      // Outline items
+      await page.evaluate(() => {
+        const mod = window.__ATELIER_SHELL__.module;
+        mod.refreshOutline();
+        const el = document.getElementById("latexOutline");
+        if (el) el.style.display = "block";
+        mod.refreshOutline();
+      });
+      // outline may be hidden until Plan click — force HTML
+      const outlineHtml = await page.evaluate(() => {
+        const src = window.__ATELIER_SHELL__.cm().getValue();
+        return window.AtelierLatexOutline.renderOutlineHtml(
+          window.AtelierLatexOutline.parseOutline(src),
+          0
+        );
+      });
+      expect(outlineHtml).toContain("Introduction");
+      expect(outlineHtml).toContain("Results");
+
+      // Error gutters on broken path: open broken in same shell API
+      // (diagnostic helper pure)
+      const errLines = await page.evaluate(() =>
+        window.AtelierLatexErrors.errorLinesFromLog("! err\nl.7 \\undefined\n")
+      );
+      expect(errLines).toContain(7);
+    });
+  });
+
+  test("shell rewrap reanchors comments by content", async ({ page }) => {
+    await withLatexProject(async ({ base, commentsPath }) => {
+      const url =
+        `${base}/.fig_thumbs/code_editor.html?surface=latex&path=` +
+        encodeURIComponent(commentsPath);
+      await page.goto(url);
+      await page.waitForFunction(() => window.__ATELIER_SHELL__?.module, null, {
+        timeout: 20000,
+      });
+      const result = await page.evaluate(() => {
+        const shell = window.__ATELIER_SHELL__;
+        const cm = shell.cm();
+        // Select UNIQUE_ANCHOR_PHRASE and add comment
+        const text = cm.getValue();
+        const idx = text.indexOf("UNIQUE_ANCHOR_PHRASE");
+        const from = cm.posFromIndex(idx);
+        const to = cm.posFromIndex(idx + "UNIQUE_ANCHOR_PHRASE".length);
+        cm.setSelection(from, to);
+        shell.module.addCommentForSelection("anchored via shell");
+        // Rewrap comments at col 40
+        const sel = document.getElementById("wrapSel");
+        if (sel && !sel.querySelector('option[value="40"]')) {
+          const opt = document.createElement("option");
+          opt.value = "40";
+          opt.textContent = "Wrap: 40";
+          sel.insertBefore(opt, sel.querySelector('option[value="custom"]'));
+        }
+        if (sel) {
+          sel.value = "40";
+          sel.dispatchEvent(new Event("change", { bubbles: true }));
+        }
+        cm.setCursor({ line: 2, ch: 0 });
+        shell.module.rewrap(true);
+        const annots = shell.module.getAnnots();
+        return {
+          count: annots.length,
+          comment: annots[0] && annots[0].comment,
+          text: annots[0] && annots[0].text,
+          stillHasPhrase: cm.getValue().includes("UNIQUE_ANCHOR_PHRASE"),
+          stillHasCode: cm.getValue().includes("UNIQUE_CODE_LINE"),
+        };
+      });
+      expect(result.count).toBeGreaterThanOrEqual(1);
+      expect(result.comment).toBe("anchored via shell");
+      expect(result.text).toContain("UNIQUE_ANCHOR_PHRASE");
+      expect(result.stillHasPhrase).toBe(true);
+      expect(result.stillHasCode).toBe(true);
+    });
+  });
+});
+
 test.describe("Gate C — agent bank not hidden at top-level", () => {
   test("codex annotation bank button is visible on gallery", async ({ page }) => {
     // Reuse core-style minimal server via latex project + codex env
