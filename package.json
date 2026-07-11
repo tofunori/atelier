@@ -6,6 +6,7 @@
     "test": "npm run typecheck && cargo test --manifest-path rust/Cargo.toml && npm run test:editor-contracts && npm run test:e2e && bash scripts/check-no-python.sh",
     "test:contracts": "cargo test --manifest-path rust/Cargo.toml -p atelier-server --test http_smoke",
     "test:editor-contracts": "node --test tests/contracts/*.test.mjs",
+    "test:editor": "bash scripts/verify-ide-checkout.sh",
     "test:e2e": "playwright test",
     "typecheck": "tsc --noEmit",
     "build:frontend": "tsc",

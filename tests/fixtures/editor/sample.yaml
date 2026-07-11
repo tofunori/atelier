@@ -1,0 +1,6 @@
+# Sample YAML for editor contract tests.
+name: sample
+version: 0.1.0
+items:
+  - one
+  - two

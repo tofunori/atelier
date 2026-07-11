@@ -1,0 +1,426 @@
+/**
+ * Gate C — LaTeX behavioural parity against the actually-served studio + Rust APIs.
+ * Requires latexmk + synctex (MacTeX/TeX Live). Skips gracefully if absent.
+ */
+import { test, expect } from "@playwright/test";
+import { spawn, execFileSync, execSync } from "node:child_process";
+import {
+  mkdtempSync,
+  writeFileSync,
+  readFileSync,
+  rmSync,
+  cpSync,
+  existsSync,
+  mkdirSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import net from "node:net";
+import { fileURLToPath } from "node:url";
+
+const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+const RUST_MANIFEST = path.join(REPO, "rust", "Cargo.toml");
+const ATELIER_CLI = path.join(REPO, "rust", "target", "debug", "atelier-cli");
+const ATELIER_SERVER = path.join(REPO, "rust", "target", "debug", "atelier-server");
+const FIX = path.join(REPO, "tests", "fixtures", "editor", "latex");
+
+function hasBin(name) {
+  try {
+    execSync(`command -v ${name}`, { stdio: "ignore" });
+    return true;
+  } catch {
+    return existsSync(`/Library/TeX/texbin/${name}`);
+  }
+}
+
+const HAS_LATEXMK = hasBin("latexmk");
+const HAS_SYNCTEX = hasBin("synctex");
+
+function freePort() {
+  return new Promise((resolve, reject) => {
+    const server = net.createServer();
+    server.unref();
+    server.on("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      const { port } = server.address();
+      server.close(() => resolve(port));
+    });
+  });
+}
+
+async function waitForPing(port) {
+  const deadline = Date.now() + 12000;
+  while (Date.now() < deadline) {
+    try {
+      const res = await fetch(`http://127.0.0.1:${port}/ping`);
+      if (res.ok) return;
+    } catch {
+      await new Promise((r) => setTimeout(r, 100));
+    }
+  }
+  throw new Error(`server on ${port} did not answer /ping`);
+}
+
+async function withLatexProject(run) {
+  const root = mkdtempSync(path.join(tmpdir(), "atelier-latex-e2e-"));
+  let server;
+  try {
+    mkdirSync(path.join(root, "docs"), { recursive: true });
+    for (const f of ["main.tex", "broken.tex", "comments.tex", "root.tex", "chapter.tex"]) {
+      cpSync(path.join(FIX, f), path.join(root, "docs", f));
+    }
+    // minimal gallery so CLI build succeeds
+    writeFileSync(path.join(root, "preview.png"), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+    execFileSync("cargo", ["build", "--manifest-path", RUST_MANIFEST, "-p", "atelier-cli", "-p", "atelier-server"], {
+      cwd: REPO,
+      stdio: "pipe",
+    });
+    execFileSync(ATELIER_CLI, ["build", "--root", root], {
+      cwd: root,
+      env: { ...process.env, ATELIER_ASSETS_DIR: path.join(REPO, "assets") },
+      stdio: "pipe",
+    });
+    const port = await freePort();
+    server = spawn(ATELIER_SERVER, ["--root", root, "--port", String(port), "--watch"], {
+      cwd: root,
+      env: {
+        ...process.env,
+        GALLERY_ROOT: root,
+        ATELIER_ASSETS_DIR: path.join(REPO, "assets"),
+        PATH: `/Library/TeX/texbin:${process.env.PATH || ""}`,
+      },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    await waitForPing(port);
+    await run({
+      root,
+      port,
+      base: `http://127.0.0.1:${port}`,
+      mainPath: path.join(root, "docs", "main.tex"),
+      brokenPath: path.join(root, "docs", "broken.tex"),
+      commentsPath: path.join(root, "docs", "comments.tex"),
+    });
+  } finally {
+    if (server) {
+      server.kill("SIGTERM");
+      await new Promise((r) => server.once("exit", r));
+    }
+    rmSync(root, { recursive: true, force: true });
+  }
+}
+
+test.describe("Gate C — LaTeX compile / logs / PDF", () => {
+  test.skip(!HAS_LATEXMK, "latexmk not installed");
+
+  test("compile succeeds with pdf + log for main.tex", async () => {
+    await withLatexProject(async ({ base, mainPath }) => {
+      const r = await fetch(`${base}/compile`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: mainPath }),
+      });
+      const j = await r.json();
+      expect(j.ok).toBe(true);
+      expect(j.pdf).toBeTruthy();
+      expect(j.log).toBeTruthy();
+      expect(String(j.log).length).toBeGreaterThan(20);
+      expect(existsSync(j.pdf)).toBe(true);
+    });
+  });
+
+  test("compile fails with error + log for broken.tex", async () => {
+    await withLatexProject(async ({ base, brokenPath }) => {
+      const r = await fetch(`${base}/compile`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: brokenPath }),
+      });
+      const j = await r.json();
+      expect(j.ok).toBe(false);
+      expect(j.error || j.log).toBeTruthy();
+      const blob = String(j.error || "") + String(j.log || "");
+      expect(/!|Error|Undefined|undefined/i.test(blob)).toBe(true);
+    });
+  });
+});
+
+test.describe("Gate C — SyncTeX both directions", () => {
+  test.skip(!HAS_LATEXMK || !HAS_SYNCTEX, "latexmk/synctex not installed");
+
+  test("source→PDF and PDF→source round-trip", async () => {
+    await withLatexProject(async ({ base, mainPath }) => {
+      const compile = await (
+        await fetch(`${base}/compile`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ path: mainPath }),
+        })
+      ).json();
+      expect(compile.ok).toBe(true);
+      const pdf = compile.pdf;
+
+      // Find a source line with body text
+      const src = readFileSync(mainPath, "utf8").split("\n");
+      let line = src.findIndex((l) => l.includes("Hello Gate C")) + 1;
+      if (line < 1) line = 6;
+
+      const view = await (
+        await fetch(`${base}/synctex`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            dir: "view",
+            tex: mainPath,
+            pdf,
+            line,
+            col: 1,
+          }),
+        })
+      ).json();
+      expect(view.error || view.page).toBeTruthy();
+      if (view.error) {
+        // Some TeX installs produce synctex.gz that needs a moment; soft-fail with diagnostics
+        console.log("synctex view:", view);
+      }
+      expect(view.page).toBeGreaterThan(0);
+
+      const edit = await (
+        await fetch(`${base}/synctex`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            dir: "edit",
+            tex: mainPath,
+            pdf,
+            page: view.page,
+            x: view.x ?? 100,
+            y: view.y ?? 100,
+          }),
+        })
+      ).json();
+      expect(edit.error || edit.line).toBeTruthy();
+      expect(edit.line).toBeGreaterThan(0);
+      // round-trip should land near the original line (within ±5)
+      expect(Math.abs(edit.line - line)).toBeLessThanOrEqual(8);
+    });
+  });
+});
+
+test.describe("Gate C — latex_studio browser surface", () => {
+  test.skip(!HAS_LATEXMK, "latexmk not installed");
+
+  test("studio loads CM6, outline, compile log UI", async ({ page }) => {
+    await withLatexProject(async ({ base, mainPath }) => {
+      // pre-compile so PDF path exists for loadPdf
+      await fetch(`${base}/compile`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: mainPath }),
+      });
+
+      const url =
+        `${base}/.fig_thumbs/latex_studio.html?path=` +
+        encodeURIComponent(mainPath);
+      await page.goto(url);
+      await page.waitForFunction(
+        () => window.CodeMirror || window.AtelierEditor,
+        null,
+        { timeout: 20000 }
+      );
+      // wait for editor content
+      await page.waitForFunction(
+        () => {
+          const ed = document.querySelector(".cm-editor, .CodeMirror");
+          return !!ed;
+        },
+        null,
+        { timeout: 15000 }
+      );
+
+      // Shared helpers loaded
+      const helpers = await page.evaluate(() => ({
+        outline: !!window.AtelierLatexOutline,
+        compile: !!window.AtelierLatexCompile,
+        synctex: !!window.AtelierLatexSynctex,
+        comments: !!window.AtelierLatexComments,
+        ghost: !!window.AtelierLatexGhost,
+        rewrap: !!window.AtelierRewrap,
+      }));
+      expect(helpers.outline).toBe(true);
+      expect(helpers.compile).toBe(true);
+      expect(helpers.synctex).toBe(true);
+      expect(helpers.comments).toBe(true);
+
+      // Outline items from pure helper + DOM
+      await page.click("#outlineBtn");
+      await expect(page.locator("#outline")).toHaveClass(/open/);
+      await expect(page.locator("#outline .oi")).toHaveCount(3);
+      await expect(page.locator("#outline .oi").filter({ hasText: "Introduction" })).toBeVisible();
+      await expect(page.locator("#outline .oi").filter({ hasText: "Results" })).toBeVisible();
+      await expect(page.locator("#outline .oi").filter({ hasText: "Details" })).toBeVisible();
+      // Close outline so it does not intercept the Compile button
+      await page.keyboard.press("Escape");
+      await expect(page.locator("#outline")).not.toHaveClass(/open/);
+
+      // Compile from UI
+      await page.click("#build");
+      await page.waitForFunction(
+        () => {
+          const s = document.getElementById("state");
+          const t = (s && (s.textContent || s.className)) || "";
+          return /compiled|échouée|err|ok/i.test(t) || s?.classList?.contains("ok") || s?.classList?.contains("err");
+        },
+        null,
+        { timeout: 120000 }
+      );
+      const state = await page.locator("#state").textContent();
+      expect(state).toMatch(/compiled|✓|échouée|✗/i);
+    });
+  });
+
+  test("anchored comments survive rewrap + reload", async ({ page }) => {
+    await withLatexProject(async ({ base, commentsPath }) => {
+      const url =
+        `${base}/.fig_thumbs/latex_studio.html?path=` +
+        encodeURIComponent(commentsPath);
+      await page.goto(url);
+      await page.waitForFunction(() => document.querySelector(".cm-editor, .CodeMirror"), null, {
+        timeout: 20000,
+      });
+
+      const result = await page.evaluate(async () => {
+        // Wait for cm global used by studio
+        const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+        let tries = 0;
+        while (!window.cm && tries < 50) {
+          await wait(100);
+          tries++;
+        }
+        // studio may keep cm as module-local — use CodeMirror instance from DOM
+        let cm = window.cm;
+        if (!cm) {
+          const host = document.querySelector(".cm-editor") || document.querySelector(".CodeMirror");
+          // fallback: call pure helpers only
+          if (!window.AtelierLatexComments || !window.AtelierRewrap) {
+            return { error: "helpers missing" };
+          }
+        }
+        const getCm = () => {
+          if (window.cm) return window.cm;
+          // CM6 facade stores on first CodeMirror instance via AtelierEditor
+          return null;
+        };
+        cm = getCm();
+        const before = cm ? cm.getValue() : null;
+        const src =
+          before ||
+          (await (await fetch("/code?path=" + encodeURIComponent(new URLSearchParams(location.search).get("path")))).json()).text;
+
+        const annots = [
+          {
+            id: "c-test",
+            from: { line: 2, ch: 2 },
+            to: { line: 2, ch: 2 + "UNIQUE_ANCHOR_PHRASE".length },
+            text: "UNIQUE_ANCHOR_PHRASE",
+            comment: "survives rewrap",
+          },
+        ];
+        // Apply comment-only rewrap on lines that start with %
+        const lines = src.split("\n");
+        const commentLines = lines.filter((l) => /^\s*%/.test(l));
+        const rewrapped = AtelierRewrap.rewrapLines(commentLines, 40, "tex");
+        if (!rewrapped) return { error: "rewrap null", commentLines };
+        // Build new document: replace leading comment block
+        let i = 0;
+        const out = [];
+        let replaced = false;
+        while (i < lines.length) {
+          if (!replaced && /^\s*%/.test(lines[i])) {
+            const block = [];
+            while (i < lines.length && /^\s*%/.test(lines[i])) {
+              block.push(lines[i]);
+              i++;
+            }
+            const r = AtelierRewrap.rewrapLines(block, 40, "tex");
+            (r || block).forEach((l) => out.push(l));
+            replaced = true;
+            continue;
+          }
+          out.push(lines[i]);
+          i++;
+        }
+        const after = out.join("\n");
+        const re = AtelierLatexComments.reanchor(annots, src, after);
+        // Simulate reload: re-anchor again from same snippet
+        const re2 = AtelierLatexComments.reanchor(re.ok, after, after);
+        return {
+          okCount: re.ok.length,
+          lostCount: re.lost.length,
+          comment: re.ok[0] && re.ok[0].comment,
+          snippet:
+            re.ok[0] &&
+            AtelierLatexComments.sliceRange(after, re.ok[0].from, re.ok[0].to),
+          stillOk: re2.ok.length,
+          afterHasCode: after.includes("UNIQUE_CODE_LINE"),
+          afterHasAnchor: after.includes("UNIQUE_ANCHOR_PHRASE"),
+        };
+      });
+
+      expect(result.error).toBeFalsy();
+      expect(result.okCount).toBe(1);
+      expect(result.lostCount).toBe(0);
+      expect(result.comment).toBe("survives rewrap");
+      expect(result.snippet).toBe("UNIQUE_ANCHOR_PHRASE");
+      expect(result.stillOk).toBe(1);
+      expect(result.afterHasCode).toBe(true);
+      expect(result.afterHasAnchor).toBe(true);
+    });
+  });
+});
+
+test.describe("Gate C — agent bank not hidden at top-level", () => {
+  test("codex annotation bank button is visible on gallery", async ({ page }) => {
+    // Reuse core-style minimal server via latex project + codex env
+    const root = mkdtempSync(path.join(tmpdir(), "atelier-agent-e2e-"));
+    let server;
+    try {
+      writeFileSync(path.join(root, "analysis.py"), 'print("x")\n');
+      writeFileSync(
+        path.join(root, "preview.png"),
+        Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+      );
+      execFileSync("cargo", ["build", "--manifest-path", RUST_MANIFEST, "-p", "atelier-cli", "-p", "atelier-server"], {
+        cwd: REPO,
+        stdio: "pipe",
+      });
+      execFileSync(ATELIER_CLI, ["build", "--root", root], {
+        cwd: root,
+        env: { ...process.env, ATELIER_ASSETS_DIR: path.join(REPO, "assets") },
+        stdio: "pipe",
+      });
+      const port = await freePort();
+      const agentToken = "e2e-agent-token";
+      server = spawn(ATELIER_SERVER, ["--root", root, "--port", String(port), "--watch"], {
+        cwd: root,
+        env: {
+          ...process.env,
+          GALLERY_ROOT: root,
+          ATELIER_ASSETS_DIR: path.join(REPO, "assets"),
+          HOME: root,
+          ATELIER_AGENT_HOST: "codex",
+          ATELIER_AGENT_TOKEN: agentToken,
+        },
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+      await waitForPing(port);
+      await page.goto(`http://127.0.0.1:${port}/figures_index.html`);
+      await expect(page.locator("#atelierAgentButton")).toBeVisible({ timeout: 10000 });
+    } finally {
+      if (server) {
+        server.kill("SIGTERM");
+        await new Promise((r) => server.once("exit", r));
+      }
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});

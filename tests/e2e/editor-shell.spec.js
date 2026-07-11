@@ -1,0 +1,394 @@
+/**
+ * Unified editor shell — behavioural smoke for code surface.
+ */
+import { test, expect } from "@playwright/test";
+import { createServer } from "node:http";
+import { readFileSync, existsSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
+const assets = join(root, "assets");
+const fixtures = join(root, "tests", "fixtures", "editor");
+
+function contentType(p) {
+  if (p.endsWith(".js")) return "application/javascript; charset=utf-8";
+  if (p.endsWith(".css")) return "text/css; charset=utf-8";
+  if (p.endsWith(".html")) return "text/html; charset=utf-8";
+  if (p.endsWith(".json")) return "application/json";
+  return "application/octet-stream";
+}
+
+test.describe("Editor shell (code)", () => {
+  let server;
+  let baseURL;
+  /** @type {Map<string, {text:string, mtime:number}>} */
+  let files;
+
+  test.beforeAll(async () => {
+    files = new Map();
+    for (const name of ["sample.rs", "sample.py", "sample.md"]) {
+      const text = readFileSync(join(fixtures, name), "utf8");
+      files.set("/tmp/atelier-test/" + name, { text, mtime: 1 });
+    }
+
+    server = createServer((req, res) => {
+      const url = new URL(req.url || "/", "http://127.0.0.1");
+      // API stubs
+      if (url.pathname === "/code") {
+        const p = url.searchParams.get("path") || "";
+        const f = files.get(p);
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(f ? { text: f.text, mtime: f.mtime } : { error: "missing" }));
+        return;
+      }
+      if (url.pathname === "/codesave" && req.method === "POST") {
+        let body = "";
+        req.on("data", (c) => (body += c));
+        req.on("end", () => {
+          const j = JSON.parse(body || "{}");
+          const cur = files.get(j.path);
+          if (cur && j.mtime != null && Math.abs(j.mtime - cur.mtime) > 0.001) {
+            res.writeHead(200, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "conflit", mtime: cur.mtime, text: cur.text }));
+            return;
+          }
+          const next = { text: j.text, mtime: (cur?.mtime || 1) + 1 };
+          files.set(j.path, next);
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ ok: true, mtime: next.mtime }));
+        });
+        return;
+      }
+      if (url.pathname === "/selinfo" && req.method === "POST") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: true }));
+        return;
+      }
+      if (url.pathname === "/versions") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ versions: [] }));
+        return;
+      }
+
+      let rel = url.pathname;
+      if (rel.startsWith("/.fig_thumbs/")) rel = rel.slice("/.fig_thumbs/".length);
+      else if (rel.startsWith("/")) rel = rel.slice(1);
+      if (!rel) rel = "code_editor.html";
+      const file = join(assets, rel);
+      if (!file.startsWith(assets) || !existsSync(file)) {
+        res.writeHead(404);
+        res.end("not found " + rel);
+        return;
+      }
+      res.writeHead(200, { "Content-Type": contentType(file) });
+      res.end(readFileSync(file));
+    });
+    await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+    baseURL = `http://127.0.0.1:${server.address().port}`;
+  });
+
+  test.afterAll(async () => {
+    await new Promise((resolve) => server.close(resolve));
+  });
+
+  test("opens Rust file with CM6 shell, not CM5", async ({ page }) => {
+    const path = "/tmp/atelier-test/sample.rs";
+    await page.goto(
+      baseURL + "/code_editor.html?path=" + encodeURIComponent(path)
+    );
+    await page.waitForFunction(() => window.__ATELIER_SHELL__ != null, null, {
+      timeout: 15000,
+    });
+    const info = await page.evaluate(() => {
+      const shell = window.__ATELIER_SHELL__;
+      const cm = shell.cm();
+      return {
+        surface: shell.surface,
+        ext: shell.ext,
+        engine: window.AtelierEditor?.engine?.(),
+        value: cm?.getValue?.() || "",
+        hasCmEditor: !!document.querySelector(".cm-editor"),
+        hasCm5: !!document.querySelector(".CodeMirror-code") && !document.querySelector(".cm-editor"),
+        stateLabel: document.getElementById("state")?.getAttribute("aria-label") || "",
+      };
+    });
+    expect(info.surface).toBe("code");
+    expect(info.ext).toBe("rs");
+    expect(info.engine).toBe("cm6");
+    expect(info.hasCmEditor).toBe(true);
+    expect(info.hasCm5).toBe(false);
+    expect(info.value).toContain("fn main");
+    expect(info.stateLabel).toMatch(/saved/i);
+  });
+
+  test("Rust keyword token is highlighted", async ({ page }) => {
+    const path = "/tmp/atelier-test/sample.rs";
+    await page.goto(
+      baseURL + "/code_editor.html?path=" + encodeURIComponent(path)
+    );
+    await page.waitForFunction(() => window.__ATELIER_SHELL__?.cm?.(), null, {
+      timeout: 15000,
+    });
+    await page.waitForSelector(".tok-keyword, .cm-keyword", { timeout: 10000 });
+    const color = await page.evaluate(() => {
+      const el =
+        document.querySelector(".tok-keyword") ||
+        document.querySelector(".cm-keyword");
+      return el ? getComputedStyle(el).color : null;
+    });
+    expect(color).toBeTruthy();
+    expect(color).not.toBe("rgb(0, 0, 0)");
+  });
+
+  test("save updates state and persists text", async ({ page }) => {
+    const path = "/tmp/atelier-test/sample.py";
+    await page.goto(
+      baseURL + "/code_editor.html?path=" + encodeURIComponent(path)
+    );
+    await page.waitForFunction(() => window.__ATELIER_SHELL__?.cm?.(), null, {
+      timeout: 15000,
+    });
+    await page.evaluate(() => {
+      const cm = window.__ATELIER_SHELL__.cm();
+      cm.setValue(cm.getValue() + "\n# edited\n");
+    });
+    await page.keyboard.press("Meta+s");
+    await page.waitForFunction(() => {
+      const label = document.getElementById("state")?.getAttribute("aria-label") || "";
+      return /saved/i.test(label);
+    });
+    // reload
+    await page.goto(
+      baseURL + "/code_editor.html?path=" + encodeURIComponent(path)
+    );
+    await page.waitForFunction(() => window.__ATELIER_SHELL__?.cm?.(), null, {
+      timeout: 15000,
+    });
+    const value = await page.evaluate(() => window.__ATELIER_SHELL__.cm().getValue());
+    expect(value).toContain("# edited");
+  });
+
+  test("markdown shell mounts preview", async ({ page }) => {
+    const path = "/tmp/atelier-test/sample.md";
+    await page.goto(
+      baseURL + "/md_viewer.html?path=" + encodeURIComponent(path)
+    );
+    await page.waitForFunction(() => window.__ATELIER_SHELL__ != null, null, {
+      timeout: 15000,
+    });
+    const info = await page.evaluate(() => ({
+      surface: window.__ATELIER_SHELL__.surface,
+      hasPreview: !!document.querySelector(".md-preview"),
+      hasCm: !!document.querySelector(".cm-editor"),
+    }));
+    expect(info.surface).toBe("markdown");
+    expect(info.hasPreview).toBe(true);
+    expect(info.hasCm).toBe(true);
+  });
+
+  test("shell modules exist on disk", async () => {
+    for (const rel of [
+      "editor/shell.js",
+      "editor/languages.js",
+      "editor/modules/code.js",
+      "editor/modules/latex.js",
+      "editor/modules/markdown.js",
+      "cm6/editor.bundle.js",
+      "editor_factory.js",
+    ]) {
+      expect(existsSync(join(assets, rel))).toBeTruthy();
+    }
+  });
+
+  test("wrap modes: window, off, fixed column", async ({ page }) => {
+    const path = "/tmp/atelier-test/sample.rs";
+    await page.goto(
+      baseURL + "/code_editor.html?path=" + encodeURIComponent(path)
+    );
+    await page.waitForFunction(() => window.__ATELIER_SHELL__?.cm?.(), null, {
+      timeout: 15000,
+    });
+
+    // window wrap
+    await page.selectOption("#wrapSel", "win");
+    let wrapping = await page.evaluate(() =>
+      window.__ATELIER_SHELL__.cm().getOption("lineWrapping")
+    );
+    expect(wrapping).toBe(true);
+
+    // off
+    await page.selectOption("#wrapSel", "off");
+    wrapping = await page.evaluate(() =>
+      window.__ATELIER_SHELL__.cm().getOption("lineWrapping")
+    );
+    expect(wrapping).toBe(false);
+    const maxOff = await page.evaluate(() => {
+      const w = window.__ATELIER_SHELL__.cm().getWrapperElement();
+      return w.style.maxWidth || "";
+    });
+    expect(maxOff).toBe("");
+
+    // fixed 80
+    await page.selectOption("#wrapSel", "80");
+    wrapping = await page.evaluate(() =>
+      window.__ATELIER_SHELL__.cm().getOption("lineWrapping")
+    );
+    expect(wrapping).toBe(true);
+    const max80 = await page.evaluate(() => {
+      const w = window.__ATELIER_SHELL__.cm().getWrapperElement();
+      return w.style.maxWidth || "";
+    });
+    expect(max80).toContain("80ch");
+  });
+
+  test("rewrap only mutates pure comment blocks", async ({ page }) => {
+    const path = "/tmp/atelier-test/sample.py";
+    files.set(path, {
+      text:
+        // Blank line separates comment paragraph from code so rewrap does not
+        // treat the whole file as one mixed block (safety rule).
+        "# this is a very long comment that should rewrap when the column is small enough for testing purposes only\n" +
+        "\n" +
+        "def answer() -> int:\n" +
+        "    return 42\n",
+      mtime: 1,
+    });
+    await page.goto(
+      baseURL + "/code_editor.html?path=" + encodeURIComponent(path)
+    );
+    await page.waitForFunction(() => window.__ATELIER_SHELL__?.cm?.(), null, {
+      timeout: 15000,
+    });
+    const after = await page.evaluate(() => {
+      const sel = document.getElementById("wrapSel");
+      if (!sel.querySelector('option[value="40"]')) {
+        const opt = document.createElement("option");
+        opt.value = "40";
+        opt.textContent = "Wrap: 40";
+        sel.insertBefore(opt, sel.querySelector('option[value="custom"]'));
+      }
+      sel.value = "40";
+      sel.dispatchEvent(new Event("change", { bubbles: true }));
+      const cm = window.__ATELIER_SHELL__.cm();
+      cm.setCursor({ line: 0, ch: 0 });
+      const result = window.__ATELIER_SHELL__.module.rewrap(false);
+      return { text: cm.getValue(), result };
+    });
+    expect(after.result?.ok).toBe(true);
+    const commentLines = after.text.split("\n").filter((l) => l.trim().startsWith("#"));
+    expect(commentLines.length).toBeGreaterThan(1);
+    expect(after.text).toContain("def answer() -> int:");
+    expect(after.text).toContain("return 42");
+  });
+
+  test("toolbar fits at 375px without horizontal page overflow", async ({ page }) => {
+    const path = "/tmp/atelier-test/sample.rs";
+    await page.setViewportSize({ width: 375, height: 700 });
+    await page.goto(
+      baseURL + "/code_editor.html?path=" + encodeURIComponent(path)
+    );
+    await page.waitForFunction(() => window.__ATELIER_SHELL__ != null, null, {
+      timeout: 15000,
+    });
+    await expect(page.locator("#wrapSel")).toBeVisible();
+    await expect(page.locator("#rewrapBtn")).toBeVisible();
+    await expect(page.locator("#autoRewrap")).toBeAttached();
+    const overflow = await page.evaluate(() => {
+      const doc = document.documentElement;
+      return {
+        scrollWidth: doc.scrollWidth,
+        clientWidth: doc.clientWidth,
+        hasCm: !!document.querySelector(".cm-editor"),
+      };
+    });
+    expect(overflow.hasCm).toBe(true);
+    // Allow 1px subpixel; no significant horizontal overflow of the page
+    expect(overflow.scrollWidth - overflow.clientWidth).toBeLessThanOrEqual(2);
+  });
+
+  test("two simultaneous CM6 instances do not share volatile state", async ({ page }) => {
+    // Static dual-host page using factory + core (no server load needed)
+    await page.goto(baseURL + "/cm6-smoke.html");
+    await page.waitForFunction(() => window.__CM6_SMOKE__ && window.__CM6_SMOKE__.done, null, {
+      timeout: 15000,
+    });
+    const result = await page.evaluate(async () => {
+      await window.AtelierEditor.ready;
+      const a = document.createElement("div");
+      a.id = "edA";
+      a.style.cssText = "height:120px;display:flex;flex-direction:column";
+      const b = document.createElement("div");
+      b.id = "edB";
+      b.style.cssText = "height:120px;display:flex;flex-direction:column";
+      document.body.appendChild(a);
+      document.body.appendChild(b);
+      const cmA = window.AtelierEditor.create(a, {
+        value: "fn a() {}\n",
+        mode: "rust",
+        lineWrapping: true,
+      });
+      const cmB = window.AtelierEditor.create(b, {
+        value: "def b():\n  pass\n",
+        mode: "python",
+        lineWrapping: false,
+      });
+      cmA.setValue("fn a_only() { let x = 1; }\n");
+      const valB = cmB.getValue();
+      const valA = cmA.getValue();
+      const wrapA = cmA.getOption("lineWrapping");
+      const wrapB = cmB.getOption("lineWrapping");
+      const modeA = cmA.getOption("mode");
+      const modeB = cmB.getOption("mode");
+      if (typeof cmA.destroy === "function") cmA.destroy();
+      if (typeof cmB.destroy === "function") cmB.destroy();
+      return { valA, valB, wrapA, wrapB, modeA, modeB };
+    });
+    expect(result.valA).toContain("a_only");
+    expect(result.valB).toContain("def b()");
+    expect(result.valB).not.toContain("a_only");
+    expect(result.wrapA).toBe(true);
+    expect(result.wrapB).toBe(false);
+    expect(result.modeA).toMatch(/rust/i);
+    expect(result.modeB).toMatch(/python/i);
+  });
+
+  test("user edit and unsaved merge use dirty state chrome", async ({ page }) => {
+    const path = "/tmp/atelier-test/sample.py";
+    files.set(path, {
+      text: "print('base')\n",
+      mtime: 10,
+    });
+    await page.goto(
+      baseURL + "/code_editor.html?path=" + encodeURIComponent(path)
+    );
+    await page.waitForFunction(() => window.__ATELIER_SHELL__?.cm?.(), null, {
+      timeout: 15000,
+    });
+    // setValue uses origin setValue (clean load path) — real edits use replaceRange
+    await page.evaluate(() => {
+      const cm = window.__ATELIER_SHELL__.cm();
+      cm.replaceRange(
+        "print('local')\n",
+        { line: 0, ch: 0 },
+        { line: cm.lineCount() - 1, ch: cm.getLine(cm.lineCount() - 1).length }
+      );
+    });
+    await expect(page.locator("#state")).toHaveClass(/dirty/);
+    const dirtyLabel = await page.locator("#state").getAttribute("aria-label");
+    expect(dirtyLabel).toMatch(/modified/i);
+
+    // Simulate the post-merge status path: dirty buffer + non-sauvegardé message
+    await page.evaluate(() => {
+      const st = window.__ATELIER_SHELL__.status;
+      st.set(
+        "dirty",
+        "modifs de l'agent fusionnées avec les tiennes (non sauvegardées)"
+      );
+    });
+    await expect(page.locator("#state")).toHaveClass(/dirty/);
+    await expect(page.locator("#state")).not.toHaveClass(/saved/);
+    const mergeLabel = await page.locator("#state").getAttribute("aria-label");
+    expect(mergeLabel).toMatch(/non sauvegardées/i);
+  });
+});
