@@ -1273,8 +1273,9 @@ const lb=()=>document.getElementById('lb');
 function latexShellEnabled(){
   try{
     const q=new URLSearchParams(location.search);
-    if(q.get('latexShell')==='1'||q.get('editorShell')==='v2') return true;
+    // Explicit off always wins (including when editorShell=v2 is also present).
     if(q.get('latexShell')==='0') return false;
+    if(q.get('latexShell')==='1'||q.get('editorShell')==='v2') return true;
     return localStorage.getItem('atelier.editor.v1.latexShell')==='1';
   }catch(e){ return false; }
 }

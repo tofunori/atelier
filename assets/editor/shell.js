@@ -111,7 +111,9 @@
         getCm: getCm,
         path: path,
         notify: function (m) {
-          status.set("saved", m);
+          // Version persistence is secondary — never replace compile/save status
+          if (status.soft) status.soft("saved", m);
+          else status.set("saved", m);
         },
         els: {
           group: els.diffGrp,

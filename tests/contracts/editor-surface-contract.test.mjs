@@ -133,6 +133,16 @@ describe("Phase 0 — editor surface inventory", () => {
     assert.ok(html.includes("function texEditorUrl"), "tex route helper");
     assert.ok(html.includes("latex_studio.html"), "default tex studio");
     assert.ok(html.includes("surface=latex"), "experimental shell tex surface");
+    // latexShell=0 must return false before editorShell=v2 can enable the shell
+    const fn = html.slice(
+      html.indexOf("function latexShellEnabled"),
+      html.indexOf("function texEditorUrl")
+    );
+    const offPos = fn.indexOf("get('latexShell')==='0'");
+    const v2EnablePos = fn.indexOf("get('editorShell')==='v2'");
+    assert.ok(offPos >= 0, "latexShell=0 branch present");
+    assert.ok(v2EnablePos >= 0, "editorShell=v2 branch present");
+    assert.ok(offPos < v2EnablePos, "latexShell=0 checked before editorShell=v2 enable");
   });
 
   it("code_editor explorer routes tex vs code", () => {

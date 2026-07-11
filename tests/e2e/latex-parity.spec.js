@@ -262,19 +262,23 @@ test.describe("Gate C — latex_studio browser surface", () => {
       await page.keyboard.press("Escape");
       await expect(page.locator("#outline")).not.toHaveClass(/open/);
 
-      // Compile from UI
+      // Compile from UI — primary status must remain compile result even if
+      // DiffVersions later fails to persist (soft channel / title only).
       await page.click("#build");
       await page.waitForFunction(
         () => {
           const s = document.getElementById("state");
-          const t = (s && (s.textContent || s.className)) || "";
-          return /compiled|échouée|err|ok/i.test(t) || s?.classList?.contains("ok") || s?.classList?.contains("err");
+          const t = (s && s.textContent) || "";
+          return /compiled|échouée|✗|✓/i.test(t);
         },
         null,
         { timeout: 120000 }
       );
+      // Allow async version-store notify to race; primary bar must hold
+      await page.waitForTimeout(600);
       const state = await page.locator("#state").textContent();
       expect(state).toMatch(/compiled|✓|échouée|✗/i);
+      expect(state).not.toMatch(/persistance du diff/i);
     });
   });
 

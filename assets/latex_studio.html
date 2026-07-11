@@ -588,9 +588,32 @@ let cm = null, diskMtime = 0, dirty = false, lastSavedText = null, pdfDoc = null
 let zoom = parseFloat(localStorage.getItem("texZoom") || "1");
 const stateEl = document.getElementById("state");
 let __stT = null;
-const setState = (cls, txt) => { stateEl.className = cls; stateEl.textContent = txt; stateEl.title = txt;
+let __stPrimaryUntil = 0;
+// Primary status (compile / save / conflict / dirty) must not be clobbered by
+// async version-persistence notifications from DiffVersions.
+const setState = (cls, txt) => {
+  stateEl.className = cls;
+  stateEl.textContent = txt;
+  stateEl.title = txt || "";
   clearTimeout(__stT);
-  if(cls === "ok") __stT = setTimeout(() => { if(stateEl.className === "ok") stateEl.textContent = ""; }, 2500);
+  if(cls === "ok" || cls === "err" || cls === "dirty"){
+    __stPrimaryUntil = Date.now() + 4000;
+  }
+  if(cls === "ok") __stT = setTimeout(() => {
+    if(stateEl.className === "ok" && Date.now() >= __stPrimaryUntil - 500) stateEl.textContent = "";
+  }, 2500);
+};
+const setStateSoft = (cls, txt) => {
+  if(txt == null || txt === "") return;
+  const cur = stateEl.textContent || "";
+  const holdPrimary = Date.now() < __stPrimaryUntil
+    || /compiled|compiling|saving|saved|✓|✗|échouée|conflit|conflict|modified|sauvegarde/i.test(cur);
+  if(holdPrimary){
+    // Keep the main bar; attach secondary note to tooltip only
+    stateEl.title = (cur ? cur + " · " : "") + txt;
+    return;
+  }
+  setState(cls || "hint", txt);
 };
 const ddot = document.getElementById("ddot");
 
@@ -1913,7 +1936,8 @@ document.getElementById("openFile").onclick = () => pickerShow();
 const __dv = DiffVersions({
   getCm: () => cm,
   path,
-  notify: (m) => setState("ok", m),
+  // Secondary channel: never overwrite "✓ compiled" / save / conflict
+  notify: (m) => setStateSoft("hint", m),
   els: {
     group: document.getElementById("diffGrp"),
     tag: document.getElementById("diffTag"),
