@@ -57,8 +57,11 @@ bash ~/tools/atelier/install.sh
 (and shows how to add it if not), and verifies `python3` + `cmux`. Manual
 equivalent: `ln -s …/cmux_gallery.py ~/.local/bin/atelier && chmod +x …`.
 
-`build` needs only the Python 3 standard library; `run`/`serve` need the `cmux`
-CLI. Thumbnails use macOS `qlmanage` (skipped gracefully elsewhere).
+`build` needs only the Python 3 standard library and the bundled, precompiled
+viewer assets; `run`/`serve` need the `cmux` CLI. During development, refresh
+the TypeScript client explicitly with `npm run build:frontend` (or set
+`ATELIER_BUILD_TYPESCRIPT=1` for a build). Thumbnails use macOS `qlmanage`
+(skipped gracefully elsewhere).
 
 ## Use
 
@@ -70,6 +73,12 @@ atelier foreground          # foreground mode; keep the pane open
 atelier serve               # build + HOST the server, self-healing, no browser tab
 atelier run --root /path    # a specific project (default: current dir)
 atelier build               # just write the HTML + viewers (no server)
+atelier status              # project, server, Codex, index and pending annotations
+atelier doctor              # diagnose the local runtime
+atelier doctor --repair     # clear stale state and rebuild missing/stale assets
+
+# progressive Rust backend (Python remains the default)
+ATELIER_BACKEND=rust atelier run --no-open
 ```
 
 When launched from inside a git checkout, the default root is the checkout root,
@@ -84,6 +93,32 @@ e.g. `http://127.0.0.1:8790/figures_index.html`. Pin one with `--port <n>`.
 > **Opening it (avoid "connection refused"):** prefer `atelier run` over a
 > raw bookmark. It starts or reuses the server before opening the page. Use
 > `atelier stop` when you want to shut down the detached server.
+
+The server watches supported project artifacts by default and rebuilds the
+index after a short quiet period. Set `GALLERY_WATCH=0` to disable this and use
+the manual **Rescan** action instead.
+
+## Provenance and regeneration
+
+Atelier conservatively links an artifact to a same-stem script when there is a
+single match. For reproducible one-click regeneration, declare the relationship
+in `<project>/.atelier-provenance.json`:
+
+```json
+{
+  "artifacts": {
+    "outputs/figure_04.pdf": {
+      "generator": "scripts/figure_04.py",
+      "command": ["python3", "scripts/figure_04.py"],
+      "inputs": ["data/model_results.csv"]
+    }
+  }
+}
+```
+
+Commands are argument arrays, never shell strings, and the gallery asks for an
+explicit confirmation before running one. The artifact menu exposes provenance,
+the generating script and regeneration when these fields are available.
 
 ### As a cmux command / Dock control
 
@@ -154,6 +189,15 @@ rebuild clean).
 | `GALLERY_TITLE` | header wordmark (default `Atelier`) |
 | `GALLERY_NO_THUMBS=1` | skip Quick-Look thumbnail generation |
 | `GALLERY_SHOW_FRAMES=1` | index animation-frame dirs (hidden by default) |
+| `GALLERY_WATCH=0` | disable automatic debounced artifact watching |
+| `ATELIER_BACKEND=rust` | use the Rust server for `run`, `serve` and `foreground` |
+| `ATELIER_BUILD_TYPESCRIPT=1` | recompile the TypeScript client during a build/rebuild |
+
+The Rust backend is a progressive migration: gallery health, state, provenance,
+rescan, image/text annotations, Codex delivery, and the local watcher are
+implemented first. The Python backend remains the compatibility fallback for
+specialized editor, Git, Zotero, export, and macOS integration routes that are
+not yet ported to Rust.
 
 ## Notes & caveats
 

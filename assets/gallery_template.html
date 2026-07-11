@@ -51,6 +51,7 @@
   @keyframes ctIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
   .card.claude-flash{outline:2px solid var(--accent);outline-offset:2px;transition:outline-color 1s}
   .card.claude-flash.fade{outline-color:transparent}
+  body.codex-host #annotPillTarget{display:none}
   .csel-menu div{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:13px;white-space:nowrap}
   .csel-menu div:hover{background:var(--card2)}
   .csel-menu div .ck{width:12px;flex:none;color:var(--accent);opacity:0}
@@ -393,6 +394,7 @@
     <div id="exportMenu" class="menu"></div>
   </div>
 </header>
+<script src="/.fig_thumbs/agent_bridge_ui.js"></script>
 <main id="grid"></main>
 <div id="tabPanes"></div>
 <div id="lb">
@@ -416,7 +418,7 @@
     <button class="del" title="Supprimer cette annotation (&Eacute;chap : annuler)"><svg viewBox="0 0 14 14"><path d="M2 3.5h10M5.5 3.5V2.2c0-.4.3-.7.7-.7h1.6c.4 0 .7.3.7.7v1.3M3.5 3.5l.6 8.1c0 .5.4.9.9.9h4c.5 0 .9-.4.9-.9l.6-8.1M5.8 6v4M8.2 6v4"/></svg></button>
     <button class="anSave" title="Enregistrer (Entr&eacute;e)">&#10003;</button>
   </div>
-  <div id="annotPill"><span class="ic">&#128172;</span><span id="annotPillN"></span><button id="annotPillTarget" title="Choisir la session Claude cible">&#9678;</button><button class="x" id="annotPillCancel" title="Annuler : supprimer les commentaires sans envoyer">&#10005;</button><button id="annotPillSend" title="Envoyer directement dans la session Claude (avec soumission)">&#8593;</button></div>
+  <div id="annotPill"><span class="ic">&#128172;</span><span id="annotPillN"></span><button id="annotPillTarget" title="Choisir la session Claude cible">&#9678;</button><button class="x" id="annotPillCancel" title="Annuler : supprimer les commentaires sans envoyer">&#10005;</button><button id="annotPillSend" title="Envoyer l’annotation à l’agent actif">&#8593;</button></div>
   <div id="tgMenu" style="position:fixed;z-index:104;display:none;flex-direction:column;min-width:260px;max-width:420px;background:rgba(24,27,34,.98);border:1px solid #3a4150;border-radius:10px;padding:6px;box-shadow:0 14px 48px rgba(0,0,0,.55);font-size:13px"></div>
   <iframe id="lbPdf" style="display:none;width:94vw;height:86vh;border:none;border-radius:6px;background:#fff"></iframe>
   <video id="lbVid" controls playsinline style="display:none;max-width:94vw;max-height:86vh;border-radius:6px;background:#000"></video>
@@ -451,6 +453,13 @@ let FILES = Array.isArray(INLINE_FILES) ? INLINE_FILES : [];
 let FOLDERS = Array.isArray(__FOLDERS__) ? __FOLDERS__ : [];
 let SEED_FAVS = Array.isArray(__FAVS__) ? __FAVS__ : [];
 let galleryDataLoaded = Array.isArray(INLINE_FILES);
+const GALLERY_SESSION_KEY='atelierGallerySession:'+encodeURIComponent('__ROOT__');
+let gallerySession={};
+try{gallerySession=JSON.parse(localStorage.getItem(GALLERY_SESSION_KEY)||'{}')||{};}catch(e){}
+function saveGallerySession(patch){
+  gallerySession=Object.assign({},gallerySession,patch||{});
+  try{localStorage.setItem(GALLERY_SESSION_KEY,JSON.stringify(gallerySession));}catch(e){}
+}
 function foldersFromFiles(files){
   return [...new Set((files||[]).map(f=>f.folder||'.'))].sort();
 }
@@ -832,7 +841,10 @@ function buildCollectionChip(){
 }
 let healthStatus = null;
 // Claude Code desktop preview : décaler les contrôles haut-droite sous la pilule « send to chat »
-fetch('/ping').then(r=>r.json()).then(j=>{ if(j&&j.claudePreview) document.body.classList.add('cpv'); }).catch(()=>{});
+fetch('/ping').then(r=>r.json()).then(j=>{
+  if(j&&j.claudePreview) document.body.classList.add('cpv');
+  if(j&&j.agentHost==='codex') document.body.classList.add('codex-host');
+}).catch(()=>{});
 function healthRows(data){
   const ok=data&&data.ok;
   const project=data&&data.project?data.project:'checking...';
@@ -845,7 +857,10 @@ function healthRows(data){
 function checkHealth(){
   healthStatus = null;
   buildViewMenu();
-  fetch('/ping').then(r=>r.json()).then(j=>{ healthStatus=j; buildViewMenu(); })
+  const healthRequest = window.AtelierClient?.health
+    ? window.AtelierClient.health()
+    : fetch('/ping').then(r=>r.json());
+  healthRequest.then(j=>{ healthStatus=j; buildViewMenu(); })
     .catch(()=>{ healthStatus={ok:false,project:''}; buildViewMenu(); });
 }
 function updateViewChip(){
@@ -913,6 +928,8 @@ function cardMenu(anchor, rel){
   m.innerHTML='<div class="mhd">'+esc(f.name)+'</div>'
     +'<div class="mi" style="cursor:default">'+rateRow(rel)+'</div>'
     +'<div class="mhd sep"></div>'
+    +(f.provenance?'<div class="mi"><span class="lbl" data-cact="prov">Provenance</span></div>':'')
+    +(f.provenance&&f.provenance.command?'<div class="mi"><span class="lbl" data-cact="regen">Regenerate…</span></div>':'')
     +((window.self!==window.top)?'<div class="mi"><span class="lbl" data-cact="src">Open script &lt;/&gt;</span></div>'
       +'<div class="mi"><span class="lbl" data-cact="board">Send to whiteboard</span></div>':'')
     +'<div class="mi"><span class="lbl" data-cact="hide">'+(isHid?'Unhide':'Hide')+'</span></div>'
@@ -921,9 +938,30 @@ function cardMenu(anchor, rel){
   placeMenu(m, anchor);
   m.querySelectorAll('[data-act="rate"]').forEach(sp=>{ sp.onclick=ev=>{ setRate(rel, +sp.dataset.n, ev); closeFloat(); }; });
   const _src=m.querySelector('[data-cact="src"]'); if(_src) _src.onclick=()=>{ closeFloat(); findScript(rel); };
+  const _prov=m.querySelector('[data-cact="prov"]'); if(_prov) _prov.onclick=()=>{ closeFloat(); showProvenance(f); };
+  const _regen=m.querySelector('[data-cact="regen"]'); if(_regen) _regen.onclick=()=>{ closeFloat(); regenerateArtifact(f); };
   const _bd=m.querySelector('[data-cact="board"]'); if(_bd) _bd.onclick=()=>{ closeFloat(); sendToBoard(rel, anchor); };
   m.querySelector('[data-cact="hide"]').onclick=()=>{ closeFloat(); toggleHide(rel); };
   m.querySelector('[data-cact="del"]').onclick=()=>{ closeFloat(); delOne(rel); };
+}
+function showProvenance(f){
+  const p=f.provenance||{};
+  const lines=[f.rel];
+  if(p.generator)lines.push('Generator: '+p.generator);
+  if(p.command)lines.push('Command: '+p.command.join(' '));
+  if(p.inputs&&p.inputs.length)lines.push('Inputs: '+p.inputs.join(', '));
+  if(p.gitCommit)lines.push('Git: '+p.gitCommit);
+  lines.push('Source: '+(p.confidence==='declared'?'declared manifest':'same-name inference'));
+  alert(lines.join('\n'));
+}
+async function regenerateArtifact(f){
+  const p=f.provenance||{};
+  if(!p.command||!p.command.length)return;
+  if(!await confirmDialog('Run this declared command?\n\n'+p.command.join(' '),'Regenerate'))return;
+  const r=await fetch('/regenerate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({rel:f.rel})});
+  const j=await r.json();
+  if(!j.ok){alert(j.error||j.output||'Regeneration failed');return;}
+  alert('Regenerated. The gallery will refresh automatically.');
 }
 function placeMenu(menu, anchor){
   // append to <body> to escape the sticky header's backdrop-filter containing block,
@@ -948,6 +986,8 @@ function lbOpenAny(rel){
   return true;
 }
 function findScript(rel){
+  const artifact=FILES.find(f=>f.rel===rel), declared=artifact&&artifact.provenance&&artifact.provenance.generator;
+  if(declared&&lbOpenAny(declared)) return;
   const stem = rel.split('/').pop().replace(/\.[^.]+$/,'');
   const hit = FILES.find(f=>codeExt(f.ext) && f.rel.split('/').pop().replace(/\.[^.]+$/,'')===stem);
   if(hit){ lbOpenAny(hit.rel); return; }
@@ -1174,12 +1214,14 @@ async function lbShow(i){
     (isSvg?` <span style="margin-left:8px;color:#5b9dff;font-size:12px">&#9672; click elements in the plot to select them</span>`:'');
   document.getElementById('lbAnnot').style.display=(imgExt(f.ext)&&!isSvg)?'flex':'none';
   lb().classList.add('show');
+  saveGallerySession({activeRel:f.rel});
 }
 async function lbClose(){
   if(!(await annotGuard()))return;
   if(lb().classList.contains('fs')||fsActiveEl()) await lbFsLeave();
   const v=document.getElementById('lbVid');if(v){v.pause();v.removeAttribute('src');v.load();}
   lb().classList.remove('show');lb().classList.remove('annot');lbIdx=-1;
+  saveGallerySession({activeRel:null});
 }
 let lbFsUiTimer=0, fsLeaving=false, nativeFsOk=null, lbFsEnterGen=0, lbNativeReq=false;
 function fsActiveEl(){
@@ -1533,9 +1575,9 @@ document.getElementById('delSel').onclick=async function(){
   });
   updateDelBtn(); render();
 };
-document.getElementById('q').oninput=render;
-document.getElementById('sort').onchange=render;
-fsel.onchange=render;
+document.getElementById('q').oninput=function(){saveGallerySession({query:this.value});render();};
+document.getElementById('sort').onchange=function(){saveGallerySession({sort:this.value});render();};
+fsel.onchange=function(){saveGallerySession({folder:this.value});render();};
 // collapsible search: a 🔍 chip expands the field; Esc / blur-when-empty collapses it; "/" opens it
 const qEl=document.getElementById('q'), searchChip=document.getElementById('searchChip');
 function openSearch(){qEl.classList.remove('collapsed');searchChip.classList.add('on');qEl.focus();qEl.select();}
@@ -1807,7 +1849,9 @@ function annotInit(){
       const j=await annotPost(true);
       annotSent=true;
       this.textContent='✓';
-      lbl.textContent=ANNOT_EMBEDDED?'Added to chat ✓':(j.submitted?'Sent to session ✓':'Pasted into Claude ✓');
+      lbl.textContent=(j.agentHost==='codex'&&j.queuedForAgent)
+        ?'Envoyé à Codex ✓'
+        :(ANNOT_EMBEDDED?'Added to chat ✓':(j.submitted?'Sent to session ✓':'Pasted into Claude ✓'));
     }catch(e){
       this.textContent='!';
       lbl.textContent='Serveur off — démarrer le serveur';
@@ -1824,7 +1868,15 @@ document.getElementById('lbNext').onclick=e=>{e.stopPropagation();lbShow(lbIdx+1
 lb().onclick=e=>{if(e.target.id==='lb')lbClose();};
 document.getElementById('lbWrap').onclick=e=>e.stopPropagation();
 document.getElementById('lbPdf').onclick=e=>e.stopPropagation();
+if(typeof gallerySession.query==='string')document.getElementById('q').value=gallerySession.query;
+if(gallerySession.sort&&[...document.getElementById('sort').options].some(o=>o.value===gallerySession.sort))document.getElementById('sort').value=gallerySession.sort;
+if(gallerySession.folder&&FOLDERS.includes(gallerySession.folder))fsel.value=gallerySession.folder;
 render();
+requestAnimationFrame(()=>{
+  if(Number.isFinite(gallerySession.scrollY))scrollTo(0,gallerySession.scrollY);
+  if(gallerySession.activeRel&&FILES.some(f=>f.rel===gallerySession.activeRel))setTimeout(()=>lbOpen(gallerySession.activeRel),80);
+});
+addEventListener('beforeunload',()=>saveGallerySession({scrollY:scrollY}));
 
 // --- live reload: auto-refresh when the gallery is rebuilt (Claude edits + rescans),
 //     never interrupting an open viewer/lightbox or an active text selection ---
@@ -1859,7 +1911,7 @@ render();
   }
   async function pollClaudeEvents(){
     try{
-      const j = await fetch('/claude-events?since='+evLast, {cache:'no-store'}).then(r=>r.json());
+      const j = await fetch('/agent-events?since='+evLast, {cache:'no-store'}).then(r=>r.json());
       if(evBoot){ evLast = j.last || 0; evBoot = false; return; }   // ignore l'historique d'avant l'ouverture
       if(!j.events || !j.events.length){ evLast = j.last || evLast; return; }
       evLast = j.last;
@@ -1887,5 +1939,6 @@ render();
   }, 2500);
 })();
 </script>
+<script type="module" src="/.fig_thumbs/ts/atelier-client.js"></script>
 </body>
 </html>

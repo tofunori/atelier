@@ -18,3 +18,18 @@ __pycache__/
 *.pyc
 *.bak
 .DS_Store
+
+# local gallery/runtime outputs
+figures_data.json
+atelier-*-preview.png
+atelier-*-menu*.png
+
+# LaTeX build products (sources stay tracked)
+*.aux
+*.fdb_latexmk
+*.fls
+*.log
+*.synctex.gz
+
+# Rust build output (Cargo.lock is intentionally tracked for the application)
+rust/target/

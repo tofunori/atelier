@@ -28,12 +28,15 @@ import subprocess
 import sys
 import time
 
+from atelier_runtime import atomic_write_json
+
 HERE = os.path.dirname(os.path.realpath(__file__))  # realpath: resolve the PATH symlink
 BUILDER = os.path.join(HERE, "build_gallery.py")
 SERVER = os.path.join(HERE, "fig_annotate_server.py")
 ASSETS = os.path.join(HERE, "assets")
 VIEWERS = ("pdf_viewer.html", "md_viewer.html", "code_editor.html", "latex_studio.html")
 OUT = "figures_index.html"
+RUST_MANIFEST = os.path.join(HERE, "rust", "Cargo.toml")
 
 
 PORT_BASE = 8790  # each project gets a stable port derived from its path
@@ -141,11 +144,25 @@ def server_project(port: int):
         if r.status != 200:
             return None
         d = json.loads(body or b"{}")
-        if d.get("service") == "fig-annotate" and d.get("project"):
+        if d.get("service") in ("fig-annotate", "atelier") and d.get("project"):
             return os.path.realpath(d["project"])
     except (OSError, ValueError):
         pass
     return None
+
+
+def backend_name() -> str:
+    return "rust" if os.environ.get("ATELIER_BACKEND", "python").strip().lower() == "rust" else "python"
+
+
+def server_backend(port: int):
+    try:
+        payload = fetch_health(port) or {}
+        if payload.get("backend") in ("python", "rust"):
+            return payload["backend"]
+        return "python" if payload.get("service") == "fig-annotate" else None
+    except (OSError, ValueError):
+        return None
 
 
 def provision_viewers(root: str) -> None:
@@ -164,10 +181,46 @@ def provision_viewers(root: str) -> None:
 
 
 def build(root: str) -> str:
+    frontend_package = os.path.join(HERE, "package.json")
+    if (os.environ.get("ATELIER_BUILD_TYPESCRIPT") == "1"
+            and os.path.isfile(frontend_package)
+            and os.path.isdir(os.path.join(HERE, "frontend"))):
+        subprocess.run(["npm", "run", "build:frontend"], cwd=HERE, check=True)
     env = dict(os.environ, GALLERY_ROOT=root)
     subprocess.run([sys.executable, BUILDER], cwd=root, env=env, check=True)
     provision_viewers(root)
     return os.path.join(root, OUT)
+
+
+def rust_server_binary() -> str:
+    """Build the Rust backend on first opt-in, then reuse the binary."""
+    candidates = [
+        os.path.join(HERE, "rust", "target", "release", "atelier-server"),
+        os.path.join(HERE, "rust", "target", "debug", "atelier-server"),
+    ]
+    for candidate in candidates:
+        if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+            return candidate
+    if not os.path.isfile(RUST_MANIFEST):
+        raise SystemExit("[atelier] Rust backend is not available in this checkout")
+    subprocess.run(["cargo", "build", "--manifest-path", RUST_MANIFEST,
+                    "-p", "atelier-server"], cwd=HERE, check=True)
+    return candidates[1]
+
+
+def backend_command(root: str, port: int):
+    """Return the selected server command and environment.
+
+    Python remains the default. ``ATELIER_BACKEND=rust`` is the explicit
+    migration switch until the Rust routes reach full parity.
+    """
+    env = dict(os.environ, FIG_PORT=str(port), GALLERY_ROOT=root,
+               ATELIER_TOOL_ROOT=HERE, ATELIER_BUILDER=BUILDER)
+    if os.environ.get("ATELIER_BACKEND", "python").strip().lower() == "rust":
+        command = [rust_server_binary(), "--root", root, "--port", str(port)]
+        command.append("--no-watch" if os.environ.get("GALLERY_WATCH", "1") == "0" else "--watch")
+        return command, env
+    return [sys.executable, SERVER], env
 
 
 def wait_up(port: int, timeout: float = 8.0) -> bool:
@@ -189,14 +242,15 @@ def write_server_state(root: str, port: int, pid: int, log_path: str) -> None:
     os.makedirs(os.path.join(root, ".fig_thumbs"), exist_ok=True)
     data = {
         "service": "atelier",
+        "backend": backend_name(),
         "project": os.path.realpath(root),
         "port": port,
         "pid": pid,
         "log": log_path,
         "started": int(time.time()),
     }
-    with open(state_path(root, port), "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
+    path = state_path(root, port)
+    atomic_write_json(path, data)
 
 
 def read_server_state(root: str, port: int) -> dict | None:
@@ -215,14 +269,106 @@ def process_alive(pid: int) -> bool:
         return False
 
 
+def fetch_health(port: int) -> dict | None:
+    """Return the live gallery health payload, or None when unreachable."""
+    try:
+        c = http.client.HTTPConnection("127.0.0.1", port, timeout=2)
+        c.request("GET", "/ping")
+        r = c.getresponse()
+        payload = json.loads(r.read() or b"{}")
+        c.close()
+        return payload if r.status == 200 and isinstance(payload, dict) else None
+    except (OSError, ValueError):
+        return None
+
+
+def project_diagnostics(root: str, port: int) -> dict:
+    root = os.path.realpath(root)
+    state = read_server_state(root, port) or {}
+    pid = int(state.get("pid") or 0)
+    health = fetch_health(port)
+    index = os.path.join(root, OUT)
+    data_file = os.path.join(root, "figures_data.json")
+    assets_copy = os.path.join(root, ".fig_thumbs", "gallery_template.html")
+    source_asset = os.path.join(ASSETS, "gallery_template.html")
+    def mtime(path):
+        try:
+            return int(os.path.getmtime(path))
+        except OSError:
+            return 0
+    return {
+        "project": root,
+        "port": port,
+        "url": gallery_url(port),
+        "running": bool(health),
+        "pid": pid or None,
+        "pidAlive": bool(pid and process_alive(pid)),
+        "health": health,
+        "indexExists": os.path.isfile(index),
+        "dataExists": os.path.isfile(data_file),
+        "assetsCurrent": bool(mtime(assets_copy) >= mtime(source_asset)),
+        "indexUpdated": mtime(index) or None,
+        "log": state.get("log"),
+    }
+
+
+def cmd_status(a) -> None:
+    port = a.port or project_port(a.root)
+    d = project_diagnostics(a.root, port)
+    h = d.get("health") or {}
+    print(f"Project       {d['project']}")
+    print(f"Server        {'running' if d['running'] else 'stopped'}" +
+          (f" · PID {d['pid']}" if d.get("pid") else ""))
+    print(f"URL           {d['url']}")
+    print(f"Codex         {'connected' if h.get('agentHost') == 'codex' else 'not connected'}")
+    print(f"Annotations   {int(h.get('agentInbox') or 0)} pending")
+    print(f"Index         {'ready' if d['indexExists'] and d['dataExists'] else 'missing'}")
+    watcher = h.get("watcher") if isinstance(h.get("watcher"), dict) else {}
+    print(f"Watcher       {'active' if watcher.get('running') else ('enabled' if watcher.get('enabled') else 'off')}")
+    print(f"Assets        {'current' if d['assetsCurrent'] else 'stale'}")
+
+
+def cmd_doctor(a) -> None:
+    port = a.port or project_port(a.root)
+    d = project_diagnostics(a.root, port)
+    if a.repair:
+        state = read_server_state(a.root, port)
+        if state and not d["pidAlive"]:
+            try:
+                os.remove(state_path(a.root, port))
+            except OSError:
+                pass
+        if not d["indexExists"] or not d["dataExists"] or not d["assetsCurrent"]:
+            build(a.root)
+        if not d["running"] and not _port_busy(port):
+            start_detached_server(a.root, port)
+            wait_up(port)
+        d = project_diagnostics(a.root, port)
+    checks = [
+        ("project", os.path.isdir(d["project"]), d["project"]),
+        ("server", d["running"], f"127.0.0.1:{port}"),
+        ("metadata", not d["pid"] or d["pidAlive"], "PID state"),
+        ("index", d["indexExists"] and d["dataExists"], "HTML + JSON"),
+        ("assets", d["assetsCurrent"], "bundled viewers"),
+        ("write", os.access(d["project"], os.W_OK), "project writable"),
+    ]
+    failed = 0
+    for name, ok, detail in checks:
+        failed += not ok
+        print(f"{'OK' if ok else 'FAIL':4}  {name:10} {detail}")
+    if failed:
+        hint = "" if a.repair else "; retry with `atelier doctor --repair`"
+        raise SystemExit(f"[atelier] {failed} diagnostic check(s) failed{hint}")
+
+
 def start_detached_server(root: str, port: int) -> tuple[int, str]:
-    env = dict(os.environ, FIG_PORT=str(port), GALLERY_ROOT=root)
+    command, env = backend_command(root, port)
     os.makedirs(os.path.join(root, ".fig_thumbs"), exist_ok=True)
     log_path = os.path.join(root, ".fig_thumbs", f"cmux-gallery-{port}.log")
     log = open(log_path, "a", encoding="utf-8")
     try:
         srv = subprocess.Popen(
-            [sys.executable, SERVER],
+            command,
             cwd=root,
             env=env,
             stdin=subprocess.DEVNULL,
@@ -242,7 +388,7 @@ def resolve_port_for_host(root: str, requested_port: int) -> int:
     if not _port_busy(port):
         return port
     served_project = server_project(port)
-    if served_project == os.path.realpath(root):
+    if served_project == os.path.realpath(root) and server_backend(port) == backend_name():
         return port
     if requested_port:
         raise SystemExit(f"[atelier] port {port} is busy and is not serving {root}")
@@ -264,7 +410,8 @@ def cmd_foreground(a) -> None:
     # (the live server serves the fresh file) instead of starting a duplicate on
     # a random port — that's what was leaking a new port on every run.
     if not a.port and _port_busy(port):
-        if server_project(port) == os.path.realpath(a.root):
+        if (server_project(port) == os.path.realpath(a.root)
+                and server_backend(port) == backend_name()):
             url = gallery_url(port)
             print(f"[atelier] gallery already running on :{port} → reusing it "
                   f"(rebuilt; stable URL, no duplicate server)")
@@ -274,10 +421,10 @@ def cmd_foreground(a) -> None:
             return
         print(f"[atelier] port {port} busy (not our gallery) → using a free port", file=sys.stderr)
         port = next((c for c in range(port + 1, port + 50) if not _port_busy(c)), 0) or free_port()
-    env = dict(os.environ, FIG_PORT=str(port), GALLERY_ROOT=a.root)
+    command, env = backend_command(a.root, port)
     print(f"[atelier] starting server on :{port}  (cwd={a.root})")
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))  # SIGTERM -> SystemExit -> finally tears down the server (no orphan)
-    srv = subprocess.Popen([sys.executable, SERVER], cwd=a.root, env=env)
+    srv = subprocess.Popen(command, cwd=a.root, env=env)
     try:
         if not wait_up(port):
             print("[atelier] warning: server /ping did not answer", file=sys.stderr)
@@ -302,7 +449,8 @@ def cmd_open(a) -> None:
     port = resolve_port_for_host(a.root, a.port)
     url = gallery_url(port)
     served_project = server_project(port) if _port_busy(port) else None
-    if served_project == os.path.realpath(a.root):
+    if (served_project == os.path.realpath(a.root)
+            and server_backend(port) == backend_name()):
         print(f"[atelier] gallery already running on :{port} → reusing it")
     else:
         pid, log_path = start_detached_server(a.root, port)
@@ -347,7 +495,7 @@ def cmd_serve(a) -> None:
     out = build(a.root)
     print(f"[atelier] built {out}")
     port = a.port or project_port(a.root)
-    env = dict(os.environ, FIG_PORT=str(port), GALLERY_ROOT=a.root)
+    command, env = backend_command(a.root, port)
     print(f"[atelier] serving {gallery_url(port)}  "
           f"(cwd={a.root}; hosting; self-healing; Ctrl-C to stop)")
     srv = None
@@ -358,7 +506,7 @@ def cmd_serve(a) -> None:
     signal.signal(signal.SIGTERM, _stop)
     try:
         while True:
-            srv = subprocess.Popen([sys.executable, SERVER], cwd=a.root, env=env)
+            srv = subprocess.Popen(command, cwd=a.root, env=env)
             srv.wait()
             print("[atelier] server exited — restarting in 2s", file=sys.stderr)
             time.sleep(2)
@@ -371,6 +519,30 @@ def cmd_serve(a) -> None:
                 srv.wait(timeout=5)
             except subprocess.TimeoutExpired:
                 srv.kill()
+
+
+def cmd_codex_serve(a) -> None:
+    """Internal foreground host used by the bundled Codex MCP plugin."""
+    token = os.environ.get("ATELIER_AGENT_TOKEN") or ""
+    if not token:
+        raise SystemExit("[atelier] ATELIER_AGENT_TOKEN is required for codex-serve")
+    env = dict(os.environ, GALLERY_ROOT=a.root, FIG_PORT=str(a.port or project_port(a.root)),
+               ATELIER_AGENT_HOST="codex")
+    os.chdir(a.root)
+    if os.environ.get("ATELIER_BACKEND", "python").strip().lower() == "rust":
+        command, _ = backend_command(a.root, int(a.port or project_port(a.root)))
+        os.execve(command[0], command, env)
+    os.execve(sys.executable, [sys.executable, SERVER], env)
+
+
+def cmd_rust_serve(a) -> None:
+    """Internal Rust foreground host used by the Codex MCP bridge."""
+    os.environ["ATELIER_BACKEND"] = "rust"
+    env = dict(os.environ, ATELIER_BACKEND="rust", GALLERY_ROOT=a.root,
+               FIG_PORT=str(a.port or project_port(a.root)))
+    command, _ = backend_command(a.root, int(a.port or project_port(a.root)))
+    os.chdir(a.root)
+    os.execve(command[0], command, env)
 
 
 def cmd_claude_init(a) -> None:
@@ -453,6 +625,20 @@ def main(argv=None) -> int:
                    help="project to scan (default: git root for cwd, else cwd)")
     s.add_argument("--port", type=int, default=0,
                    help="server port (default: a stable port derived from the project path)")
+    cs = sub.add_parser("codex-serve", help=argparse.SUPPRESS)
+    cs.add_argument("--root", required=True, type=root_arg)
+    cs.add_argument("--port", required=True, type=int)
+    rs = sub.add_parser("rust-serve", help=argparse.SUPPRESS)
+    rs.add_argument("--root", required=True, type=root_arg)
+    rs.add_argument("--port", required=True, type=int)
+    status = sub.add_parser("status", help="show the active project, server and Codex state")
+    status.add_argument("--root", default=None, type=root_arg)
+    status.add_argument("--port", type=int, default=0)
+    doctor = sub.add_parser("doctor", help="diagnose the local gallery runtime")
+    doctor.add_argument("--root", default=None, type=root_arg)
+    doctor.add_argument("--port", type=int, default=0)
+    doctor.add_argument("--repair", action="store_true",
+                        help="remove stale metadata and rebuild missing/stale assets")
     a = p.parse_args(argv)
     if a.root is None:
         a.root = default_project_root()
@@ -463,7 +649,11 @@ def main(argv=None) -> int:
         "stop": cmd_stop,
         "foreground": cmd_foreground,
         "serve": cmd_serve,
+        "codex-serve": cmd_codex_serve,
+        "rust-serve": cmd_rust_serve,
         "claude-init": cmd_claude_init,
+        "status": cmd_status,
+        "doctor": cmd_doctor,
     }[a.cmd](a)
     return 0
 

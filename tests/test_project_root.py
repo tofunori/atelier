@@ -58,6 +58,42 @@ class ProjectRootTests(unittest.TestCase):
             cmux_gallery.write_server_state(td, 9999, 12345, log)
             self.assertEqual(cmux_gallery.read_server_state(td, 9999)["pid"], 12345)
             self.assertEqual(cmux_gallery.read_server_state(td, 9999)["port"], 9999)
+            self.assertIn(cmux_gallery.read_server_state(td, 9999)["backend"], {"python", "rust"})
+
+    def test_project_diagnostics_reports_live_codex_state(self):
+        with tempfile.TemporaryDirectory() as td, \
+                patch.object(cmux_gallery, "fetch_health", return_value={
+                    "service": "fig-annotate", "agentHost": "codex", "agentInbox": 2
+                }), patch.object(cmux_gallery, "process_alive", return_value=True):
+            thumbs = os.path.join(td, ".fig_thumbs")
+            os.makedirs(thumbs)
+            Path(td, "figures_index.html").write_text("index")
+            Path(td, "figures_data.json").write_text("{}")
+            Path(thumbs, "gallery_template.html").write_text("asset")
+            with patch.object(cmux_gallery, "ASSETS", thumbs):
+                d = cmux_gallery.project_diagnostics(td, 9999)
+            self.assertTrue(d["running"])
+            self.assertTrue(d["indexExists"])
+            self.assertTrue(d["dataExists"])
+            self.assertTrue(d["assetsCurrent"])
+            self.assertEqual(d["health"]["agentInbox"], 2)
+
+    def test_backend_command_has_explicit_rust_opt_in(self):
+        with patch.dict(os.environ, {"ATELIER_BACKEND": "rust"}), \
+                patch.object(cmux_gallery, "rust_server_binary", return_value="/tmp/atelier-server"):
+            command, env = cmux_gallery.backend_command("/tmp/project", 9360)
+            self.assertEqual(command[:2], ["/tmp/atelier-server", "--root"])
+            self.assertEqual(command[-1], "--watch")
+            self.assertEqual(env["GALLERY_ROOT"], "/tmp/project")
+
+        with patch.dict(os.environ, {"ATELIER_BACKEND": "rust", "GALLERY_WATCH": "0"}), \
+                patch.object(cmux_gallery, "rust_server_binary", return_value="/tmp/atelier-server"):
+            command, _ = cmux_gallery.backend_command("/tmp/project", 9360)
+            self.assertEqual(command[-1], "--no-watch")
+
+        with patch.dict(os.environ, {"ATELIER_BACKEND": "python"}):
+            command, _ = cmux_gallery.backend_command("/tmp/project", 9360)
+            self.assertEqual(command[0], cmux_gallery.sys.executable)
 
 
 if __name__ == "__main__":

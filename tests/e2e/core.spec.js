@@ -49,6 +49,15 @@ function writeFixtureProject(root) {
 </svg>
 `);
   writeFileSync(path.join(root, 'analysis.py'), 'print("alpha snow analysis")\n');
+  writeFileSync(path.join(root, '.atelier-provenance.json'), JSON.stringify({
+    artifacts: {
+      'preview-alpha.png': {
+        generator: 'analysis.py',
+        command: ['python3', 'analysis.py'],
+        inputs: ['analysis.py'],
+      },
+    },
+  }));
 }
 
 function pngFixture(width, height) {
@@ -96,7 +105,7 @@ function crc32(buf) {
   return (crc ^ 0xffffffff) >>> 0;
 }
 
-async function withGallery(run) {
+async function withGallery(run, options = {}) {
   const root = mkdtempSync(path.join(tmpdir(), 'cmux-gallery-e2e-'));
   let server;
   try {
@@ -111,13 +120,23 @@ async function withGallery(run) {
       stdio: 'pipe',
     });
     const port = await freePort();
+    const agentToken = options.codex ? 'e2e-agent-token' : '';
     server = spawn('python3', [path.join(REPO, 'fig_annotate_server.py')], {
       cwd: root,
-      env: { ...process.env, GALLERY_ROOT: root, FIG_PORT: String(port) },
+      env: {
+        ...process.env,
+        GALLERY_ROOT: root,
+        FIG_PORT: String(port),
+        ...(options.codex ? {
+          HOME: root,
+          ATELIER_AGENT_HOST: 'codex',
+          ATELIER_AGENT_TOKEN: agentToken,
+        } : {}),
+      },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     await waitForPing(port);
-    await run({ root, port, url: `http://127.0.0.1:${port}/figures_index.html` });
+    await run({ root, port, agentToken, url: `http://127.0.0.1:${port}/figures_index.html` });
   } finally {
     if (server) {
       server.kill('SIGTERM');
@@ -133,13 +152,94 @@ test('browse: search filters the generated gallery cards', async ({ page }) => {
     await expect(page.locator('#grid .card')).toHaveCount(3);
     await expect(page.locator('.brand .stat')).toContainText('4 files');
 
-    await page.locator('#searchChip').click();
     await page.locator('#q').fill('alpha');
 
     await expect(page.locator('#grid .card')).toHaveCount(2);
     await expect(page.locator('#grid')).toContainText('plot-alpha.svg');
     await expect(page.locator('#grid')).toContainText('preview-alpha.png');
     await expect(page.locator('#grid')).not.toContainText('plot-beta.svg');
+  });
+});
+
+test('codex annotation bank sends and deletes individual items', async ({ page }) => {
+  await withGallery(async ({ port, url, agentToken }) => {
+    const base = `http://127.0.0.1:${port}`;
+    const destination = 'thread:e2e-destination';
+    await fetch(`${base}/agent-consumers/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${agentToken}` },
+      body: JSON.stringify({ consumer: 'e2e-consumer', destination, label: 'LaTeX review' }),
+    });
+
+    await page.goto(url);
+    await expect(page.locator('#atelierAgentButton')).toBeVisible();
+    await page.locator('#atelierAgentButton').click();
+    await expect(page.locator('#aaConnection')).toContainText('Vers LaTeX review');
+
+    const sent = await page.evaluate(async () => {
+      const response = await fetch('/quote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rel: 'analysis.py', page: 'L1-1', text: 'alpha snow' }),
+      });
+      return response.json();
+    });
+    expect(sent.agentSelectionStatus).toBe('staged');
+    await expect(page.locator('#aaQueue .aaannotation')).toHaveCount(1);
+    await expect(page.locator('#aaQueue')).toContainText('analysis.py · L1-1');
+    await expect(page.locator('#aaQueue')).toContainText('alpha snow');
+    await page.locator('#aaQueue [data-send]').click();
+    await expect(page.locator('#aaQueue .aaannotation')).toHaveCount(0);
+
+    const claimed = await (await fetch(
+      `${base}/agent-selections?consumer=e2e-consumer&destination=${encodeURIComponent(destination)}`,
+      { headers: { Authorization: `Bearer ${agentToken}` } },
+    )).json();
+    expect(claimed.items).toHaveLength(1);
+    expect(claimed.items[0]).toMatchObject({ action: 'ask', destination, selection: 'alpha snow' });
+
+    await fetch(`${base}/agent-selections/ack`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${agentToken}` },
+      body: JSON.stringify({ ids: [claimed.items[0].id], consumer: 'e2e-consumer' }),
+    });
+    const deletable = await page.evaluate(async () => {
+      const response = await fetch('/quote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rel: 'analysis.py', page: 'L2-2', text: 'delete me' }),
+      });
+      return response.json();
+    });
+    expect(deletable.agentSelectionStatus).toBe('staged');
+    await expect(page.locator('#aaQueue .aaannotation')).toHaveCount(1);
+    await page.locator('#aaQueue [data-delete]').click();
+    await expect(page.locator('#aaQueue .aaannotation')).toHaveCount(0);
+    const status = await (await fetch(`${base}/agent-status?limit=20`)).json();
+    expect(status.pending.some(item => item.id === deletable.agentSelectionId)).toBe(false);
+
+    await page.locator('#aaHistory').click();
+    await expect(page.locator('#aaTitle')).toHaveText('Historique');
+    const cancelled = page.locator(`[data-restore="${deletable.agentSelectionId}"]`);
+    await expect(cancelled).toBeVisible();
+    await cancelled.click();
+    await expect(page.locator('#aaTitle')).toContainText('Annotations');
+    await expect(page.locator('#aaQueue')).toContainText('delete me');
+  }, { codex: true });
+});
+
+test('session and provenance: search survives reload and declared actions appear', async ({ page }) => {
+  await withGallery(async ({ url }) => {
+    await page.goto(url);
+    await page.locator('#q').fill('preview-alpha');
+    await page.reload();
+    await expect(page.locator('#q')).toHaveValue('preview-alpha');
+    await expect(page.locator('#grid .card')).toHaveCount(1);
+
+    await page.locator('#grid .card').hover();
+    await page.locator('[data-act="more"][data-rel="preview-alpha.png"]').click();
+    await expect(page.locator('[data-cact="prov"]')).toHaveText('Provenance');
+    await expect(page.locator('[data-cact="regen"]')).toContainText('Regenerate');
   });
 });
 
@@ -189,19 +289,36 @@ test('annotate: image lightbox posts an annotated PNG payload', async ({ page })
     let savePayload = null;
     await page.route('**/save', async route => {
       savePayload = route.request().postDataJSON();
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, sentToClaude: false, path: 'annotations/mock.png' }) });
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+        ok: true,
+        sentToClaude: false,
+        queuedForAgent: true,
+        agentHost: 'codex',
+        path: 'annotations/mock.png',
+      }) });
     });
 
     await page.goto(url);
     await page.locator('[data-act="lb"][data-rel="preview-alpha.png"]').click();
     await expect(page.locator('#lbImg')).toBeVisible();
-    await page.locator('#lbCap button', { hasText: 'Annotate' }).click();
+    await page.locator('#lbAnnot').click();
     await expect(page.locator('#lb')).toHaveClass(/annot/);
 
-    await page.locator('#annotSend').click();
+    const canvas = page.locator('#annotCv');
+    const box = await canvas.boundingBox();
+    expect(box).not.toBeNull();
+    await page.mouse.move(box.x + box.width * 0.25, box.y + box.height * 0.25);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width * 0.7, box.y + box.height * 0.65);
+    await page.mouse.up();
+    await page.locator('#annotNote textarea').fill('Titre trop bas');
+    await page.locator('#annotNote .anSave').click();
+
+    await page.locator('#annotPillSend').click();
     await expect.poll(() => savePayload && savePayload.name).toBe('preview-alpha.png');
+    await expect(page.locator('#annotPillN')).toContainText('Envoyé à Codex');
     expect(savePayload.dataURL).toMatch(/^data:image\/png;base64,/);
-    expect(savePayload.notes).toEqual([]);
+    expect(savePayload.notes).toEqual([{ n: 1, text: 'Titre trop bas' }]);
   });
 });
 

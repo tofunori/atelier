@@ -9,10 +9,10 @@ and writes a self-contained figures_index.html at the project root.
 Run it again any time to refresh the index after producing new figures.
 """
 import os, json, time, hashlib, subprocess, sys, signal, tempfile, shutil, concurrent.futures, re
+from atelier_runtime import ARTIFACT_EXTENSIONS, EXCLUDED_DIRECTORIES, atomic_write_text
 
 ROOT = os.path.abspath(os.environ.get("GALLERY_ROOT") or os.getcwd())
-EXTS = {".png", ".jpg", ".jpeg", ".svg", ".pdf", ".html", ".docx", ".xlsx", ".xls", ".csv", ".md", ".py", ".r", ".jl", ".tex", ".sh",
-        ".mp4", ".m4v", ".mov", ".webm"}
+EXTS = set(ARTIFACT_EXTENSIONS)
 # GALLERY_EXTS = liste "png, svg, pdf" (réglable par projet) ; vide = défaut
 _env_exts = [("." + e.lstrip(".")).lower() for e in re.split(r"[,\s]+", os.environ.get("GALLERY_EXTS", "")) if e.strip()]
 if _env_exts:
@@ -20,9 +20,7 @@ if _env_exts:
 # Skip these directories entirely (virtualenvs, git, caches, build trees, worktrees, the index itself).
 # .prism is a build tree that mirrors source files (PDF/Office duplicates) — indexing it walks
 # thousands of extra artefacts and thumbnails build-output copies, so exclude it outright.
-EXCLUDE_PARTS = {".git", ".venv", ".venv-era5", ".venv-codex", "node_modules",
-                 "__pycache__", ".ipynb_checkpoints", "worktrees", ".claude", ".fig_thumbs",
-                 "_gallery_exports", ".prism"}
+EXCLUDE_PARTS = set(EXCLUDED_DIRECTORIES)
 ARCHIVE_HINTS = ("_archive", "menage_", "/tmp/", "tmp_dir", "/tmp", "raqdps_tests")
 SELF = "figures_index.html"
 SNIP_EXTS = (".py", ".r", ".jl", ".sh", ".tex", ".md", ".csv")
@@ -229,6 +227,56 @@ def scan():
     return rows
 
 
+def enrich_provenance(rows, root=None):
+    """Attach explicit or conservative same-stem provenance to artifact rows.
+
+    Projects can provide ``.atelier-provenance.json`` with either a direct
+    artifact mapping or ``{"artifacts": {...}}``. Commands must be argv lists;
+    they are never interpreted by a shell.
+    """
+    root = os.path.realpath(root or ROOT)
+    manifest_path = os.path.join(root, ".atelier-provenance.json")
+    manifest = {}
+    try:
+        with open(manifest_path, encoding="utf-8") as f:
+            raw = json.load(f)
+        manifest = raw.get("artifacts", raw) if isinstance(raw, dict) else {}
+    except (OSError, ValueError):
+        pass
+    scripts = {}
+    for row in rows:
+        if row.get("ext") not in {"py", "r", "jl", "sh"}:
+            continue
+        stem = os.path.splitext(os.path.basename(row["rel"]))[0]
+        scripts.setdefault(stem, []).append(row["rel"])
+    try:
+        git = subprocess.run(["git", "-C", root, "rev-parse", "--short", "HEAD"],
+                             capture_output=True, text=True, timeout=3)
+        git_commit = git.stdout.strip() if git.returncode == 0 else None
+    except (OSError, subprocess.SubprocessError):
+        git_commit = None
+    for row in rows:
+        rel = row["rel"]
+        explicit = manifest.get(rel) if isinstance(manifest, dict) else None
+        provenance = dict(explicit) if isinstance(explicit, dict) else {}
+        if provenance:
+            command = provenance.get("command")
+            if not (isinstance(command, list) and 0 < len(command) <= 32 and
+                    all(isinstance(arg, str) and len(arg) <= 2000 for arg in command)):
+                provenance.pop("command", None)
+            provenance["confidence"] = "declared"
+        elif row.get("ext") not in {"py", "r", "jl", "sh"}:
+            stem = os.path.splitext(os.path.basename(rel))[0]
+            candidates = scripts.get(stem, [])
+            if len(candidates) == 1:
+                provenance = {"generator": candidates[0], "confidence": "same-stem"}
+        if provenance:
+            if git_commit:
+                provenance.setdefault("gitCommit", git_commit)
+            row["provenance"] = provenance
+    return rows
+
+
 def purge_orphan_thumbs(keys_seen):
     """Remove .png/.fail thumbnails whose (md5) key is no longer referenced."""
     if not os.path.isdir(THUMB_DIR):
@@ -290,6 +338,7 @@ def prewarm_image_thumbs(rows, limit=400):
 
 def main():
     rows = scan()
+    enrich_provenance(rows)
     prewarm_image_thumbs(rows)
     folders = sorted({r["folder"] for r in rows})
     gen = time.strftime("%Y-%m-%d %H:%M")
@@ -299,7 +348,8 @@ def main():
     # __ROOT__ lands inside single-quoted JS string literals ('__ROOT__/'+rel);
     # escape it for that context so a path with a quote/backslash can't break the script.
     root_js = ROOT.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n").replace("\r", "").replace("</", "<\\/")
-    html = (load_gallery_template()
+    template = load_gallery_template()
+    html = (template
             .replace("__TITLE__", f"{wordmark} · {project}")
             .replace("__WORDMARK__", wordmark)
             .replace("__PROJECT__", project)
@@ -310,16 +360,16 @@ def main():
             .replace("__FOLDERS__", json.dumps(folders, ensure_ascii=False).replace("</", "<\\/"))
             .replace("__FAVS__", json.dumps(sorted(cmux_favorites()), ensure_ascii=False).replace("</", "<\\/"))
             .replace("__ROOT__", root_js))
-    # regression guard: the page is ONE inline <script>; an unescaped </script> in
-    # embedded data (snippet/name/path) would close it early and blank the whole gallery.
-    # The </ -> <\/ escaping above prevents that — fail loud if it ever regresses.
+    # Regression guard: generated data must not add a closing script tag beyond
+    # the trusted scripts already present in the source template.  The </ -> <\/
+    # escaping above prevents that — fail loud if it ever regresses.
     n_close = html.count("</script>")
-    if n_close != 1:
-        raise SystemExit(f"build_gallery: emitted page has {n_close} </script> tags (expected 1) — "
+    expected_close = template.count("</script>")
+    if n_close != expected_close:
+        raise SystemExit(f"build_gallery: emitted page has {n_close} </script> tags (expected {expected_close}) — "
                          "data escaping is broken; aborting rather than ship a blank gallery")
     out = os.path.join(ROOT, SELF)
-    with open(out, "w") as f:
-        f.write(html)
+    atomic_write_text(out, html, mode=0o644)
     # figures_data.json : même payload que le builder Node d'Atelier Studio,
     # consommé par GET /data (rafraîchissement live du template sans rebuild).
     payload = {

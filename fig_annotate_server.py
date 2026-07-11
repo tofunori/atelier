@@ -12,6 +12,7 @@ import json
 import mimetypes
 import os
 import re
+import secrets
 import signal
 import shutil
 import subprocess
@@ -20,6 +21,7 @@ import threading
 import sys
 import time
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from atelier_runtime import ARTIFACT_EXTENSIONS, EXCLUDED_DIRECTORIES, artifact_snapshot
 
 PROJECT = os.path.realpath(os.environ.get("GALLERY_ROOT") or os.getcwd())
 HERE = os.path.dirname(os.path.realpath(__file__))
@@ -29,7 +31,11 @@ STUDIO = bool(os.environ.get("ATELIER_STUDIO"))  # embarqué dans Atelier Studio
 # Claude Code desktop preview: pas de push cmux/muxy/orca (aucun terminal à viser),
 # mais garde le canal fichier (~/.claude/fig-last-quote.txt, fig-selection.json) + clipboard.
 CLAUDE_PREVIEW = bool(os.environ.get("CLAUDE_PREVIEW"))
-NO_PUSH = STUDIO or CLAUDE_PREVIEW
+AGENT_HOST = (os.environ.get("ATELIER_AGENT_HOST") or "").strip().lower()
+CODEX_PREVIEW = AGENT_HOST == "codex"
+AGENT_TOKEN = os.environ.get("ATELIER_AGENT_TOKEN") or ""
+AGENT_BRIDGE_PROTOCOL = 2
+NO_PUSH = STUDIO or CLAUDE_PREVIEW or CODEX_PREVIEW
 # FIG_PORT prioritaire ; sinon PORT (assigné par les harness de preview, ex. Claude Code desktop)
 PORT = int(os.environ.get("FIG_PORT") or os.environ.get("PORT") or 8790)
 
@@ -45,6 +51,523 @@ _CLAUDE_EVENTS = []              # [{id, ts, rel, note, row}]
 _CLAUDE_EVENTS_LOCK = threading.Lock()
 _CLAUDE_EVENTS_NEXT = [1]
 _SNIP_EXTS = {"py", "r", "jl", "sh", "tex", "md", "csv"}
+
+# Persistent browser -> agent inbox.  The gallery writes annotations here and a
+# Codex MCP tool drains them.  Keeping the queue under the project makes the
+# handoff survive a server restart and avoids coupling Codex to ~/.claude.
+_AGENT_INBOX_DIR = os.path.expanduser("~/Library/Application Support/Atelier/agent-inbox")
+_AGENT_INBOX_KEY = hashlib.sha256(PROJECT.encode()).hexdigest()[:24]
+_AGENT_INBOX_PATH = os.path.join(_AGENT_INBOX_DIR, _AGENT_INBOX_KEY + ".json")
+_AGENT_HISTORY_PATH = os.path.join(_AGENT_INBOX_DIR, _AGENT_INBOX_KEY + "-history.json")
+_AGENT_CONSUMERS_PATH = os.path.join(_AGENT_INBOX_DIR, _AGENT_INBOX_KEY + "-consumers.json")
+_AGENT_INBOX_LOCK = threading.Lock()
+_AGENT_WAKE_LOCK = threading.Lock()
+_AGENT_WAKE_RUNNING = set()
+_AGENT_WAKE_DIRTY = set()
+
+
+def _read_agent_inbox_unlocked():
+    try:
+        with open(_AGENT_INBOX_PATH, encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, list) else []
+    except (OSError, ValueError):
+        return []
+
+
+def _write_agent_inbox_unlocked(items):
+    os.makedirs(os.path.dirname(_AGENT_INBOX_PATH), exist_ok=True)
+    fd, tmp = tempfile.mkstemp(prefix="agent-inbox-", suffix=".tmp",
+                               dir=os.path.dirname(_AGENT_INBOX_PATH))
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(items, f, ensure_ascii=False, indent=2)
+            f.write("\n")
+        os.chmod(tmp, 0o600)
+        os.replace(tmp, _AGENT_INBOX_PATH)
+    finally:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+
+
+def _read_agent_json_unlocked(path, default):
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, type(default)) else default
+    except (OSError, ValueError):
+        return default
+
+
+def _write_agent_json_unlocked(path, value):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    fd, tmp = tempfile.mkstemp(prefix="agent-state-", suffix=".tmp",
+                               dir=os.path.dirname(path))
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(value, f, ensure_ascii=False, indent=2)
+            f.write("\n")
+        os.chmod(tmp, 0o600)
+        os.replace(tmp, path)
+    finally:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+
+
+def _history_update_unlocked(event_id, new_status, **extra):
+    history = _read_agent_json_unlocked(_AGENT_HISTORY_PATH, [])
+    found = None
+    for item in history:
+        if str(item.get("id")) == str(event_id):
+            found = item
+            break
+    if found is None:
+        found = {"id": str(event_id), "project": PROJECT}
+        history.append(found)
+    found.update(extra)
+    found["status"] = new_status
+    found["statusAt"] = time.time()
+    del history[:-500]
+    _write_agent_json_unlocked(_AGENT_HISTORY_PATH, history)
+
+
+def _public_event(item):
+    allowed = ("id", "ts", "type", "path", "page", "selection", "comment", "notes",
+               "original", "source", "region", "anchor", "restoredFrom",
+               "status", "statusAt", "destination", "destinationLabel",
+               "action", "batchId", "held", "claimedBy", "claimedAt", "result", "error")
+    return {key: item.get(key) for key in allowed if item.get(key) is not None}
+
+
+def register_agent_consumer(consumer, destination=None, label=None, thread_id=None,
+                            automatic=None, pid=None):
+    consumer = str(consumer or "").strip()[:200]
+    destination = str(destination or consumer).strip()[:240]
+    if not consumer or not destination:
+        raise ValueError("consumer and destination are required")
+    now = time.time()
+    with _AGENT_INBOX_LOCK:
+        consumers = _read_agent_json_unlocked(_AGENT_CONSUMERS_PATH, {})
+        current = consumers.get(destination) if isinstance(consumers.get(destination), dict) else {}
+        current.update({
+            "id": destination,
+            "consumer": consumer,
+            "label": str(label or current.get("label") or "Codex task")[:160],
+            "threadId": str(thread_id or current.get("threadId") or "")[:120] or None,
+            "pid": int(pid) if str(pid or "").isdigit() else current.get("pid"),
+            "lastSeen": now,
+        })
+        if automatic is not None:
+            current["automatic"] = bool(automatic)
+        else:
+            current.setdefault("automatic", False)
+        consumers[destination] = current
+        # Forget dead ephemeral MCP consumers after seven days, while preserving
+        # thread-backed destinations that the user may intentionally resume later.
+        consumers = {key: value for key, value in consumers.items()
+                     if value.get("threadId") or float(value.get("lastSeen") or 0) > now - 604800}
+        _write_agent_json_unlocked(_AGENT_CONSUMERS_PATH, consumers)
+        return dict(current)
+
+
+def get_agent_consumers(active_seconds=180):
+    now = time.time()
+    with _AGENT_INBOX_LOCK:
+        consumers = _read_agent_json_unlocked(_AGENT_CONSUMERS_PATH, {})
+    result = []
+    for value in consumers.values():
+        if not isinstance(value, dict):
+            continue
+        item = dict(value)
+        process_online = False
+        try:
+            if item.get("pid"):
+                os.kill(int(item["pid"]), 0)
+                process_online = True
+        except (OSError, TypeError, ValueError):
+            process_online = False
+        item["online"] = process_online or float(item.get("lastSeen") or 0) > now - active_seconds
+        result.append(item)
+    return sorted(result, key=lambda item: float(item.get("lastSeen") or 0), reverse=True)
+
+
+def _public_consumer(item):
+    allowed = ("id", "label", "lastSeen", "online", "automatic", "wakeState",
+               "lastWake", "lastWakeFinished", "wakeError")
+    return {key: item.get(key) for key in allowed if item.get(key) is not None}
+
+
+def set_agent_consumer_preferences(destination, automatic=None, label=None):
+    destination = str(destination or "").strip()[:240]
+    with _AGENT_INBOX_LOCK:
+        consumers = _read_agent_json_unlocked(_AGENT_CONSUMERS_PATH, {})
+        current = consumers.get(destination)
+        if not isinstance(current, dict):
+            raise ValueError("unknown destination")
+        if automatic is not None:
+            current["automatic"] = bool(automatic)
+        if isinstance(label, str) and label.strip():
+            current["label"] = label.strip()[:160]
+        consumers[destination] = current
+        _write_agent_json_unlocked(_AGENT_CONSUMERS_PATH, consumers)
+        return dict(current)
+
+
+def enqueue_agent_annotation(payload):
+    event = dict(payload)
+    event["id"] = f"{int(time.time() * 1000)}-{secrets.token_hex(4)}"
+    event["ts"] = time.time()
+    event["project"] = PROJECT
+    event["status"] = "staged" if event.get("held") else "queued"
+    event["statusAt"] = event["ts"]
+    with _AGENT_INBOX_LOCK:
+        items = _read_agent_inbox_unlocked()
+        if len(items) >= 100:
+            raise RuntimeError("agent inbox is full; acknowledge pending annotations first")
+        items.append(event)
+        _write_agent_inbox_unlocked(items)
+        _history_update_unlocked(event["id"], event["status"], **_public_event(event))
+    if event["status"] == "queued":
+        _schedule_automatic_agent(event)
+    return event
+
+
+def get_agent_annotations():
+    with _AGENT_INBOX_LOCK:
+        return _read_agent_inbox_unlocked()
+
+
+def claim_agent_annotations(consumer, destination=None, lease_seconds=300):
+    now = time.time()
+    destination = str(destination or consumer)
+    with _AGENT_INBOX_LOCK:
+        items = _read_agent_inbox_unlocked()
+        changed = False
+        claimed = []
+        for item in items:
+            if item.get("status") == "staged" or item.get("held"):
+                continue
+            target = item.get("destination")
+            if target not in (None, "", "auto", destination):
+                continue
+            owner = item.get("claimedBy")
+            claimed_at = float(item.get("claimedAt") or 0)
+            if not owner or claimed_at < now - lease_seconds:
+                item["claimedBy"] = consumer
+                item["claimedAt"] = now
+                item["status"] = "received"
+                item["statusAt"] = now
+                owner = consumer
+                changed = True
+            if owner == consumer:
+                claimed.append(item)
+        if changed:
+            _write_agent_inbox_unlocked(items)
+            for item in claimed:
+                _history_update_unlocked(item["id"], "received", **_public_event(item))
+        return claimed
+
+
+def acknowledge_agent_annotations(ids, consumer):
+    wanted = {str(value) for value in ids}
+    with _AGENT_INBOX_LOCK:
+        items = _read_agent_inbox_unlocked()
+        kept = [item for item in items
+                if not (str(item.get("id")) in wanted and item.get("claimedBy") == consumer)]
+        removed = len(items) - len(kept)
+        if removed:
+            _write_agent_inbox_unlocked(kept)
+            for item in items:
+                if str(item.get("id")) in wanted and item.get("claimedBy") == consumer:
+                    _history_update_unlocked(item["id"], "acknowledged", **_public_event(item))
+        return removed
+
+
+def update_agent_annotation_status(ids, status, result="", error=""):
+    allowed = {"queued", "received", "processing", "completed", "failed", "cancelled"}
+    if status not in allowed:
+        raise ValueError("invalid annotation status")
+    wanted = {str(value) for value in ids}
+    with _AGENT_INBOX_LOCK:
+        history = _read_agent_json_unlocked(_AGENT_HISTORY_PATH, [])
+        changed = 0
+        for item in history:
+            if str(item.get("id")) not in wanted:
+                continue
+            item["status"] = status
+            item["statusAt"] = time.time()
+            if result:
+                item["result"] = str(result)[:2000]
+            if error:
+                item["error"] = str(error)[:2000]
+            changed += 1
+        if changed:
+            _write_agent_json_unlocked(_AGENT_HISTORY_PATH, history)
+        return changed
+
+
+def release_agent_batch(batch_id):
+    batch_id = str(batch_id or "").strip()[:120]
+    released = []
+    with _AGENT_INBOX_LOCK:
+        items = _read_agent_inbox_unlocked()
+        for item in items:
+            if item.get("batchId") != batch_id or not item.get("held"):
+                continue
+            item["held"] = False
+            item["status"] = "queued"
+            item["statusAt"] = time.time()
+            released.append(dict(item))
+        if released:
+            _write_agent_inbox_unlocked(items)
+            for item in released:
+                _history_update_unlocked(item["id"], "queued", **_public_event(item))
+    for item in released[:1]:
+        _schedule_automatic_agent(item)
+    return released
+
+
+def cancel_agent_batch(batch_id):
+    batch_id = str(batch_id or "").strip()[:120]
+    with _AGENT_INBOX_LOCK:
+        items = _read_agent_inbox_unlocked()
+        cancelled = [dict(item) for item in items
+                     if item.get("batchId") == batch_id and item.get("held")]
+        if cancelled:
+            kept = [item for item in items
+                    if not (item.get("batchId") == batch_id and item.get("held"))]
+            _write_agent_inbox_unlocked(kept)
+            for item in cancelled:
+                _history_update_unlocked(item["id"], "cancelled", **_public_event(item))
+        return cancelled
+
+
+def release_agent_annotations(ids, destination):
+    """Move selected banked annotations to one explicit Codex task."""
+    wanted = {str(value) for value in (ids or [])}
+    destination = str(destination or "").strip()[:240]
+    matched = next((item for item in get_agent_consumers(active_seconds=86400 * 30)
+                    if item.get("id") == destination), None)
+    if not wanted:
+        raise ValueError("ids are required")
+    if not matched:
+        raise ValueError("unknown destination")
+    released = []
+    with _AGENT_INBOX_LOCK:
+        items = _read_agent_inbox_unlocked()
+        for item in items:
+            if str(item.get("id")) not in wanted:
+                continue
+            if item.get("claimedBy") or not (item.get("held") or item.get("status") == "staged"):
+                continue
+            item["destination"] = destination
+            item["destinationLabel"] = matched.get("label")
+            item["held"] = False
+            item["batchId"] = None
+            item["status"] = "queued"
+            item["statusAt"] = time.time()
+            released.append(dict(item))
+        if released:
+            _write_agent_inbox_unlocked(items)
+            for item in released:
+                _history_update_unlocked(item["id"], "queued", **_public_event(item))
+    for item in released:
+        _schedule_automatic_agent(item)
+    return released
+
+
+def delete_agent_annotations(ids):
+    """Delete selected unsent annotations from the project bank."""
+    wanted = {str(value) for value in (ids or [])}
+    if not wanted:
+        raise ValueError("ids are required")
+    with _AGENT_INBOX_LOCK:
+        items = _read_agent_inbox_unlocked()
+        deleted = [dict(item) for item in items
+                   if str(item.get("id")) in wanted and not item.get("claimedBy")
+                   and (item.get("held") or item.get("status") == "staged")]
+        if deleted:
+            deleted_ids = {str(item["id"]) for item in deleted}
+            _write_agent_inbox_unlocked(
+                [item for item in items if str(item.get("id")) not in deleted_ids]
+            )
+            for item in deleted:
+                _history_update_unlocked(item["id"], "cancelled", **_public_event(item))
+        return deleted
+
+
+def restore_agent_annotations(ids):
+    """Restore cancelled bank items as new staged events with traceable ids."""
+    wanted = {str(value) for value in (ids or [])}
+    if not wanted:
+        raise ValueError("ids are required")
+    with _AGENT_INBOX_LOCK:
+        history = _read_agent_json_unlocked(_AGENT_HISTORY_PATH, [])
+        source = [dict(item) for item in history
+                  if str(item.get("id")) in wanted and item.get("status") == "cancelled"]
+    restored = []
+    for old in source:
+        payload = {key: value for key, value in _public_event(old).items()
+                   if key not in {"id", "ts", "status", "statusAt", "claimedBy", "claimedAt",
+                                  "result", "error", "destination", "destinationLabel"}}
+        payload.update({"held": True, "action": old.get("action") or "ask",
+                        "restoredFrom": old.get("id")})
+        restored.append(enqueue_agent_annotation(payload))
+    return restored
+
+
+def normalize_agent_notes(value):
+    if not isinstance(value, list):
+        return []
+    notes = []
+    for raw in value[:100]:
+        if not isinstance(raw, dict):
+            continue
+        text = raw.get("text")
+        if not isinstance(text, str):
+            continue
+        notes.append({"n": raw.get("n"), "text": text[:2000]})
+    return notes
+
+
+def normalize_agent_anchor(req, rel):
+    """Produce one portable anchor contract from existing viewer payloads."""
+    raw = req.get("anchor")
+    if isinstance(raw, dict) and isinstance(raw.get("kind"), str):
+        anchor = {"kind": raw["kind"][:80]}
+        for key in ("startLine", "endLine", "startColumn", "endColumn", "page",
+                    "x", "y", "width", "height", "selector"):
+            value = raw.get(key)
+            if isinstance(value, (str, int, float)) and not isinstance(value, bool):
+                anchor[key] = value[:2000] if isinstance(value, str) else value
+        return anchor
+    page = req.get("page")
+    match = re.fullmatch(r"L(\d+)-(\d+)", str(page or ""))
+    if match:
+        return {"kind": "text-range", "startLine": int(match.group(1)),
+                "endLine": int(match.group(2))}
+    region = req.get("region")
+    if isinstance(region, dict):
+        anchor = {"kind": "image-region"}
+        for key in ("x", "y", "width", "height", "selector"):
+            if isinstance(region.get(key), (str, int, float)):
+                value = region[key]
+                anchor[key] = value[:2000] if isinstance(value, str) else value
+        if page not in (None, ""):
+            anchor["page"] = page
+            anchor["kind"] = "pdf-region"
+        return anchor
+    if page not in (None, "", "html"):
+        ext = os.path.splitext(rel or "")[1].lower()
+        return {"kind": "pdf-page" if ext == ".pdf" else "document-location", "page": page}
+    return {"kind": "artifact"}
+
+
+def normalize_agent_delivery(req):
+    action = req.get("action")
+    if action not in ("ask", "apply"):
+        action = "apply" if req.get("direct") else "ask"
+    destination = req.get("destination")
+    destination = destination.strip()[:240] if isinstance(destination, str) else ""
+    consumers = get_agent_consumers(active_seconds=86400 * 30)
+    matched = next((item for item in consumers if item.get("id") == destination), None)
+    if not matched:
+        destination = ""
+    batch_id = req.get("batchId")
+    batch_id = batch_id.strip()[:120] if isinstance(batch_id, str) else ""
+    held = bool(req.get("held"))
+    return {
+        "destination": destination or None,
+        "destinationLabel": matched.get("label") if matched else None,
+        "action": action,
+        "batchId": batch_id or None,
+        "held": held,
+    }
+
+
+def _set_agent_consumer_runtime(destination, **fields):
+    with _AGENT_INBOX_LOCK:
+        consumers = _read_agent_json_unlocked(_AGENT_CONSUMERS_PATH, {})
+        current = consumers.get(destination)
+        if not isinstance(current, dict):
+            return
+        current.update(fields)
+        consumers[destination] = current
+        _write_agent_json_unlocked(_AGENT_CONSUMERS_PATH, consumers)
+
+
+def _schedule_automatic_agent(event):
+    """Wake an explicitly paired Codex task when its user-controlled auto mode is on.
+
+    The worker never uses a bypass flag.  It resumes the selected task under the
+    workspace-write sandbox and lets the task's normal policy decide what can run.
+    """
+    destination = str(event.get("destination") or "").strip()
+    if not destination:
+        return False
+    consumer = next((item for item in get_agent_consumers(active_seconds=86400 * 30)
+                     if item.get("id") == destination), None)
+    thread_id = str((consumer or {}).get("threadId") or "")
+    if not consumer or not consumer.get("automatic") or not re.fullmatch(
+            r"[0-9a-fA-F-]{32,40}", thread_id):
+        return False
+    codex = shutil.which("codex")
+    if not codex:
+        return False
+    with _AGENT_WAKE_LOCK:
+        if destination in _AGENT_WAKE_RUNNING:
+            _AGENT_WAKE_DIRTY.add(destination)
+            return False
+        _AGENT_WAKE_RUNNING.add(destination)
+    _set_agent_consumer_runtime(destination, wakeState="starting", lastWake=time.time())
+
+    def run():
+        prompt = (
+            "Une ou plusieurs annotations Atelier sont en attente pour ce projet. "
+            "Utilise le skill Atelier et atelier_get_selection pour toutes les récupérer. "
+            "Respecte le champ action de chaque annotation: réponds seulement pour ask; "
+            "n'applique une modification que pour apply. Accuse réception, marque le statut "
+            "processing puis completed ou failed, et actualise l'artefact si nécessaire."
+        )
+        succeeded = False
+        try:
+            _set_agent_consumer_runtime(destination, wakeState="running")
+            result = subprocess.run(
+                [codex, "exec", "-C", PROJECT, "-s", "workspace-write",
+                 "resume", thread_id, prompt],
+                cwd=PROJECT, stdin=subprocess.DEVNULL, capture_output=True,
+                text=True, timeout=1800, start_new_session=True,
+            )
+            if result.returncode == 0:
+                succeeded = True
+                _set_agent_consumer_runtime(destination, wakeState="idle",
+                                            lastWakeFinished=time.time(), wakeError="")
+            else:
+                error = (result.stderr or result.stdout or "Codex resume failed")[-1200:]
+                _set_agent_consumer_runtime(destination, wakeState="failed",
+                                            lastWakeFinished=time.time(), wakeError=error)
+        except Exception as error:
+            _set_agent_consumer_runtime(destination, wakeState="failed",
+                                        lastWakeFinished=time.time(), wakeError=str(error)[:1200])
+        finally:
+            with _AGENT_WAKE_LOCK:
+                _AGENT_WAKE_RUNNING.discard(destination)
+                rerun = succeeded and destination in _AGENT_WAKE_DIRTY
+                _AGENT_WAKE_DIRTY.discard(destination)
+            if rerun:
+                with _AGENT_INBOX_LOCK:
+                    pending = next((dict(item) for item in _read_agent_inbox_unlocked()
+                                    if item.get("status") == "queued" and
+                                    item.get("destination") == destination), None)
+                if pending:
+                    _schedule_automatic_agent(pending)
+
+    threading.Thread(target=run, daemon=True, name="atelier-codex-wake").start()
+    return True
 
 
 # ---------------------------------------------------------------------------
@@ -881,6 +1404,68 @@ def write_contact_sheet(out_path, files):
 
 _REBUILD_LOCK = threading.Lock()
 _REBUILD_LAST = [0.0]
+_WATCH_EXTS = set(ARTIFACT_EXTENSIONS)
+_WATCH_EXCLUDED = set(EXCLUDED_DIRECTORIES)
+_WATCH_STATE = {"enabled": os.environ.get("GALLERY_WATCH", "1") != "0",
+                "running": False, "lastScan": 0.0, "lastBuild": 0.0,
+                "lastChanged": [], "error": ""}
+
+
+def _artifact_snapshot(root=None):
+    """Cheap artifact signature used by the dependency-free local watcher."""
+    return artifact_snapshot(root or PROJECT, _WATCH_EXTS, _WATCH_EXCLUDED)
+
+
+def _launch_gallery_rebuild(reason="change", changed=None):
+    """Run one rebuild at a time; return False when a build is already running."""
+    if not _REBUILD_LOCK.acquire(blocking=False):
+        return False
+    _REBUILD_LAST[0] = time.time()
+    changed = list(changed or [])[:50]
+    def run():
+        try:
+            result = subprocess.run(
+                [sys.executable, os.path.join(HERE, "build_gallery.py")],
+                cwd=PROJECT, env=dict(os.environ, GALLERY_ROOT=PROJECT),
+                capture_output=True, text=True, timeout=300, start_new_session=True,
+            )
+            _WATCH_STATE["lastBuild"] = time.time()
+            _WATCH_STATE["lastChanged"] = changed
+            _WATCH_STATE["error"] = "" if result.returncode == 0 else (result.stdout or result.stderr or "build failed")[-500:]
+        except Exception as error:
+            _WATCH_STATE["error"] = str(error)[:500]
+        finally:
+            _REBUILD_LOCK.release()
+    threading.Thread(target=run, daemon=True, name="atelier-gallery-rebuild").start()
+    return True
+
+
+def _start_artifact_watcher(interval=1.5, debounce=1.2):
+    """Watch supported artifacts and rebuild after a short quiet period."""
+    if not _WATCH_STATE["enabled"] or _WATCH_STATE["running"]:
+        return
+    _WATCH_STATE["running"] = True
+    def watch():
+        previous = _artifact_snapshot()
+        pending = set()
+        changed_at = 0.0
+        while True:
+            time.sleep(interval)
+            try:
+                current = _artifact_snapshot()
+                _WATCH_STATE["lastScan"] = time.time()
+                changed = {key for key in set(previous) | set(current)
+                           if previous.get(key) != current.get(key)}
+                previous = current
+                if changed:
+                    pending.update(changed)
+                    changed_at = time.time()
+                if pending and time.time() - changed_at >= debounce:
+                    if _launch_gallery_rebuild("watch", sorted(pending)):
+                        pending.clear()
+            except Exception as error:
+                _WATCH_STATE["error"] = str(error)[:500]
+    threading.Thread(target=watch, daemon=True, name="atelier-artifact-watcher").start()
 
 def _index_stale():
     """L'index du projet est-il plus vieux que le template ou le builder ?"""
@@ -905,19 +1490,7 @@ def _rebuild_if_stale():
     now = time.time()
     if not _index_stale() or now - _REBUILD_LAST[0] < 60:
         return
-    if not _REBUILD_LOCK.acquire(blocking=False):
-        return
-    _REBUILD_LAST[0] = now
-    def run():
-        try:
-            subprocess.run([sys.executable, os.path.join(HERE, "build_gallery.py")],
-                           cwd=PROJECT, env=dict(os.environ, GALLERY_ROOT=PROJECT),
-                           capture_output=True, timeout=300, start_new_session=True)
-        except Exception:
-            pass
-        finally:
-            _REBUILD_LOCK.release()
-    threading.Thread(target=run, daemon=True).start()
+    _launch_gallery_rebuild("source")
 
 # ---- Historique de versions + git (parité avec le serveur Node d'Atelier
 # Studio, gallery/server/routes/editors.mjs). Même layout de stockage
@@ -1165,6 +1738,21 @@ class Handler(SimpleHTTPRequestHandler):
         # webviews (Studio) : ne jamais servir de JS/HTML périmé
         if self.path.endswith((".js", ".html")) or self.path == "/":
             self.send_header("Cache-Control", "no-cache")
+        # In Codex mode, project-authored HTML/SVG is untrusted content.  Give it
+        # an opaque sandboxed origin so it cannot call the gallery control API.
+        clean = self.path.split("?", 1)[0].split("#", 1)[0]
+        trusted = clean in ("/", "/figures_index.html")
+        if clean.startswith("/.fig_thumbs/"):
+            rel = clean[len("/.fig_thumbs/"):]
+            candidate = os.path.realpath(os.path.join(ASSETS_DIR, rel))
+            assets_root = os.path.realpath(ASSETS_DIR)
+            trusted = ((candidate == assets_root or candidate.startswith(assets_root + os.sep)) and
+                       os.path.isfile(candidate))
+        content_type = mimetypes.guess_type(clean)[0]
+        executable_document = content_type in ("text/html", "application/xhtml+xml", "image/svg+xml")
+        if CODEX_PREVIEW and not trusted and executable_document:
+            self.send_header("Content-Security-Policy",
+                             "sandbox allow-scripts allow-forms allow-modals allow-popups")
         super().end_headers()
 
     def __init__(self, *a, **kw):
@@ -1198,6 +1786,12 @@ class Handler(SimpleHTTPRequestHandler):
         except Exception:
             return False
         return host in ("127.0.0.1", "localhost", "::1")
+
+    def _agent_authorized(self):
+        if not CODEX_PREVIEW or not AGENT_TOKEN:
+            return False
+        supplied = self.headers.get("Authorization") or ""
+        return secrets.compare_digest(supplied, "Bearer " + AGENT_TOKEN)
 
     def _safe_path(self, p):
         p = os.path.expanduser(p)
@@ -1442,7 +2036,7 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._respond(200, {"collections": [], "error": str(e)})
             except Exception as e:
                 return self._respond(500, {"error": str(e)})
-        if self.path.startswith("/claude-events"):
+        if self.path.startswith(("/claude-events", "/agent-events")):
             from urllib.parse import urlparse, parse_qs
             q = parse_qs(urlparse(self.path).query)
             since = int((q.get("since") or ["0"])[0] or 0)
@@ -1450,6 +2044,50 @@ class Handler(SimpleHTTPRequestHandler):
                 evs = [e for e in _CLAUDE_EVENTS if e["id"] > since]
                 last = _CLAUDE_EVENTS[-1]["id"] if _CLAUDE_EVENTS else 0
             return self._respond(200, {"events": evs, "last": last})
+        if self.path.split("?", 1)[0] == "/agent-status":
+            if not self._local_only():
+                return self._respond(403, {"error": "loopback origin required"})
+            from urllib.parse import urlparse, parse_qs
+            q = parse_qs(urlparse(self.path).query)
+            try:
+                limit = max(1, min(200, int((q.get("limit") or ["50"])[0])))
+            except ValueError:
+                limit = 50
+            with _AGENT_INBOX_LOCK:
+                pending = _read_agent_inbox_unlocked()
+                history = _read_agent_json_unlocked(_AGENT_HISTORY_PATH, [])
+            return self._respond(200, {
+                "ok": True,
+                "agentHost": AGENT_HOST or None,
+                "consumers": [_public_consumer(item) for item in get_agent_consumers()],
+                "pending": [_public_event(item) for item in pending],
+                "history": [_public_event(item) for item in history[-limit:]][::-1],
+                "counts": {
+                    "staged": sum(1 for item in pending if item.get("status") == "staged"),
+                    "queued": sum(1 for item in pending if item.get("status") != "staged"),
+                },
+            })
+        if self.path.split("?", 1)[0] == "/agent-selections":
+            if not self._local_only() or not self._agent_authorized():
+                return self._respond(403, {"error": "agent authorization required"})
+            from urllib.parse import urlparse, parse_qs
+            q = parse_qs(urlparse(self.path).query)
+            consumer = (q.get("consumer") or [""])[0].strip()[:200]
+            destination = (q.get("destination") or [consumer])[0].strip()[:240]
+            if not consumer:
+                return self._respond(400, {"error": "consumer is required"})
+            items = claim_agent_annotations(consumer, destination=destination)
+            return self._respond(200, {"items": items, "count": len(items)})
+        if self.path == "/agent-selection":
+            if not self._local_only() or not self._agent_authorized():
+                return self._respond(403, {"error": "agent authorization required"})
+            items = get_agent_annotations()
+            return self._respond(200, {
+                "ok": True,
+                "usage": "POST an annotation here; Codex reads it through the Atelier MCP tool",
+                "pending": len(items),
+                "latest": items[-1] if items else None,
+            })
         if self.path == "/data":
             # figures_data.json brut (parité serveur Node Atelier) : rafraîchissement
             # live du template sans rebuild de figures_index.html.
@@ -1773,9 +2411,13 @@ class Handler(SimpleHTTPRequestHandler):
                 store = {}
             return self._respond(200, {"annots": store.get(rel, [])})
         if self.path == "/ping":
-            return self._respond(200, {"ok": True, "service": "fig-annotate",
+                return self._respond(200, {"ok": True, "service": "fig-annotate",
                                        "project": os.path.realpath(PROJECT),
-                                       "claudePreview": CLAUDE_PREVIEW})
+                                       "claudePreview": CLAUDE_PREVIEW,
+                                       "agentHost": AGENT_HOST or None,
+                                       "agentBridgeProtocol": AGENT_BRIDGE_PROTOCOL,
+                                       "agentInbox": len(get_agent_annotations()),
+                                       "watcher": dict(_WATCH_STATE)})
         if self.path == "/rev":
             # build revision = mtime of the generated index; bumps on every rescan/rebuild,
             # so the open gallery can auto-reload after Claude edits + rescans
@@ -1836,6 +2478,22 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._respond(400, {"error": "bad request: " + str(e)})
             except Exception as e:
                 return self._respond(500, {"error": str(e)})
+        if self.path.startswith("/provenance?"):
+            try:
+                if not self._local_only():
+                    return self._respond(403, {"error": "cross-origin blocked"})
+                from urllib.parse import parse_qs, urlparse
+                rel = (parse_qs(urlparse(self.path).query).get("rel", [""])[0] or "").strip()
+                dp = os.path.join(PROJECT, "figures_data.json")
+                with open(dp, encoding="utf-8") as f:
+                    data = json.load(f)
+                row = next((item for item in data.get("files", []) if item.get("rel") == rel), None)
+                if not row:
+                    return self._respond(404, {"error": "artifact not found"})
+                return self._respond(200, {"ok": True, "rel": rel,
+                                           "provenance": row.get("provenance")})
+            except (OSError, ValueError, json.JSONDecodeError) as e:
+                return self._respond(400, {"error": str(e)})
         from urllib.parse import urlparse as _up
         if os.path.splitext(_up(self.path).path)[1].lower() in VIDEO_EXTS:
             return self._serve_video()
@@ -1887,17 +2545,113 @@ class Handler(SimpleHTTPRequestHandler):
             if not new_annots and store.get(rel_key):
                 try:
                     bak = store_path + ".bak"
-                    with open(bak, "w") as bf:
-                        json.dump(store, bf)
+                    _write_file_atomic(bak, json.dumps(store, ensure_ascii=False).encode("utf-8"))
                 except Exception:
                     pass
             store[rel_key] = new_annots
-            os.makedirs(os.path.dirname(store_path), exist_ok=True)
-            with open(store_path, "w") as f:
-                json.dump(store, f)
+            _write_file_atomic(
+                store_path,
+                (json.dumps(store, ensure_ascii=False, indent=2) + "\n").encode("utf-8"),
+            )
             return self._respond(200, {"ok": True})
         if not self._local_only():
             return self._respond(403, {"error": "cross-origin blocked"})
+        if self.path == "/agent-consumers/register":
+            if not self._agent_authorized():
+                return self._respond(403, {"error": "agent authorization required"})
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+                req = json.loads(self.rfile.read(length))
+                result = register_agent_consumer(
+                    req.get("consumer"), req.get("destination"), req.get("label"),
+                    req.get("threadId"), req.get("automatic") if "automatic" in req else None,
+                    req.get("pid"),
+                )
+                return self._respond(200, {"ok": True, "destination": result})
+            except (ValueError, json.JSONDecodeError) as e:
+                return self._respond(400, {"error": str(e)})
+        if self.path == "/agent-annotations/status":
+            if not self._agent_authorized():
+                return self._respond(403, {"error": "agent authorization required"})
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+                req = json.loads(self.rfile.read(length))
+                ids = req.get("ids")
+                if not isinstance(ids, list) or not ids or len(ids) > 100:
+                    return self._respond(400, {"error": "ids are required"})
+                changed = update_agent_annotation_status(
+                    ids, str(req.get("status") or ""), req.get("result") or "",
+                    req.get("error") or "",
+                )
+                return self._respond(200, {"ok": True, "updated": changed})
+            except (ValueError, json.JSONDecodeError) as e:
+                return self._respond(400, {"error": str(e)})
+        if self.path == "/agent-preferences":
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+                req = json.loads(self.rfile.read(length))
+                result = set_agent_consumer_preferences(
+                    req.get("destination"),
+                    req.get("automatic") if "automatic" in req else None,
+                    req.get("label"),
+                )
+                return self._respond(200, {"ok": True, "destination": result})
+            except (ValueError, json.JSONDecodeError) as e:
+                return self._respond(400, {"error": str(e)})
+        if self.path == "/agent-annotations/release":
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+                req = json.loads(self.rfile.read(length))
+                ids = req.get("ids") if isinstance(req, dict) else None
+                if not isinstance(ids, list) or not ids or len(ids) > 100:
+                    return self._respond(400, {"error": "ids are required"})
+                released = release_agent_annotations(ids, req.get("destination"))
+                return self._respond(200, {"ok": True, "released": len(released),
+                                           "ids": [item["id"] for item in released]})
+            except (ValueError, json.JSONDecodeError) as e:
+                return self._respond(400, {"error": str(e)})
+        if self.path == "/agent-annotations/delete":
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+                req = json.loads(self.rfile.read(length))
+                ids = req.get("ids") if isinstance(req, dict) else None
+                if not isinstance(ids, list) or not ids or len(ids) > 100:
+                    return self._respond(400, {"error": "ids are required"})
+                deleted = delete_agent_annotations(ids)
+                return self._respond(200, {"ok": True, "deleted": len(deleted),
+                                           "ids": [item["id"] for item in deleted]})
+            except (ValueError, json.JSONDecodeError) as e:
+                return self._respond(400, {"error": str(e)})
+        if self.path == "/agent-annotations/restore":
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+                req = json.loads(self.rfile.read(length))
+                ids = req.get("ids") if isinstance(req, dict) else None
+                if not isinstance(ids, list) or not ids or len(ids) > 100:
+                    return self._respond(400, {"error": "ids are required"})
+                restored = restore_agent_annotations(ids)
+                return self._respond(200, {"ok": True, "restored": len(restored),
+                                           "ids": [item["id"] for item in restored]})
+            except (ValueError, json.JSONDecodeError) as e:
+                return self._respond(400, {"error": str(e)})
+        if self.path == "/agent-batches/release":
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+                req = json.loads(self.rfile.read(length))
+                released = release_agent_batch(req.get("batchId"))
+                return self._respond(200, {"ok": True, "released": len(released),
+                                           "ids": [item["id"] for item in released]})
+            except (ValueError, json.JSONDecodeError) as e:
+                return self._respond(400, {"error": str(e)})
+        if self.path == "/agent-batches/cancel":
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+                req = json.loads(self.rfile.read(length))
+                cancelled = cancel_agent_batch(req.get("batchId"))
+                return self._respond(200, {"ok": True, "cancelled": len(cancelled),
+                                           "ids": [item["id"] for item in cancelled]})
+            except (ValueError, json.JSONDecodeError) as e:
+                return self._respond(400, {"error": str(e)})
         if self.path == "/orca-fullscreen-exit":
             try:
                 result = orca_fullscreen_exit()
@@ -2236,6 +2990,33 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._respond(400, {"error": "bad request: " + str(e)})
             except Exception as e:
                 return self._respond(500, {"error": str(e)})
+        if self.path == "/regenerate":
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+                req = json.loads(self.rfile.read(length))
+                rel = req.get("rel") if isinstance(req, dict) else None
+                if not isinstance(rel, str):
+                    return self._respond(400, {"error": "rel is required"})
+                dp = os.path.join(PROJECT, "figures_data.json")
+                with open(dp, encoding="utf-8") as f:
+                    data = json.load(f)
+                row = next((item for item in data.get("files", []) if item.get("rel") == rel), None)
+                provenance = row.get("provenance") if isinstance(row, dict) else None
+                command = provenance.get("command") if isinstance(provenance, dict) else None
+                if not (isinstance(command, list) and 0 < len(command) <= 32 and
+                        all(isinstance(arg, str) and 0 < len(arg) <= 2000 for arg in command)):
+                    return self._respond(409, {"error": "no declared argv command for this artifact"})
+                result = subprocess.run(command, cwd=PROJECT, capture_output=True, text=True,
+                                        timeout=900, start_new_session=True)
+                output = ((result.stdout or "") + (result.stderr or ""))[-6000:]
+                if result.returncode == 0:
+                    _launch_gallery_rebuild("regenerate", [rel])
+                return self._respond(200, {"ok": result.returncode == 0,
+                                           "returncode": result.returncode, "output": output})
+            except subprocess.TimeoutExpired:
+                return self._respond(408, {"error": "regeneration timed out"})
+            except (OSError, ValueError, json.JSONDecodeError) as e:
+                return self._respond(400, {"error": str(e)})
         if self.path == "/delete":
             try:
                 length = int(self.headers.get("Content-Length", 0))
@@ -2529,7 +3310,7 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._respond(200, zotero_add_pdf(name, data))
             except Exception as e:
                 return self._respond(500, {"error": str(e)})
-        if self.path == "/claude-event":
+        if self.path in ("/claude-event", "/agent-event"):
             try:
                 length = int(self.headers.get("Content-Length", 0))
                 req = json.loads(self.rfile.read(length))
@@ -2550,23 +3331,121 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._respond(400, {"error": "bad request: " + str(e)})
             except Exception as e:
                 return self._respond(500, {"error": str(e)})
-        if self.path == "/quote":
+        if self.path == "/agent-selections/ack":
+            if not self._agent_authorized():
+                return self._respond(403, {"error": "agent authorization required"})
             try:
                 length = int(self.headers.get("Content-Length", 0))
                 req = json.loads(self.rfile.read(length))
-                pdf = os.path.join(PROJECT, req["rel"])
+                ids = req.get("ids") if isinstance(req, dict) else None
+                consumer = req.get("consumer") if isinstance(req, dict) else None
+                if (not isinstance(ids, list) or len(ids) > 100 or
+                        not isinstance(consumer, str) or not consumer.strip()):
+                    return self._respond(400, {"error": "consumer and ids are required"})
+                removed = acknowledge_agent_annotations(ids, consumer.strip()[:200])
+                return self._respond(200, {"ok": True, "acknowledged": removed})
+            except (ValueError, json.JSONDecodeError) as e:
+                return self._respond(400, {"error": "bad request: " + str(e)})
+        if self.path == "/agent-selection":
+            try:
+                if not self._agent_authorized():
+                    return self._respond(403, {"error": "agent authorization required"})
+                length = int(self.headers.get("Content-Length", 0))
+                if length <= 0 or length > 1024 * 1024:
+                    return self._respond(400, {"error": "bad size"})
+                req = json.loads(self.rfile.read(length))
+                if not isinstance(req, dict):
+                    return self._respond(400, {"error": "JSON object required"})
+                raw_rel = req.get("path") or req.get("rel") or ""
+                if not isinstance(raw_rel, str):
+                    return self._respond(400, {"error": "path must be a string"})
+                requested_path = raw_rel.strip()
+                full = self._safe_path(requested_path) if requested_path else None
+                if not full or not os.path.isfile(full):
+                    return self._respond(404, {"error": "file not found: " + requested_path})
+                rel = os.path.relpath(full, PROJECT).replace(os.sep, "/")
+                raw_source = req.get("source") or ""
+                if not isinstance(raw_source, str):
+                    return self._respond(400, {"error": "source must be a string"})
+                source = raw_source.strip()
+                if source:
+                    source_full = self._safe_path(source)
+                    source = (os.path.relpath(source_full, PROJECT).replace(os.sep, "/")
+                              if source_full and os.path.isfile(source_full) else "")
+                raw_type = req.get("type") or "annotation"
+                raw_comment = req.get("comment") or ""
+                if not isinstance(raw_type, str) or not isinstance(raw_comment, str):
+                    return self._respond(400, {"error": "type and comment must be strings"})
+                event = enqueue_agent_annotation({
+                    "type": raw_type[:80],
+                    "path": rel,
+                    "source": source or None,
+                    "comment": raw_comment.strip()[:10000],
+                    "region": req.get("region") if isinstance(req.get("region"), dict) else None,
+                    "anchor": normalize_agent_anchor(req, rel),
+                    "notes": normalize_agent_notes(req.get("notes")),
+                    "requestedDirect": bool(req.get("direct")),
+                    **normalize_agent_delivery(req),
+                })
+                return self._respond(200, {"ok": True, "queuedForAgent": True,
+                                           "id": event["id"]})
+            except (ValueError, json.JSONDecodeError) as e:
+                return self._respond(400, {"error": "bad request: " + str(e)})
+            except Exception as e:
+                return self._respond(500, {"error": str(e)})
+        if self.path == "/quote":
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+                if length <= 0 or length > 1024 * 1024:
+                    return self._respond(400, {"error": "bad size"})
+                req = json.loads(self.rfile.read(length))
+                if not isinstance(req, dict):
+                    return self._respond(400, {"error": "JSON object required"})
+                raw_rel = req.get("rel")
+                raw_text = req.get("text")
+                if not isinstance(raw_rel, str) or not isinstance(raw_text, str):
+                    return self._respond(400, {"error": "rel and text must be strings"})
+                # Studio viewers receive an absolute project path in their query
+                # string.  _safe_path already accepts both absolute and
+                # project-relative paths while enforcing the project boundary;
+                # stripping the leading slash turned valid absolute paths into
+                # nonexistent project-relative ones.
+                full = self._safe_path(raw_rel.strip())
+                if not full or not os.path.isfile(full):
+                    return self._respond(404, {"error": "file not found"})
+                rel = os.path.relpath(full, PROJECT).replace(os.sep, "/")
+                text = raw_text.strip()[:100000]
+                if not text:
+                    return self._respond(400, {"error": "text is required"})
+                req["rel"] = rel
+                req["text"] = text
+                pdf = full
                 page = req.get("page")
                 loc = f" (p.{page})" if page not in (None, "", "html") else ""
-                msg = f"{pdf}{loc} : \u00ab {req['text'].strip()} \u00bb "
-                comment = (req.get("comment") or "").strip()
+                msg = f"{pdf}{loc} : \u00ab {text} \u00bb "
+                raw_comment = req.get("comment") or ""
+                if not isinstance(raw_comment, str):
+                    return self._respond(400, {"error": "comment must be a string"})
+                comment = raw_comment.strip()[:10000]
                 if comment:
                     msg = msg.rstrip() + f"\nCommentaire : {comment}"
                 direct = bool(req.get("direct"))
+                agent_event = (enqueue_agent_annotation({
+                    "type": "text_annotation",
+                    "path": req["rel"],
+                    "page": page,
+                    "selection": text,
+                    "comment": comment,
+                    "anchor": normalize_agent_anchor(req, rel),
+                    "message": msg,
+                    "requestedDirect": direct,
+                    **normalize_agent_delivery(req),
+                }) if CODEX_PREVIEW else None)
                 # Composer line kept short: the full payload lives in
                 # ~/.claude/fig-last-quote.txt, which the annotation skill reads.
                 short = (f"✏️ Regarde mon annotation ({os.path.basename(req['rel'])}{loc}"
                          + (", avec commentaire" if comment else "") + ") et agis en conséquence.")
-                if not STUDIO:
+                if not (STUDIO or CODEX_PREVIEW):
                     subprocess.run("pbcopy", input=msg.encode(), timeout=5)
                     with open(os.path.expanduser("~/.claude/fig-last-quote.txt"), "w") as f:
                         f.write(msg)
@@ -2575,7 +3454,11 @@ class Handler(SimpleHTTPRequestHandler):
                     # postMessage (Atelier) ; en Claude preview le presse-papier +
                     # ~/.claude/fig-last-quote.txt sont déjà remplis ci-dessus.
                     return self._respond(200, {"embedded": True, "message": msg,
-                                               "claudePreview": CLAUDE_PREVIEW})
+                                               "claudePreview": CLAUDE_PREVIEW,
+                                               "agentHost": AGENT_HOST or None,
+                                               "queuedForAgent": bool(agent_event),
+                                               "agentSelectionId": agent_event["id"] if agent_event else None,
+                                               "agentSelectionStatus": agent_event.get("status") if agent_event else None})
                 sent = False
                 tgt = req.get("target")
                 if isinstance(tgt, dict):
@@ -2607,8 +3490,13 @@ class Handler(SimpleHTTPRequestHandler):
                             args.append("--enter")
                         r = subprocess.run(args, capture_output=True, timeout=5)
                         sent = r.returncode == 0
-                return self._respond(200, {"sentToClaude": sent, "clipboard": True,
-                                           "submitted": sent and direct})
+                return self._respond(200, {"sentToClaude": sent,
+                                           "clipboard": not CODEX_PREVIEW,
+                                           "submitted": sent and direct,
+                                           "agentHost": AGENT_HOST or None,
+                                           "queuedForAgent": bool(agent_event),
+                                           "agentSelectionId": agent_event["id"] if agent_event else None,
+                                           "agentSelectionStatus": agent_event.get("status") if agent_event else None})
             except (KeyError, ValueError, json.JSONDecodeError) as e:
                 return self._respond(400, {"error": "bad request: " + str(e)})
             except Exception as e:
@@ -2617,16 +3505,24 @@ class Handler(SimpleHTTPRequestHandler):
             return self._respond(404, {"error": "not found"})
         try:
             length = int(self.headers.get("Content-Length", 0))
+            if length <= 0 or length > 64 * 1024 * 1024:
+                return self._respond(400, {"error": "bad size"})
             req = json.loads(self.rfile.read(length))
+            if not isinstance(req, dict) or not isinstance(req.get("name"), str) or \
+                    not isinstance(req.get("dataURL"), str):
+                return self._respond(400, {"error": "name and dataURL are required"})
             name = re.sub(r"[^A-Za-z0-9_.-]", "_", os.path.splitext(req["name"])[0])
-            raw = base64.b64decode(req["dataURL"].split(",", 1)[1])  # decode FIRST: a bad dataURL must not leave a 0-byte orphan
+            encoded = req["dataURL"].split(",", 1)
+            if len(encoded) != 2 or not encoded[0].startswith("data:image/png;base64"):
+                return self._respond(400, {"error": "PNG dataURL required"})
+            raw = base64.b64decode(encoded[1], validate=True)  # decode FIRST: a bad dataURL must not leave a 0-byte orphan
             os.makedirs(OUT_DIR, exist_ok=True)
             stamp = time.strftime("%Y%m%d-%H%M%S")
             path = os.path.join(OUT_DIR, f"{name}_annot_{stamp}.png")
             with open(path, "wb") as f:
                 f.write(raw)
 
-            notes = req.get("notes") or []
+            notes = normalize_agent_notes(req.get("notes"))
             direct = bool(req.get("direct"))
             msg = path
             if notes:
@@ -2638,13 +3534,31 @@ class Handler(SimpleHTTPRequestHandler):
                 msg += ("\nApplique directement ces annotations : retrouve le script qui genere "
                         "cette figure, fais les corrections demandees et regenere la figure.")
 
-            if not STUDIO:
+            rel_path = os.path.relpath(path, PROJECT).replace(os.sep, "/")
+            agent_event = (enqueue_agent_annotation({
+                "type": "image_annotation",
+                "path": rel_path,
+                "original": req.get("name"),
+                "notes": notes,
+                "anchor": {"kind": "image-region", "x": 0, "y": 0,
+                           "width": 1, "height": 1},
+                "message": msg,
+                "requestedDirect": direct,
+                **normalize_agent_delivery(req),
+            }) if CODEX_PREVIEW else None)
+
+            if not (STUDIO or CODEX_PREVIEW):
                 subprocess.run("pbcopy", input=msg.encode(), timeout=5)
                 with open(os.path.expanduser("~/.claude/fig-last-quote.txt"), "w") as f:
                     f.write(msg)
             if req.get("embed") or STUDIO:
                 return self._respond(200, {"embedded": True, "message": msg,
-                                           "claudePreview": CLAUDE_PREVIEW, "path": path})
+                                           "claudePreview": CLAUDE_PREVIEW,
+                                           "agentHost": AGENT_HOST or None,
+                                           "queuedForAgent": bool(agent_event),
+                                           "agentSelectionId": agent_event["id"] if agent_event else None,
+                                           "agentSelectionStatus": agent_event.get("status") if agent_event else None,
+                                           "path": path})
             # Composer line kept short: the full payload (path + numbered notes +
             # instruction) lives in fig-last-quote.txt, which the annotation skill reads.
             nb = len(notes)
@@ -2690,12 +3604,19 @@ class Handler(SimpleHTTPRequestHandler):
                     pass
             threading.Thread(target=push, daemon=True).start()
 
-            self._respond(200, {"path": path, "sentToClaude": True,
-                                "clipboard": True, "submitted": direct})
+            self._respond(200, {"path": path,
+                                "sentToClaude": False if CODEX_PREVIEW else True,
+                                "clipboard": not CODEX_PREVIEW,
+                                "submitted": False if CODEX_PREVIEW else direct,
+                                "agentHost": AGENT_HOST or None,
+                                "queuedForAgent": bool(agent_event),
+                                "agentSelectionId": agent_event["id"] if agent_event else None,
+                                "agentSelectionStatus": agent_event.get("status") if agent_event else None})
         except Exception as e:
             self._respond(500, {"error": str(e)})
 
 
 if __name__ == "__main__":
     _rebuild_if_stale()   # serveur relancé après une mise à jour de cmux-gallery -> index régénéré
+    _start_artifact_watcher()
     ThreadingHTTPServer(("127.0.0.1", PORT), Handler).serve_forever()

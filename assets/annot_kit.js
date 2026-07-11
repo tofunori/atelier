@@ -326,7 +326,11 @@
       go.textContent = '⏳';
       try{
         var j = await send(true);
-        if (j && j.claudePreview){
+        if (j && j.agentHost === 'codex' && j.queuedForAgent){
+          go.textContent = '✓ Envoyé à Codex';
+          go.style.cssText += ';width:auto;min-width:0;padding:0 12px;border-radius:999px;white-space:nowrap;font-size:12px';
+          strokes = []; setTimeout(function(){ go.textContent = '↑'; go.style.width=''; shutdown(); }, 2600);
+        } else if (j && j.claudePreview){
           go.textContent = '✓ Copié — ⌘V dans Claude';
           go.style.cssText += ';width:auto;min-width:0;padding:0 12px;border-radius:999px;white-space:nowrap;font-size:12px';
           strokes = []; setTimeout(function(){ go.textContent = '↑'; go.style.width=''; shutdown(); }, 2600);

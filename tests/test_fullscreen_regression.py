@@ -125,7 +125,7 @@ class FullscreenRegressionTests(unittest.TestCase):
         self.assertIn("width:100vw;height:100vh", fs_img)
         self.assertIn("object-fit:contain", fs_img)
 
-    def test_gallery_has_workflow_shortlist_health_recent_compare_tools(self):
+    def test_gallery_has_shortlist_health_recent_compare_tools(self):
         gallery = gallery_template()
         server = (ROOT / "fig_annotate_server.py").read_text()
 
@@ -138,22 +138,12 @@ class FullscreenRegressionTests(unittest.TestCase):
         self.assertNotIn('id="tagSel"', gallery)
         self.assertNotIn("document.getElementById('tagChip')", gallery)
         self.assertNotIn("document.getElementById('tagSel')", gallery)
-        self.assertIn("let workflow = JSON.parse(localStorage.getItem('figWorkflow')", gallery)
-        self.assertIn("const WORKFLOW_STATUSES", gallery)
-        self.assertIn("function buildWorkflowChip()", gallery)
-        self.assertIn("Status &#9662;", gallery)
-        # Per-card status moved from an always-visible <select> ("Status: none")
-        # to the hover "…" card menu (sober redesign 2026-07): assert the menu form.
         self.assertIn("function cardMenu(", gallery)
-        self.assertIn('data-wfset=', gallery)
         self.assertNotIn("Workflow &#9662;", gallery)
         self.assertNotIn("Workflow: none", gallery)
-        self.assertIn("let recents = JSON.parse(localStorage.getItem('figRecent')", gallery)
-        self.assertIn("function buildRecentChip()", gallery)
         self.assertIn("function checkHealth()", gallery)
         self.assertIn("function healthRows(data)", gallery)
         self.assertIn("Server health", gallery)
-        self.assertIn("Settings &#9662;", gallery)
         self.assertNotIn('id="healthChip"', gallery)
         self.assertNotIn('id="healthMenu"', gallery)
         self.assertIn("fetch('/ping')", gallery)
