@@ -5,12 +5,20 @@ description: Open the local Atelier artifact gallery in Codex, receive explicitl
 
 # Atelier for Codex
 
+## Fast open path
+
+When the user explicitly asks to open Atelier, call `atelier_open` immediately.
+Do not run `pwd`, list or search project files, inspect the repository, read other
+workflow skills, call `atelier_connect` separately, or list annotations first.
+`atelier_open` resolves the project, reuses an existing server, registers this
+task, and returns the exact URL in one call.
+
 ## Open and connect
 
 1. Call `atelier_open` with the repository root and a concise task label.
 2. Use the returned local URL; never invent a port.
-3. Call `atelier_connect` before waiting so this task becomes the destination
-   shown in Atelier.
+3. `atelier_open` already connects the task. Call `atelier_connect` separately
+   only to rename the destination or change automatic mode.
 
 ## Annotation bank
 

@@ -14,7 +14,7 @@ _Source de vérité de la phase 0 du plan [rust-backend-full-migration-plan.md](
 - **Pas de renommage de route publique pendant le portage.**
 - **Aucune validation assouplie pour obtenir artificiellement la parité** :
   un écart est déclaré ici, jamais masqué.
-- `ATELIER_BACKEND=python` reste disponible jusqu'à la phase 9.
+- le backend de production et le builder sont Rust; Python reste uniquement une référence de test.
 
 ## Statuts
 
@@ -62,7 +62,7 @@ cmux/muxy/orca.
 | `GET` | `/data` | 2 | `ported` |  |
 | `GET` | `/state` | 1 | `ported` |  |
 | `POST` | `/state` | 1 | `ported` |  |
-| `POST` | `/rescan` | 2 | `ported` | synchron : relance build_gallery.py |
+| `POST` | `/rescan` | 2 | `ported` | reconstruction native via atelier-core |
 | `POST` | `/agent-event` | 2 | `ported` | événement toast en mémoire {ok,id} |
 | `POST` | `/claude-event` | 2 | `ported` | alias historique de /agent-event |
 | `GET` | `/agent-events` | 2 | `ported` |  |

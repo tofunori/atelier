@@ -607,10 +607,14 @@ fn trusted_static_path(requested: &str, bytes: &[u8]) -> bool {
     let Some(rel) = requested.strip_prefix(".fig_thumbs/") else {
         return false;
     };
-    let Some(tool_root) = std::env::var_os("ATELIER_TOOL_ROOT") else {
+    let Some(assets) = std::env::var_os("ATELIER_ASSETS_DIR")
+        .map(PathBuf::from)
+        .or_else(|| {
+            std::env::var_os("ATELIER_TOOL_ROOT").map(|root| PathBuf::from(root).join("assets"))
+        })
+    else {
         return false;
     };
-    let assets = PathBuf::from(tool_root).join("assets");
     let Ok(candidate) = atelier_core::safe_project_path(&assets, rel) else {
         return false;
     };
@@ -663,8 +667,21 @@ async fn static_asset(
     } else {
         requested
     };
-    let Ok(path) = atelier_core::safe_project_path(&state.root, requested) else {
-        return (StatusCode::NOT_FOUND, "not found").into_response();
+    let bundled = requested.strip_prefix(".fig_thumbs/").and_then(|rel| {
+        std::env::var_os("ATELIER_ASSETS_DIR")
+            .map(PathBuf::from)
+            .or_else(|| {
+                std::env::var_os("ATELIER_TOOL_ROOT").map(|root| PathBuf::from(root).join("assets"))
+            })
+            .and_then(|assets| atelier_core::safe_project_path(&assets, rel).ok())
+            .filter(|path| path.is_file())
+    });
+    let path = match bundled {
+        Some(path) => path,
+        None => match atelier_core::safe_project_path(&state.root, requested) {
+            Ok(path) => path,
+            Err(_) => return (StatusCode::NOT_FOUND, "not found").into_response(),
+        },
     };
     let Ok(metadata) = tokio::fs::metadata(&path).await else {
         return (StatusCode::NOT_FOUND, "not found").into_response();
@@ -913,6 +930,16 @@ async fn quote(
         .get("held")
         .and_then(Value::as_bool)
         .unwrap_or(false);
+    if state.agent_token.is_empty() {
+        return (
+            StatusCode::OK,
+            Json(json!({
+                "ok": true, "message": message, "queuedForAgent": false,
+                "agentHost": Value::Null,
+            })),
+        )
+            .into_response();
+    }
     let mut agent = state.agent.lock().await;
     let mut payload = serde_json::Map::new();
     payload.insert("type".to_string(), json!("text_annotation"));
@@ -1079,6 +1106,19 @@ async fn save_annotation(
     }
     if direct {
         message.push_str("\nApplique directement ces annotations : retrouve le script qui genere cette figure, fais les corrections demandees et regenere la figure.");
+    }
+    if state.agent_token.is_empty() {
+        return (
+            StatusCode::OK,
+            Json(json!({
+                "embedded": request.get("embed").and_then(Value::as_bool).unwrap_or(false),
+                "message": message,
+                "agentHost": Value::Null,
+                "queuedForAgent": false,
+                "path": rel,
+            })),
+        )
+            .into_response();
     }
     let held = request
         .get("held")
@@ -1568,118 +1608,51 @@ impl RebuildOutcome {
 }
 
 pub(crate) async fn rebuild(
-    root: &PathBuf,
+    root: &std::path::Path,
     status: &Arc<RwLock<WatcherStatus>>,
     revision: &Arc<RwLock<u64>>,
     rebuild_lock: &Arc<Mutex<()>>,
 ) -> RebuildOutcome {
     let _guard = rebuild_lock.lock().await;
-    let tool_root = std::env::var_os("ATELIER_TOOL_ROOT").map(PathBuf::from);
-    let Some(builder) = std::env::var_os("ATELIER_BUILDER")
+    let assets = std::env::var_os("ATELIER_ASSETS_DIR")
         .map(PathBuf::from)
         .or_else(|| {
-            tool_root
-                .as_ref()
-                .map(|value| value.join("build_gallery.py"))
-        })
-    else {
-        let message = "trusted Atelier builder is not configured";
+            std::env::var_os("ATELIER_TOOL_ROOT").map(|path| PathBuf::from(path).join("assets"))
+        });
+    let Some(assets) = assets.filter(|path| path.join("gallery_template.html").is_file()) else {
+        let message = "Atelier assets directory is not configured";
         status.write().await.error = Some(message.to_string());
         return RebuildOutcome::failure(message);
     };
-    if !builder.is_file() {
-        let message = "trusted Atelier builder is not configured";
-        status.write().await.error = Some(message.to_string());
-        return RebuildOutcome::failure(message);
-    }
-    if let Some(tool_root) = tool_root.as_ref() {
-        let trusted_root = std::fs::canonicalize(tool_root);
-        let trusted_builder = std::fs::canonicalize(&builder);
-        if let (Ok(trusted_root), Ok(trusted_builder)) = (trusted_root, trusted_builder)
-            && !trusted_builder.starts_with(&trusted_root)
-        {
-            let message = "configured Atelier builder is outside the trusted tool root";
-            status.write().await.error = Some(message.to_string());
-            return RebuildOutcome::failure(message);
-        }
-    }
-    if std::env::var("ATELIER_BUILD_TYPESCRIPT").as_deref() == Ok("1") {
-        let Some(frontend_root) = tool_root
-            .as_ref()
-            .filter(|path| path.join("frontend").is_dir())
-        else {
-            let message = "TypeScript tool root is not configured";
-            status.write().await.error = Some(message.to_string());
-            return RebuildOutcome::failure(message);
-        };
-        let frontend = Command::new("npm")
-            .args(["run", "build:frontend"])
-            .current_dir(frontend_root)
-            .output()
-            .await;
-        match &frontend {
-            Ok(output) if !output.status.success() => {
-                let message: String = String::from_utf8_lossy(&output.stderr)
-                    .chars()
-                    .take(500)
-                    .collect();
-                status.write().await.error = Some(message.clone());
-                return RebuildOutcome::failure(message);
-            }
-            Err(error) => {
-                let message = error.to_string();
-                status.write().await.error = Some(message.clone());
-                return RebuildOutcome::failure(message);
-            }
-            _ => {}
-        }
-    }
-    // Timeout 300 s comme Python ; kill_on_drop tue le builder si le délai
-    // expire (le nettoyage du groupe de processus complet arrive en phase 2).
-    let mut command = Command::new("python3");
-    command
-        .arg(&builder)
-        .current_dir(root)
-        .env("GALLERY_ROOT", root)
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .kill_on_drop(true);
-    let result = match command.spawn() {
-        Ok(child) => {
-            match tokio::time::timeout(Duration::from_secs(300), child.wait_with_output()).await {
-                Ok(outcome) => outcome,
-                Err(_) => {
-                    let message = "rescan timed out";
-                    status.write().await.error = Some(message.to_string());
-                    return RebuildOutcome::failure(message);
-                }
-            }
-        }
-        Err(error) => Err(error),
+    let options = atelier_core::gallery_builder::GalleryBuildOptions {
+        root: root.to_path_buf(),
+        template: assets.join("gallery_template.html"),
+        title: std::env::var("GALLERY_TITLE").unwrap_or_else(|_| "Atelier".into()),
+        extensions: atelier_core::gallery_builder::parse_extensions(
+            std::env::var("GALLERY_EXTS").ok().as_deref(),
+        ),
+        show_frames: std::env::var_os("GALLERY_SHOW_FRAMES").is_some(),
+        no_thumbs: std::env::var_os("GALLERY_NO_THUMBS").is_some(),
     };
+    let result =
+        tokio::task::spawn_blocking(move || atelier_core::gallery_builder::build(&options)).await;
     let mut current = status.write().await;
     match result {
-        Ok(output) => {
-            let ok = output.status.success();
-            let mut combined = String::from_utf8_lossy(&output.stdout).into_owned();
-            combined.push_str(&String::from_utf8_lossy(&output.stderr));
-            if ok {
-                *revision.write().await += 1;
-                current.last_build_at = Some(now());
-                current.error = None;
-            } else {
-                current.error = Some(tail_chars(&combined, 500));
-            }
+        Ok(Ok(built)) => {
+            *revision.write().await += 1;
+            current.last_build_at = Some(now());
+            current.error = None;
             RebuildOutcome {
-                ok,
-                out: tail_chars(&combined, 200),
+                ok: true,
+                out: format!("{} files indexed -> {}", built.count, built.index.display()),
             }
         }
-        Err(error) => {
+        Ok(Err(error)) => {
             let message = error.to_string();
             current.error = Some(message.clone());
             RebuildOutcome::failure(message)
         }
+        Err(error) => RebuildOutcome::failure(error.to_string()),
     }
 }
 

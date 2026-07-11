@@ -22,8 +22,10 @@
       var body=JSON.parse(options.body);
       delete body.destination;
       delete body.batchId;
-      body.action='ask';
-      body.held=true;
+      var sendNow=body.deliveryMode==='direct'||body.held===false||body.action==='apply';
+      delete body.deliveryMode;
+      body.action=sendNow?'apply':'ask';
+      body.held=!sendNow;
       options.body=JSON.stringify(body);
     }catch(e){}
     return options;
@@ -58,7 +60,7 @@
   #atelierAgentPanel.open{display:block}.aasummary{display:flex;align-items:baseline;justify-content:space-between;gap:12px;min-height:22px}.aatitle{color:var(--aa-text);font-weight:500}.aaconnection{max-width:170px;color:var(--aa-muted);font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\
   .aaqueue{margin-top:7px}.aaannotation{display:grid;grid-template-columns:minmax(0,1fr) 28px 28px;align-items:center;gap:2px;min-height:51px;padding:5px 0;border-top:1px solid rgba(255,255,255,.055)}.aaannotation:first-child{border-top:0}.aacopy{min-width:0}.aafile{color:rgba(255,255,255,.75);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.aapreview{margin-top:3px;color:var(--aa-faint);font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\
   .aaiconbtn{appearance:none;width:28px;height:28px;display:grid;place-items:center;padding:0;border:0;border-radius:0;background:transparent;color:var(--aa-muted);cursor:pointer;transition:transform .12s ease,color .12s ease}.aaiconbtn svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.25;stroke-linecap:round;stroke-linejoin:round}.aaiconbtn:active{transform:scale(.9)}.aaiconbtn:focus-visible{outline:1px solid rgba(255,255,255,.38);outline-offset:0}.aaiconbtn:disabled{color:rgba(255,255,255,.16);cursor:default}@media(hover:hover){.aaiconbtn:hover:not(:disabled){color:var(--aa-text)}}\
-  .aaempty{padding:19px 0 13px;color:var(--aa-faint);font-size:11px;text-align:center}.aastatus{color:var(--aa-faint);font-size:9px;margin-top:2px}.aafooter{display:flex;justify-content:flex-end;gap:14px;padding-top:8px;border-top:1px solid rgba(255,255,255,.055)}.aalink{appearance:none;padding:2px 0;border:0;background:transparent;color:var(--aa-muted);font:inherit;font-size:10px;cursor:pointer}.aalink:disabled{display:none}@media(hover:hover){.aalink:hover{color:var(--aa-text)}}\
+  .aaempty{padding:19px 0 13px;color:var(--aa-faint);font-size:11px;text-align:center}.aastatus{color:var(--aa-faint);font-size:9px;margin-top:2px}.aafooter{display:flex;justify-content:flex-end;gap:14px;padding-top:8px;border-top:1px solid rgba(255,255,255,.055)}.aalink{appearance:none;padding:2px 0;border:0;background:transparent;color:var(--aa-muted);font:inherit;font-size:10px;cursor:pointer}.aalink:disabled{opacity:.38;cursor:default}@media(hover:hover){.aalink:hover:not(:disabled){color:var(--aa-text)}}\
   .aatoast{position:fixed;right:14px;bottom:58px;padding:8px 11px;border:1px solid var(--aa-line);border-radius:8px;background:var(--aa-raised);color:var(--aa-text);box-shadow:0 10px 28px rgba(0,0,0,.28);opacity:0;transform:translateY(6px);transition:opacity .16s ease,transform .16s ease;pointer-events:none}.aatoast.show{opacity:1;transform:none}\
   body>.brand #atelierAgentHub,header #atelierAgentHub{position:static;margin-left:2px}body>.brand #atelierAgentPanel,header #atelierAgentPanel{position:fixed;right:16px;top:52px;bottom:auto}\
   @media(max-width:520px){#atelierAgentPanel{right:-4px;width:min(300px,calc(100vw - 16px))}}';
@@ -69,9 +71,71 @@
   var brand=document.querySelector('.brand'), spacer=brand&&brand.querySelector('.brand-sp');
   if(spacer) brand.insertBefore(hub,spacer); else document.body.appendChild(hub);
   var button=hub.querySelector('#atelierAgentButton'), panel=hub.querySelector('#atelierAgentPanel');
-  button.onclick=function(){state.open=!state.open;panel.classList.toggle('open',state.open);button.setAttribute('aria-expanded',String(state.open));if(state.open)refresh();};
-  document.addEventListener('keydown',function(e){if(e.key==='Escape'&&state.open){state.open=false;panel.classList.remove('open');button.setAttribute('aria-expanded','false');}});
-  document.addEventListener('click',function(e){if(state.open&&!hub.contains(e.target)){state.open=false;panel.classList.remove('open');button.setAttribute('aria-expanded','false');}});
+  var bubbleDragged=false;
+  if(window.self!==window.top){
+    button.style.cursor='grab';
+    try{
+      var savedBubble=JSON.parse(localStorage.getItem('atelierAgentBubblePos')||'null');
+      if(savedBubble&&Number.isFinite(savedBubble.x)&&Number.isFinite(savedBubble.y)){
+        hub.style.left=Math.max(4,Math.min(innerWidth-36,savedBubble.x))+'px';
+        hub.style.top=Math.max(4,Math.min(innerHeight-36,savedBubble.y))+'px';
+        hub.style.right='auto';hub.style.bottom='auto';
+      }
+    }catch(e){}
+    button.addEventListener('pointerdown',function(e){
+      if(e.button!==0)return;
+      button.style.cursor='grabbing';
+      var startX=e.clientX,startY=e.clientY,r=hub.getBoundingClientRect(),originX=r.left,originY=r.top,moved=false;
+      button.setPointerCapture(e.pointerId);
+      function move(ev){
+        var dx=ev.clientX-startX,dy=ev.clientY-startY;
+        if(Math.abs(dx)+Math.abs(dy)>4)moved=true;
+        if(!moved)return;
+        hub.style.left=Math.max(4,Math.min(innerWidth-r.width-4,originX+dx))+'px';
+        hub.style.top=Math.max(4,Math.min(innerHeight-r.height-4,originY+dy))+'px';
+        hub.style.right='auto';hub.style.bottom='auto';
+      }
+      function up(ev){
+        button.style.cursor='grab';
+        button.removeEventListener('pointermove',move);button.removeEventListener('pointerup',up);
+        if(moved){
+          bubbleDragged=true;
+          var end=hub.getBoundingClientRect();
+          try{localStorage.setItem('atelierAgentBubblePos',JSON.stringify({x:end.left,y:end.top}));}catch(err){}
+          setTimeout(function(){bubbleDragged=false;},0);
+        }
+      }
+      button.addEventListener('pointermove',move);button.addEventListener('pointerup',up);
+    });
+  }
+  function closePanel(){
+    state.open=false;panel.classList.remove('open');button.setAttribute('aria-expanded','false');
+  }
+  if(window.self===window.top){
+    window.addEventListener('message',function(e){
+      if(e.origin===location.origin&&e.data&&e.data.type==='atelier-close-agent-panel'&&state.open)closePanel();
+    });
+  }else{
+    var closeParentPanel=function(){
+      try{
+        var parentPanel=window.parent.document.getElementById('atelierAgentPanel');
+        var parentButton=window.parent.document.getElementById('atelierAgentButton');
+        if(parentPanel&&parentPanel.classList.contains('open')&&parentButton)parentButton.click();
+      }catch(e){window.parent.postMessage({type:'atelier-close-agent-panel'},location.origin);}
+    };
+    document.addEventListener('pointerdown',closeParentPanel,true);
+    document.addEventListener('click',closeParentPanel,true);
+  }
+  button.onclick=function(){if(bubbleDragged)return;state.open=!state.open;panel.classList.toggle('open',state.open);button.setAttribute('aria-expanded',String(state.open));if(state.open)refresh();};
+  document.addEventListener('keydown',function(e){if(e.key==='Escape'&&state.open)closePanel();});
+  document.addEventListener('pointerdown',function(e){
+    if(state.open&&!hub.contains(e.target))closePanel();
+  },true);
+  window.addEventListener('blur',function(){
+    setTimeout(function(){
+      if(state.open&&document.activeElement&&document.activeElement.tagName==='IFRAME')closePanel();
+    },0);
+  });
   function mutate(path,ids,destination){
     var body={ids:ids};if(destination)body.destination=destination;
     return nativeFetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
@@ -110,11 +174,16 @@
   function render(){
     if(!state.data)return;
     var consumers=state.data.consumers||[];
-    var latest=consumers.find(function(c){return c.online;})||null;
+    // Une tâche Codex peut ne pas avoir émis de heartbeat depuis 180 s tout en
+    // restant la bonne destination. Dans ce cas, on y met l'annotation en file
+    // plutôt que de désactiver toutes les actions d'envoi.
+    var latest=consumers.find(function(c){return c.online;})||consumers[0]||null;
     state.destination=latest?latest.id:'';
     var pending=state.data.pending||[],bank=bankItems(),cur=currentConsumer(),history=(state.data.history||[]).slice(0,30);
     hub.querySelector('#aaTitle').textContent=state.showHistory?'Historique':('Annotations'+(bank.length?' · '+bank.length:''));
-    hub.querySelector('#aaConnection').textContent=cur&&cur.online?'Vers '+(cur.label||'ce chat'):'Lance /atelier dans le chat cible';
+    hub.querySelector('#aaConnection').textContent=cur
+      ?('Vers '+(cur.label||'ce chat')+(cur.online?'':' · en attente'))
+      :'Lance /atelier dans le chat cible';
     var cross='<svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8"/></svg>';
     var plane='<svg viewBox="0 0 16 16" aria-hidden="true"><path d="m2.8 7.6 10-4.2-3.9 10-1.5-4.2-4.6-1.6ZM7.4 9.2l2.1-2.1"/></svg>';
     var source=state.showHistory?history:bank;
@@ -129,13 +198,13 @@
     hub.querySelector('#aaDeleteAll').textContent=state.clearArmed?'Confirmer la suppression':'Tout supprimer';
     hub.querySelector('#aaSendAll').disabled=!bank.length||!state.destination;
     hub.querySelector('#aaSendAll').style.display=state.showHistory?'none':'';
-    var busy=pending.some(function(i){return ['queued','received','processing'].indexOf(i.status)>=0;});
+    var busy=bank.length>0;
     var dot=hub.querySelector('.aadot');dot.setAttribute('class','aadot '+(busy?'busy':(cur&&cur.online?'online':'')));
     hub.querySelector('.aacount').textContent=bank.length?String(bank.length):'';
   }
   function refresh(){
     nativeFetch('/agent-status?limit=40').then(function(r){return r.json();}).then(function(j){
-      if(j&&j.agentHost==='codex'){state.enabled=true;state.data=j;hub.style.display='block';render();window.dispatchEvent(new CustomEvent('atelier-agent-status',{detail:j}));}
+      if(j&&j.agentHost==='codex'){state.enabled=true;state.data=j;hub.style.display=window.self===window.top?'none':'block';render();window.dispatchEvent(new CustomEvent('atelier-agent-status',{detail:j}));}
       else hub.style.display='none';
     }).catch(function(){hub.style.display='none';});
   }

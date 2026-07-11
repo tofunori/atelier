@@ -329,6 +329,14 @@
     justify-content:center;font-size:11px;color:var(--muted);visibility:hidden;margin-right:-5px}
   .gtab:hover .x,.gtab.on .x{visibility:visible}
   .gtab .x:hover{background:var(--border);color:var(--txt)}
+  #tabMenu{position:fixed;z-index:180;display:none;min-width:190px;padding:5px;
+    border:1px solid var(--border);border-radius:8px;background:var(--card2);
+    box-shadow:0 12px 32px rgba(0,0,0,.42)}
+  #tabMenu.show{display:block}
+  #tabMenu button{display:block;width:100%;padding:7px 10px;border:0;border-radius:5px;
+    background:transparent;color:var(--txt);font:inherit;font-size:12.5px;text-align:left;cursor:pointer}
+  #tabMenu button:hover,#tabMenu button:focus-visible{outline:0;background:var(--border)}
+  #tabMenu button:active{transform:scale(.98)}
   #tabPanes{display:none}
   body.tab-doc #tabPanes{display:block}
   body.tab-doc main#grid,body.tab-doc footer{display:none}
@@ -362,6 +370,10 @@
     <span class="chip dest icon-chip" id="viewChip" title="Settings — server health, theme, archives, hidden, auto-hide rules" aria-label="Settings"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
   </div>
   <div id="tabbar"></div>
+  <div id="tabMenu" role="menu" aria-label="Actions des onglets">
+    <button type="button" role="menuitem" data-tab-action="others">Fermer les autres onglets</button>
+    <button type="button" role="menuitem" data-tab-action="all">Fermer tous les onglets</button>
+  </div>
   <div class="controls">
     <span class="chip" id="searchChip" title="Search by name or folder (press /)" tabindex="0"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.6"/><path d="M11 11l3.2 3.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> Search</span>
     <input type="search" id="q" class="collapsed" placeholder="Search by name or folder… (Esc to close)">
@@ -394,7 +406,7 @@
     <div id="exportMenu" class="menu"></div>
   </div>
 </header>
-<script src="/.fig_thumbs/agent_bridge_ui.js"></script>
+<script src="/.fig_thumbs/agent_bridge_ui.js?v=18"></script>
 <main id="grid"></main>
 <div id="tabPanes"></div>
 <div id="lb">
@@ -586,7 +598,10 @@ const THEMES = {
   'Dracula':   {bg:'#282a36',card:'#343746',card2:'#21222c',txt:'#f8f8f2',muted:'#9aa0b3',accent:'#bd93f9',border:'#44475a',arch:'#3a2f1a'},
   'Nord':      {bg:'#2e3440',card:'#3b4252',card2:'#272c36',txt:'#e5e9f0',muted:'#9aa3b2',accent:'#88c0d0',border:'#434c5e',arch:'#3a2f1a'}
 };
-let theme = localStorage.getItem('figTheme') || 'Encre';
+const requestedTheme = new URLSearchParams(location.search).get('theme');
+let theme = (requestedTheme && THEMES[requestedTheme])
+  ? requestedTheme
+  : (localStorage.getItem('figTheme') || 'Encre');
 function applyTheme(name){
   if(!THEMES[name]) name='Encre';
   theme=name; try{ localStorage.setItem('figTheme',name); }catch(e){}
@@ -1058,6 +1073,8 @@ const TabShell = (function(){
   };
   const paneUrl={}; for(const s in SECTIONS) paneUrl[s]=SECTIONS[s].url;  // id -> url (sections + docs)
   let tabs=[], active='gallery', seq=1;   // tabs = fichiers ouverts (territoire IDE)
+  const tabMenu=document.getElementById('tabMenu');
+  let menuTab=null;
   const inIde = () => active==='ide' || tabs.some(t=>t.id===active);
   function save(){ try{ localStorage.setItem(KEY, JSON.stringify({tabs, active})); }catch(e){} }
   function restore(){
@@ -1105,10 +1122,30 @@ const TabShell = (function(){
     bar.querySelectorAll('.gtab').forEach(el=>{
       el.onclick=e=>{ const x=e.target.closest('[data-x]'); if(x){ close(x.dataset.x); return; } activate(el.dataset.tab); };
       el.onauxclick=e=>{ if(e.button===1 && !el.classList.contains('sec')) close(el.dataset.tab); };
+      el.oncontextmenu=e=>{ if(!el.classList.contains('sec')) showTabMenu(e, el.dataset.tab); };
     });
     save();
   }
   function activate(id){ active=id; render(); }
+  function hideTabMenu(){ tabMenu.classList.remove('show'); menuTab=null; }
+  function showTabMenu(e, id){
+    e.preventDefault(); menuTab=id; tabMenu.classList.add('show');
+    const pad=8, box=tabMenu.getBoundingClientRect();
+    tabMenu.style.left=Math.max(pad,Math.min(e.clientX,innerWidth-box.width-pad))+'px';
+    tabMenu.style.top=Math.max(pad,Math.min(e.clientY,innerHeight-box.height-pad))+'px';
+    tabMenu.querySelector('button').focus();
+  }
+  function closeAll(){
+    document.querySelectorAll('#tabPanes iframe[data-tab^="t"]').forEach(f=>f.remove());
+    tabs.forEach(t=>delete paneUrl[t.id]); tabs=[]; active='ide'; hideTabMenu(); render();
+  }
+  function closeOthers(id){
+    if(!tabs.some(t=>t.id===id)) return;
+    tabs.filter(t=>t.id!==id).forEach(t=>{
+      document.querySelector('#tabPanes iframe[data-tab="'+t.id+'"]')?.remove(); delete paneUrl[t.id];
+    });
+    tabs=tabs.filter(t=>t.id===id); active=id; hideTabMenu(); render();
+  }
   function close(id){
     const i=tabs.findIndex(t=>t.id===id); if(i<0) return;   // sections : jamais fermables
     document.querySelector('#tabPanes iframe[data-tab="'+id+'"]')?.remove();
@@ -1140,9 +1177,16 @@ const TabShell = (function(){
       open(d.url, d.title||'');
   });
   document.addEventListener('keydown', e=>{
+    if(e.key==='Escape' && tabMenu.classList.contains('show')){ hideTabMenu(); return; }
     if(!(e.metaKey||e.ctrlKey)) return;
     if(e.key==='w' && active!=='gallery' && tabs.find(t=>t.id===active)){ e.preventDefault(); close(active); }
   });
+  tabMenu.addEventListener('click', e=>{
+    const action=e.target.closest('[data-tab-action]')?.dataset.tabAction;
+    if(action==='others') closeOthers(menuTab);
+    if(action==='all') closeAll();
+  });
+  document.addEventListener('click', e=>{ if(!e.target.closest('#tabMenu')) hideTabMenu(); });
   return {open, openView, activate, close};
 })();
 // point d'entrée unique pour les vues (chips masqués + entrées du menu Settings)

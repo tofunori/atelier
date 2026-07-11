@@ -39,8 +39,8 @@ or reuses a detached local server (on a stable port, with the project as its
 root), opens it as a cmux browser surface, then returns your terminal.
 
 ```
-build  → GALLERY_ROOT=<root> build_gallery.py  +  copy viewer assets
-host   → detached fig_annotate_server.py, project as root
+build  → Rust scan + figures_index.html/figures_data.json + viewer assets
+host   → atelier-server, project as root
 foreground → same server attached to the terminal for debugging
 serve  → foreground self-healing host for cmux Dock controls
 view   → cmux browser open http://127.0.0.1:<port>/figures_index.html
@@ -53,15 +53,36 @@ git clone https://github.com/tofunori/atelier.git ~/tools/atelier
 bash ~/tools/atelier/install.sh
 ```
 
-`install.sh` links `atelier` (and the legacy alias `cmux-gallery`) into `~/.local/bin`, checks it is on your `PATH`
-(and shows how to add it if not), and verifies `python3` + `cmux`. Manual
-equivalent: `ln -s …/cmux_gallery.py ~/.local/bin/atelier && chmod +x …`.
+`install.sh` installs `atelier-cli`, `atelier-server` and `atelier-mcp` into
+`~/.local/bin`, installs the viewer assets under `~/.local/share/atelier`, and
+links both `atelier` and the legacy alias `cmux-gallery` to the Rust CLI.
 
-`build` needs only the Python 3 standard library and the bundled, precompiled
-viewer assets; `run`/`serve` need the `cmux` CLI. During development, refresh
+The installed runtime does not require Python, Node or Cargo. During development, refresh
 the TypeScript client explicitly with `npm run build:frontend` (or set
 `ATELIER_BUILD_TYPESCRIPT=1` for a build). Thumbnails use macOS `qlmanage`
 (skipped gracefully elsewhere).
+
+### Install the Codex plugin
+
+Atelier can be installed in Codex as a native plugin, with the same
+marketplace + skills + MCP architecture used by integrations such as ChatCut.
+Install the local app first, then register and install the plugin:
+
+```bash
+bash scripts/install-codex-plugin.sh
+```
+
+For a published checkout, Codex can register the Git marketplace directly:
+
+```bash
+codex plugin marketplace add https://github.com/tofunori/atelier.git --ref main
+codex plugin add atelier@atelier
+```
+
+Start a new Codex task after installation. Prompts such as **Open Atelier for
+this project** then expose the local gallery and annotation workflow through
+the bundled MCP bridge. The server stays on `127.0.0.1`; no Atelier account or
+OAuth connection is required.
 
 ## Use
 
@@ -77,8 +98,8 @@ atelier status              # project, server, Codex, index and pending annotati
 atelier doctor              # diagnose the local runtime
 atelier doctor --repair     # clear stale state and rebuild missing/stale assets
 
-# Rust is the default backend (phase 9). Force Python only if needed:
-ATELIER_BACKEND=python atelier run --no-open
+# Pure Rust runtime — no Python process
+atelier run --no-open
 ```
 
 When launched from inside a git checkout, the default root is the checkout root,
@@ -145,13 +166,13 @@ Pick one:
   > `~/Desktop`, `~/Downloads` or iCloud Drive.** macOS **TCC** blocks background
   > launchd processes from reading those folders, so an "always-on" agent there
   > starts but returns **404 for every file** (it binds the socket but can't read
-  > your files) unless you grant its `python3` **Full Disk Access**. The
+      > your files) unless you grant `atelier-server` **Full Disk Access**. The
   > cmux-hosted server avoids this entirely.
 
 - **A plain terminal:** `atelier run` (or `serve`) in a pane you keep open.
 
 To run it even when cmux is closed: move the project outside those protected
-folders, or grant Full Disk Access to your `python3` and launch `atelier
+folders, or grant Full Disk Access to `atelier-server` and launch `atelier
 serve` from a LaunchAgent.
 
 ## Zotero library
@@ -190,19 +211,14 @@ rebuild clean).
 | `GALLERY_NO_THUMBS=1` | skip Quick-Look thumbnail generation |
 | `GALLERY_SHOW_FRAMES=1` | index animation-frame dirs (hidden by default) |
 | `GALLERY_WATCH=0` | disable automatic debounced artifact watching |
-| `ATELIER_BACKEND=rust` | **default** — use the Rust server (`atelier-server`) |
-| `ATELIER_BACKEND=python` | temporary fallback to `fig_annotate_server.py` (logged) |
 | `ATELIER_RUST_SERVER` | absolute path to a custom `atelier-server` binary |
+| `ATELIER_ASSETS_DIR` | gallery assets root (default: `~/.local/share/atelier/assets`) |
 | `ATELIER_BUILD_TYPESCRIPT=1` | recompile the TypeScript client during a build/rebuild |
 
-The Rust backend is the **default** with 75 ported routes and three documented
-compatibility differences (`/ping`, `/quote`, `/save`; see
-`docs/rust-route-parity.md`).
-Install builds release binaries into `~/.local/bin` (`atelier-server`,
-`atelier-cli`). Gallery HTML rebuilds still call `build_gallery.py` (Python)
-for the index. The Python HTTP server is a temporary fallback when the Rust
-binary is missing or when you set `ATELIER_BACKEND=python` — every fallback is
-logged on stderr.
+**Pure Rust runtime** ([docs/rust-zero-python-migration.md](docs/rust-zero-python-migration.md)):
+`atelier-server`, `atelier-cli`, `atelier-mcp` — no Python process is started.
+Install: `bash install.sh`. Gallery rebuilds use `atelier-core::gallery_builder`.
+Project `.py` files remain displayable/editable content only.
 
 ## Notes & caveats
 

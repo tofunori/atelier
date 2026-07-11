@@ -7,6 +7,16 @@ import net from 'node:net';
 import zlib from 'node:zlib';
 
 const REPO = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..', '..');
+const RUST_MANIFEST = path.join(REPO, 'rust', 'Cargo.toml');
+const ATELIER_CLI = path.join(REPO, 'rust', 'target', 'debug', 'atelier-cli');
+const ATELIER_SERVER = path.join(REPO, 'rust', 'target', 'debug', 'atelier-server');
+
+test.beforeAll(() => {
+  execFileSync('cargo', ['build', '--manifest-path', RUST_MANIFEST, '-p', 'atelier-cli', '-p', 'atelier-server'], {
+    cwd: REPO,
+    stdio: 'pipe',
+  });
+});
 
 function freePort() {
   return new Promise((resolve, reject) => {
@@ -110,23 +120,19 @@ async function withGallery(run, options = {}) {
   let server;
   try {
     writeFixtureProject(root);
-    execFileSync('python3', [path.join(REPO, 'build_gallery.py')], {
+    execFileSync(ATELIER_CLI, ['build', '--root', root], {
       cwd: root,
-      env: { ...process.env, GALLERY_ROOT: root, GALLERY_NO_THUMBS: '1' },
-      stdio: 'pipe',
-    });
-    execFileSync('python3', ['-c', `import sys; sys.path.insert(0, ${JSON.stringify(REPO)}); import cmux_gallery; cmux_gallery.provision_viewers(${JSON.stringify(root)})`], {
-      cwd: REPO,
+      env: { ...process.env, ATELIER_ASSETS_DIR: path.join(REPO, 'assets') },
       stdio: 'pipe',
     });
     const port = await freePort();
     const agentToken = options.codex ? 'e2e-agent-token' : '';
-    server = spawn('python3', [path.join(REPO, 'fig_annotate_server.py')], {
+    server = spawn(ATELIER_SERVER, ['--root', root, '--port', String(port), '--watch'], {
       cwd: root,
       env: {
         ...process.env,
         GALLERY_ROOT: root,
-        FIG_PORT: String(port),
+        ATELIER_ASSETS_DIR: path.join(REPO, 'assets'),
         ...(options.codex ? {
           HOME: root,
           ATELIER_AGENT_HOST: 'codex',
@@ -158,6 +164,35 @@ test('browse: search filters the generated gallery cards', async ({ page }) => {
     await expect(page.locator('#grid')).toContainText('plot-alpha.svg');
     await expect(page.locator('#grid')).toContainText('preview-alpha.png');
     await expect(page.locator('#grid')).not.toContainText('plot-beta.svg');
+  });
+});
+
+test('IDE tabs: context menu closes other tabs or every tab', async ({ page }) => {
+  await withGallery(async ({ url }) => {
+    await page.goto(url);
+    await page.evaluate(() => {
+      window.postMessage({ type: 'gallery-open-tab', url: '/analysis.py', title: 'analysis.py' }, '*');
+      window.postMessage({ type: 'gallery-open-tab', url: '/plot-alpha.svg', title: 'plot-alpha.svg' }, '*');
+      window.postMessage({ type: 'gallery-open-tab', url: '/preview-alpha.png', title: 'preview-alpha.png' }, '*');
+    });
+    const fileTabs = page.locator('#tabbar .gtab:not(.sec)');
+    await expect(fileTabs).toHaveCount(3);
+
+    await page.locator('#tabbar .gtab', { hasText: 'plot-alpha.svg' }).click({ button: 'right' });
+    await expect(page.locator('#tabMenu')).toBeVisible();
+    await page.locator('[data-tab-action="others"]').click();
+    await expect(fileTabs).toHaveCount(1);
+    await expect(fileTabs).toContainText('plot-alpha.svg');
+    await expect(fileTabs).toHaveClass(/on/);
+
+    await page.evaluate(() => {
+      window.postMessage({ type: 'gallery-open-tab', url: '/analysis.py', title: 'analysis.py' }, '*');
+    });
+    await expect(fileTabs).toHaveCount(2);
+    await fileTabs.last().click({ button: 'right' });
+    await page.locator('[data-tab-action="all"]').click();
+    await expect(fileTabs).toHaveCount(0);
+    await expect(page.locator('#tabbar .gtab.sec')).toHaveClass(/on/);
   });
 });
 

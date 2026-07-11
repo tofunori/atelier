@@ -516,6 +516,27 @@ impl AgentStore {
                 changed += 1;
             }
         }
+        for item in &mut self.inbox {
+            if ids
+                .iter()
+                .any(|id| item.get("id").and_then(Value::as_str) == Some(id))
+            {
+                item["status"] = json!(status);
+                item["statusAt"] = json!(now());
+                if !result.is_empty() {
+                    item["result"] = json!(result.chars().take(2_000).collect::<String>());
+                }
+                if !error.is_empty() {
+                    item["error"] = json!(error.chars().take(2_000).collect::<String>());
+                }
+            }
+        }
+        if matches!(status, "completed" | "failed" | "cancelled") {
+            self.inbox.retain(|item| {
+                !ids.iter()
+                    .any(|id| item.get("id").and_then(Value::as_str) == Some(id))
+            });
+        }
         self.persist()?;
         Ok(changed)
     }

@@ -9,7 +9,7 @@ use axum::{
 };
 use serde::Deserialize;
 use serde_json::json;
-use std::{path::PathBuf, process::Stdio};
+use std::process::Stdio;
 use tokio::process::Command;
 
 use crate::{AppState, request_allowed};
@@ -78,15 +78,8 @@ pub async fn orca_native_fullscreen(
             json!({"ok": false, "error": "not a supported project image"}),
         );
     }
-    let Some(viewer) = native_viewer_path() else {
-        return json_status(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            json!({"ok": false, "error": "native fullscreen viewer missing"}),
-        );
-    };
-    let mut cmd = Command::new("python3");
-    cmd.arg(&viewer)
-        .arg(&path)
+    let mut cmd = Command::new("open");
+    cmd.arg(&path)
         .current_dir(&state.root)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
@@ -104,37 +97,11 @@ pub async fn orca_native_fullscreen(
             let pid = child.id().unwrap_or(0);
             // Detach: drop child without waiting (viewer runs independently).
             std::mem::forget(child);
-            json_ok(json!({"ok": true, "pid": pid}))
+            json_ok(json!({"ok": true, "pid": pid, "via": "open"}))
         }
         Err(error) => json_status(
             StatusCode::INTERNAL_SERVER_ERROR,
             json!({"ok": false, "error": error.to_string()}),
         ),
     }
-}
-
-fn native_viewer_path() -> Option<PathBuf> {
-    if let Some(tool) = std::env::var_os("ATELIER_TOOL_ROOT") {
-        let candidate = PathBuf::from(tool).join("native_fullscreen_viewer.py");
-        if candidate.is_file() {
-            return Some(candidate);
-        }
-    }
-    // Dev checkout: next to the server binary's source tree via CARGO_MANIFEST_DIR is
-    // unavailable at runtime — try relative to current exe's ancestors.
-    if let Ok(exe) = std::env::current_exe() {
-        for ancestor in exe.ancestors().take(6) {
-            let candidate = ancestor.join("native_fullscreen_viewer.py");
-            if candidate.is_file() {
-                return Some(candidate);
-            }
-            let candidate = ancestor.join("..").join("native_fullscreen_viewer.py");
-            if let Ok(canon) = std::fs::canonicalize(&candidate)
-                && canon.is_file()
-            {
-                return Some(canon);
-            }
-        }
-    }
-    None
 }

@@ -12,7 +12,7 @@ export type WatcherStatus = {
 export type Health = {
   ok: boolean;
   service?: string;
-  backend?: "python" | "rust" | string;
+  backend?: "rust" | string;
   project?: string;
   revision?: number;
   agentHost?: string | null;

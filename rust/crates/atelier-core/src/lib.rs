@@ -4,6 +4,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 
+pub mod gallery_builder;
+pub mod svg_edits;
+
 pub const ARTIFACT_EXTENSIONS: &[&str] = &[
     "png", "jpg", "jpeg", "svg", "pdf", "html", "htm", "docx", "xlsx", "xls", "csv", "md", "py",
     "r", "jl", "tex", "sh", "mp4", "m4v", "mov", "webm",

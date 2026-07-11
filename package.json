@@ -3,13 +3,14 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "npm run typecheck && cargo test --manifest-path rust/Cargo.toml && python3 -m pytest tests/contract -q && python3 -m unittest discover -s tests -v && npm run test:e2e",
-    "test:contract": "python3 -m pytest tests/contract -v",
+    "test": "npm run typecheck && cargo test --manifest-path rust/Cargo.toml && npm run test:e2e && bash scripts/check-no-python.sh",
+    "test:contracts": "cargo test --manifest-path rust/Cargo.toml -p atelier-server --test http_smoke",
     "test:e2e": "playwright test",
     "typecheck": "tsc --noEmit",
     "build:frontend": "tsc",
     "build:rust": "bash scripts/build-release.sh",
-    "build:release": "bash scripts/build-release.sh"
+    "build:release": "bash scripts/build-release.sh",
+    "check:no-python": "bash scripts/check-no-python.sh"
   },
   "devDependencies": {
     "@playwright/test": "^1.61.0",

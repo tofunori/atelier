@@ -4,4 +4,5 @@ members = [
   "crates/atelier-core",
   "crates/atelier-server",
   "crates/atelier-cli",
+  "crates/atelier-mcp",
 ]
