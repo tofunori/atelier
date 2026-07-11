@@ -18,6 +18,13 @@
 <script src="/.fig_thumbs/purify.min.js"></script>
 <script src="/.fig_thumbs/diff.min.js"></script>
 <script src="/.fig_thumbs/diff_versions.js"></script>
+<!-- Shared LaTeX helpers (Gate C extraction — studio keeps full UI, uses these for pure logic) -->
+<script src="/.fig_thumbs/editor/rewrap.js"></script>
+<script src="/.fig_thumbs/editor/modules/latex/outline.js"></script>
+<script src="/.fig_thumbs/editor/modules/latex/compile.js"></script>
+<script src="/.fig_thumbs/editor/modules/latex/synctex.js"></script>
+<script src="/.fig_thumbs/editor/modules/latex/comments.js"></script>
+<script src="/.fig_thumbs/editor/modules/latex/ghost.js"></script>
 <link rel="stylesheet" href="/.fig_thumbs/katex/katex.min.css">
 <script src="/.fig_thumbs/katex/katex.min.js"></script>
 <script src="/.fig_thumbs/texvisual.min.js"></script>
@@ -927,6 +934,20 @@ async function load(){
     const gutter = cm.getGutterElement().offsetWidth;
     const col = chosen > 0 ? chosen : Math.max(40, Math.min(120,
       Math.floor((cm.getWrapperElement().clientWidth - gutter - 16) / cm.defaultCharWidth())));
+    const before = cm.getValue();
+    // Prefer shared safe comment rewrap (never merge mixed % blocks)
+    if (window.AtelierRewrap) {
+      const r = AtelierRewrap.rewrapParagraph(cm, "tex", col, true);
+      if (r && r.ok && window.AtelierLatexComments && typeof texcAll !== "undefined" && texcAll.length) {
+        const re = AtelierLatexComments.reanchor(texcAll, before, cm.getValue());
+        // clear old marks and re-apply
+        Object.keys(texcMarks || {}).forEach(id => { try { texcMarks[id].clear(); } catch(e){} delete texcMarks[id]; });
+        texcAll = re.ok;
+        texcAll.forEach(texcMark);
+        if (typeof texcSave === "function") texcSave();
+      }
+      return;
+    }
     let from, to;
     if(cm.somethingSelected()){
       from = cm.getCursor("from").line; to = cm.getCursor("to").line;
@@ -940,10 +961,11 @@ async function load(){
     // préserver un préfixe de commentaire commun (% latex, # py/r/jl, // js)
     const cm0=(lines[0].match(/^\s*([%#]+|\/\/)\s?/)||[])[1] || "";
     const allComment = cm0 && lines.every(l => !l.trim() || l.trim().startsWith(cm0));
-    const prefix = allComment ? indent + cm0 + " " : indent;
-    const strip = (l) => allComment
-      ? l.replace(new RegExp("^\\s*" + cm0.replace(/[%/]/g, "\\$&") + "\\s?"), "").trim()
-      : l.trim();
+    // Gate C: refuse non-comment rewrap (protect code / environments)
+    if(!allComment) return;
+    const prefix = indent + cm0 + " ";
+    const strip = (l) =>
+      l.replace(new RegExp("^\\s*" + cm0.replace(/[%/]/g, "\\$&") + "\\s?"), "").trim();
     const words=lines.map(strip).join(" ").split(/\s+/).filter(Boolean);
     const out=[]; let curL="";
     for(const w of words){
@@ -953,6 +975,13 @@ async function load(){
     }
     if(curL) out.push(curL);
     cm.replaceRange(out.join("\n"), {line:from,ch:0}, {line:to,ch:cm.getLine(to).length});
+    if (window.AtelierLatexComments && typeof texcAll !== "undefined" && texcAll.length) {
+      const re = AtelierLatexComments.reanchor(texcAll, before, cm.getValue());
+      Object.keys(texcMarks || {}).forEach(id => { try { texcMarks[id].clear(); } catch(e){} delete texcMarks[id]; });
+      texcAll = re.ok;
+      texcAll.forEach(texcMark);
+      if (typeof texcSave === "function") texcSave();
+    }
   }
   cm.addKeyMap({"Alt-Q": rewrapPar});
   document.getElementById("rewrapBtn").onclick = () => { rewrapPar(); cm.focus(); };
@@ -1018,17 +1047,21 @@ function showCompileLog(j){
   const el = document.getElementById("texlog"), body = document.getElementById("tlBody");
   lastCompile = { log: String(j.log || j.error || ""), ok: !!j.ok };
   document.getElementById("tlStatus").textContent = j.ok ? "· réussie" : "· échec";
-  const esc = (t) => t.replace(/&/g,"&amp;").replace(/</g,"&lt;");
-  const html = esc(String(j.log || j.error || "(pas de log)"))
-    .split("\n").map(line => {
-      let cls = "";
-      if(/^!|Fatal error|Emergency stop/.test(line)) cls = "tl-err";
-      else if(/^LaTeX Warning|^Package .* Warning|Overfull|Underfull/.test(line)) cls = "tl-warn";
-      const withJump = line.replace(/\bl\.(\d+)/g, (m,n)=>`<span class="tl-jump" data-l="${n}">l.${n}</span>`)
-                           .replace(/lines? (\d+)/g, (m,n)=>`<span class="tl-jump" data-l="${n}">${m}</span>`);
-      return cls ? `<span class="${cls}">${withJump}</span>` : withJump;
-    }).join("\n");
-  body.innerHTML = html;
+  // Shared classifier (parity with AtelierLatexCompile) — original behaviour preserved
+  if (window.AtelierLatexCompile && AtelierLatexCompile.renderLogHtml) {
+    body.innerHTML = AtelierLatexCompile.renderLogHtml(j.log || j.error || "(pas de log)");
+  } else {
+    const esc = (t) => t.replace(/&/g,"&amp;").replace(/</g,"&lt;");
+    body.innerHTML = esc(String(j.log || j.error || "(pas de log)"))
+      .split("\n").map(line => {
+        let cls = "";
+        if(/^!|Fatal error|Emergency stop/.test(line)) cls = "tl-err";
+        else if(/^LaTeX Warning|^Package .* Warning|Overfull|Underfull/.test(line)) cls = "tl-warn";
+        const withJump = line.replace(/\bl\.(\d+)/g, (m,n)=>`<span class="tl-jump" data-l="${n}">l.${n}</span>`)
+                             .replace(/lines? (\d+)/g, (m,n)=>`<span class="tl-jump" data-l="${n}">${m}</span>`);
+        return cls ? `<span class="${cls}">${withJump}</span>` : withJump;
+      }).join("\n");
+  }
   el.classList.toggle("open", !j.ok);   // s'ouvre à l'échec, se ferme si succès
   if(!j.ok){ const firstErr = body.querySelector(".tl-err"); if(firstErr) firstErr.scrollIntoView({block:"start"}); }
 }
@@ -1117,6 +1150,12 @@ document.addEventListener("click", (e) => {
 const outlineEl = document.getElementById("outline");
 function buildOutline(){
   if(!cm) return;
+  // Shared pure outline parser (Gate C) — HTML render stays identical
+  if (window.AtelierLatexOutline) {
+    const items = AtelierLatexOutline.parseOutline(cm.getValue());
+    outlineEl.innerHTML = AtelierLatexOutline.renderOutlineHtml(items, cm.getCursor().line);
+    return;
+  }
   const lines = cm.getValue().split("\n");
   const items = [];
   const RE = /^\s*\\(section|subsection|subsubsection)\*?\{([^{}]*)\}/;
@@ -1239,9 +1278,14 @@ function showMarker(page, y0){
 async function synctexView(){
   if(!cm) return;
   const line = cm.getCursor().line + 1;
-  const r = await fetch("/synctex", {method:"POST", headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({dir:"view", tex: path, pdf: pdfPath, line})});
-  const j = await r.json();
+  let j;
+  if (window.AtelierLatexSynctex) {
+    j = await AtelierLatexSynctex.view({ tex: path, pdf: pdfPath, line });
+  } else {
+    const r = await fetch("/synctex", {method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({dir:"view", tex: path, pdf: pdfPath, line})});
+    j = await r.json();
+  }
   if(!j.page) return setState("hint", "synctex : pas de correspondance ici");
   if(bc) bc.postMessage({t: "view", page: j.page, y: j.y});   // separate PDF tabs scroll too
   if(pdfDoc && !showMarker(j.page, j.y) ) setState("err", "synctex: page not rendered");
@@ -1259,9 +1303,14 @@ function jumpToLine(line){
   cm.focus();
 }
 async function synctexEdit(page, x, y){
-  const r = await fetch("/synctex", {method:"POST", headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({dir:"edit", tex: path, pdf: pdfPath, page, x, y})});
-  const j = await r.json();
+  let j;
+  if (window.AtelierLatexSynctex) {
+    j = await AtelierLatexSynctex.edit({ tex: path, pdf: pdfPath, page, x, y });
+  } else {
+    const r = await fetch("/synctex", {method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({dir:"edit", tex: path, pdf: pdfPath, page, x, y})});
+    j = await r.json();
+  }
   if(!j.line) return setState("hint", "synctex : pas de correspondance ici");
   if(cm) jumpToLine(j.line);
   if(bc) bc.postMessage({t: "jump", line: j.line});   // editor tab jumps when we're the PDF tab

@@ -143,6 +143,8 @@ pub async fn compile(
                         "pdf": if ok { json!(pdf.to_string_lossy()) } else { Value::Null },
                         "root": root.to_string_lossy(),
                         "error": err,
+                        // Full log for UI console (truncated to keep payloads bounded)
+                        "log": truncate_log(&log, 80_000),
                     })),
                 )
                     .into_response()
@@ -152,12 +154,13 @@ pub async fn compile(
                 Json(json!({
                     "ok": false,
                     "error": error.to_string(),
+                    "log": "",
                 })),
             )
                 .into_response(),
             Err(_) => (
                 StatusCode::OK,
-                Json(json!({"ok": false, "error": "compilation > 180 s"})),
+                Json(json!({"ok": false, "error": "compilation > 180 s", "log": ""})),
             )
                 .into_response(),
         };
@@ -190,18 +193,19 @@ pub async fn compile(
                         "pdf": if ok { json!(pdf.to_string_lossy()) } else { Value::Null },
                         "root": root.to_string_lossy(),
                         "error": err,
+                        "log": truncate_log(&log, 80_000),
                     })),
                 )
                     .into_response()
             }
             Ok(Err(error)) => (
                 StatusCode::OK,
-                Json(json!({"ok": false, "error": error.to_string()})),
+                Json(json!({"ok": false, "error": error.to_string(), "log": ""})),
             )
                 .into_response(),
             Err(_) => (
                 StatusCode::OK,
-                Json(json!({"ok": false, "error": "compilation > 180 s"})),
+                Json(json!({"ok": false, "error": "compilation > 180 s", "log": ""})),
             )
                 .into_response(),
         };
@@ -228,6 +232,15 @@ fn compile_error_excerpt(log: &str) -> String {
     }
     let count = log.chars().count();
     log.chars().skip(count.saturating_sub(1500)).collect()
+}
+
+fn truncate_log(log: &str, max_chars: usize) -> String {
+    let count = log.chars().count();
+    if count <= max_chars {
+        return log.to_string();
+    }
+    let tail: String = log.chars().skip(count - max_chars).collect();
+    format!("…[truncated]\n{tail}")
 }
 
 // ---------------------------------------------------------------------------

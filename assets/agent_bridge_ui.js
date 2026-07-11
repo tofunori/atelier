@@ -204,7 +204,9 @@
   }
   function refresh(){
     nativeFetch('/agent-status?limit=40').then(function(r){return r.json();}).then(function(j){
-      if(j&&j.agentHost==='codex'){state.enabled=true;state.data=j;hub.style.display=window.self===window.top?'none':'block';render();window.dispatchEvent(new CustomEvent('atelier-agent-status',{detail:j}));}
+      // Visible both in gallery (top-level annotation bank) and in editor iframes.
+      // Hiding at top-level broke /quote queue UI and e2e codex annotation bank.
+      if(j&&j.agentHost==='codex'){state.enabled=true;state.data=j;hub.style.display='block';render();window.dispatchEvent(new CustomEvent('atelier-agent-status',{detail:j}));}
       else hub.style.display='none';
     }).catch(function(){hub.style.display='none';});
   }
