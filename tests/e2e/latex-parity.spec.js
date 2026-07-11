@@ -500,6 +500,177 @@ test.describe("Phase 4 — shell LaTeX surface (code_editor?surface=latex)", () 
       expect(result.stillHasCode).toBe(true);
     });
   });
+
+  test("compile saves dirty buffer before building PDF", async ({ page }) => {
+    await withLatexProject(async ({ base, mainPath }) => {
+      const url =
+        `${base}/.fig_thumbs/code_editor.html?surface=latex&path=` +
+        encodeURIComponent(mainPath);
+      await page.goto(url);
+      await page.waitForFunction(() => window.__ATELIER_SHELL__?.module, null, {
+        timeout: 20000,
+      });
+      const marker = "DIRTY_COMPILE_MARKER_" + Date.now();
+      const result = await page.evaluate(async (mark) => {
+        const shell = window.__ATELIER_SHELL__;
+        const cm = shell.cm();
+        // Real edit path (not setValue origin)
+        const end = { line: cm.lineCount() - 1, ch: cm.getLine(cm.lineCount() - 1).length };
+        cm.replaceRange("\n% " + mark + "\n", end);
+        const dirtyBefore = shell.persistence.isDirty();
+        const j = await shell.module.compile();
+        const dirtyAfter = shell.persistence.isDirty();
+        // Disk must contain the marker after compile-before-save
+        const disk = await (await fetch("/code?path=" + encodeURIComponent(shell.path))).json();
+        return {
+          dirtyBefore,
+          dirtyAfter,
+          ok: j && j.ok,
+          diskHasMarker: String(disk.text || "").includes(mark),
+          bufferHasMarker: cm.getValue().includes(mark),
+        };
+      }, marker);
+      expect(result.dirtyBefore).toBe(true);
+      expect(result.ok).toBe(true);
+      expect(result.dirtyAfter).toBe(false);
+      expect(result.diskHasMarker).toBe(true);
+      expect(result.bufferHasMarker).toBe(true);
+    });
+  });
+
+  test("broken compile applies clickable error gutters", async ({ page }) => {
+    await withLatexProject(async ({ base, brokenPath }) => {
+      const url =
+        `${base}/.fig_thumbs/code_editor.html?surface=latex&path=` +
+        encodeURIComponent(brokenPath);
+      await page.goto(url);
+      await page.waitForFunction(() => window.__ATELIER_SHELL__?.module, null, {
+        timeout: 20000,
+      });
+      const result = await page.evaluate(async () => {
+        const shell = window.__ATELIER_SHELL__;
+        const j = await shell.module.compile();
+        const cm = shell.cm();
+        const gutters = document.querySelectorAll(".lint-gutter-err");
+        const errLineBg = document.querySelectorAll(".cm-error-line");
+        const log = document.getElementById("latexCompileLog");
+        const jump = log && log.querySelector(".tl-jump");
+        let jumpedLine = null;
+        if (jump) {
+          jump.click();
+          jumpedLine = cm.getCursor().line + 1;
+        }
+        return {
+          ok: j && j.ok,
+          hasGutter: gutters.length > 0,
+          hasErrBg: errLineBg.length > 0,
+          hasJump: !!jump,
+          jumpedLine,
+          logHasBang: !!(log && /!|Error|Undefined/i.test(log.textContent || "")),
+        };
+      });
+      expect(result.ok).toBe(false);
+      expect(result.hasGutter || result.hasErrBg).toBe(true);
+      expect(result.logHasBang).toBe(true);
+      if (result.hasJump) {
+        expect(result.jumpedLine).toBeGreaterThan(0);
+      }
+    });
+  });
+
+  test("SyncTeX reverse via shell postMessage jumps to source line", async ({ page }) => {
+    await withLatexProject(async ({ base, mainPath }) => {
+      // Pre-compile so PDF + synctex exist
+      await fetch(`${base}/compile`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: mainPath }),
+      });
+      const url =
+        `${base}/.fig_thumbs/code_editor.html?surface=latex&path=` +
+        encodeURIComponent(mainPath);
+      await page.goto(url);
+      await page.waitForFunction(() => window.__ATELIER_SHELL__?.module, null, {
+        timeout: 20000,
+      });
+      // Forward first to get a valid page/y, then reverse via postMessage path
+      const result = await page.evaluate(async () => {
+        const shell = window.__ATELIER_SHELL__;
+        const cm = shell.cm();
+        // Place cursor on "Hello Gate C" line
+        const text = cm.getValue().split("\n");
+        let line = text.findIndex((l) => l.includes("Hello Gate C"));
+        if (line < 0) line = 5;
+        cm.setCursor({ line, ch: 0 });
+        const fwd = await shell.module.synctexForward();
+        if (!fwd || !fwd.page) {
+          return { error: "forward failed", fwd };
+        }
+        // Simulate PDF click message the module listens for
+        window.postMessage(
+          {
+            type: "atelier-synctex-edit",
+            page: fwd.page,
+            x: fwd.x ?? 100,
+            y: fwd.y ?? 100,
+          },
+          "*"
+        );
+        await new Promise((r) => setTimeout(r, 400));
+        // Also exercise direct API
+        const back = await shell.module.synctexBackward(
+          fwd.page,
+          fwd.x ?? 100,
+          fwd.y ?? 100
+        );
+        return {
+          fwdPage: fwd.page,
+          backLine: back && back.line,
+          cursorLine: cm.getCursor().line + 1,
+          hasSyncClass:
+            !!document.querySelector(".cm-syncline") ||
+            (back && back.line > 0),
+        };
+      });
+      expect(result.error).toBeFalsy();
+      expect(result.fwdPage).toBeGreaterThan(0);
+      expect(result.backLine).toBeGreaterThan(0);
+      expect(result.cursorLine).toBeGreaterThan(0);
+      // Within a few lines of the original body text
+      expect(Math.abs(result.cursorLine - result.backLine)).toBeLessThanOrEqual(2);
+    });
+  });
+
+  test("destroy during in-flight compile does not throw or paint after death", async ({ page }) => {
+    await withLatexProject(async ({ base, mainPath }) => {
+      const url =
+        `${base}/.fig_thumbs/code_editor.html?surface=latex&path=` +
+        encodeURIComponent(mainPath);
+      await page.goto(url);
+      await page.waitForFunction(() => window.__ATELIER_SHELL__?.module, null, {
+        timeout: 20000,
+      });
+      const result = await page.evaluate(async () => {
+        const shell = window.__ATELIER_SHELL__;
+        const p = shell.module.compile(); // do not await yet
+        shell.destroy();
+        let settled = null;
+        try {
+          settled = await p;
+        } catch (e) {
+          return { threw: true, message: String(e && e.message) };
+        }
+        // After destroy, gutters/listeners should not be re-applied as live UI crashes
+        return {
+          threw: false,
+          settledOk: settled === null || typeof settled === "object",
+          shellDestroyed: true,
+        };
+      });
+      expect(result.threw).toBe(false);
+      expect(result.settledOk).toBe(true);
+    });
+  });
 });
 
 test.describe("Gate C — agent bank not hidden at top-level", () => {

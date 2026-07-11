@@ -125,6 +125,11 @@ Shell surface : `code_editor.html?surface=latex` + `AtelierModuleLatex`
 Galerie ouvre encore **`latex_studio.html`** par défaut (pas de bascule silent).
 Tests : `tests/e2e/latex-parity.spec.js` (studio + shell), contrats `latex-surface-contract`.
 
+### Correctifs parité utilisateur (post-3853e84)
+
+- **Compile-before-save** : si `persistence.isDirty()`, `save()` avant `POST /compile` (comme le studio).
+- E2E shell supplémentaires : buffer dirty → disque, gutters après compile cassée, SyncTeX reverse via `postMessage`, destroy pendant compile async.
+
 ## Restant
 
 - Soak réel puis bascule route galerie TeX → shell (optionnel)

@@ -188,6 +188,9 @@
       },
       onLoaded: function () {},
     });
+    // Modules (LaTeX compile, etc.) may need to flush the dirty buffer before
+    // privileged server ops that read the file on disk.
+    ctx.persistence = persistence;
 
     async function initEditor(text) {
       if (!els.ed) throw new Error("shell: missing #ed");
