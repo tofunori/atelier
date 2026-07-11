@@ -267,11 +267,16 @@ def wait_up(port: int, timeout: float = 8.0) -> bool:
     return False
 
 
-def write_server_state(root: str, port: int, pid: int, log_path: str) -> None:
+def command_backend(command: list[str]) -> str:
+    return "python" if command and os.path.realpath(command[0]) == os.path.realpath(sys.executable) else "rust"
+
+
+def write_server_state(root: str, port: int, pid: int, log_path: str,
+                       effective_backend: str | None = None) -> None:
     os.makedirs(os.path.join(root, ".fig_thumbs"), exist_ok=True)
     data = {
         "service": "atelier",
-        "backend": backend_name(),
+        "backend": effective_backend or backend_name(),
         "project": os.path.realpath(root),
         "port": port,
         "pid": pid,
@@ -390,8 +395,8 @@ def cmd_doctor(a) -> None:
         raise SystemExit(f"[atelier] {failed} diagnostic check(s) failed{hint}")
 
 
-def start_detached_server(root: str, port: int) -> tuple[int, str]:
-    command, env = backend_command(root, port)
+def start_detached_server(root: str, port: int, command_env=None) -> tuple[int, str]:
+    command, env = command_env or backend_command(root, port)
     os.makedirs(os.path.join(root, ".fig_thumbs"), exist_ok=True)
     log_path = os.path.join(root, ".fig_thumbs", f"cmux-gallery-{port}.log")
     log = open(log_path, "a", encoding="utf-8")
@@ -408,16 +413,18 @@ def start_detached_server(root: str, port: int) -> tuple[int, str]:
         )
     finally:
         log.close()
-    write_server_state(root, port, srv.pid, log_path)
+    write_server_state(root, port, srv.pid, log_path, command_backend(command))
     return srv.pid, log_path
 
 
 def resolve_port_for_host(root: str, requested_port: int) -> int:
     port = requested_port or project_port(root)
+    command, _ = backend_command(root, port)
+    effective = command_backend(command)
     if not _port_busy(port):
         return port
     served_project = server_project(port)
-    if served_project == os.path.realpath(root) and server_backend(port) == backend_name():
+    if served_project == os.path.realpath(root) and server_backend(port) == effective:
         return port
     if requested_port:
         raise SystemExit(f"[atelier] port {port} is busy and is not serving {root}")
@@ -434,13 +441,15 @@ def cmd_foreground(a) -> None:
     out = build(a.root)
     print(f"[atelier] built {out}")
     port = a.port or project_port(a.root)
+    command, env = backend_command(a.root, port)
+    effective = command_backend(command)
     # The build above already refreshed figures_index.html + viewers. If our own
     # gallery for THIS project is already running on its stable port, reuse it
     # (the live server serves the fresh file) instead of starting a duplicate on
     # a random port — that's what was leaking a new port on every run.
     if not a.port and _port_busy(port):
         if (server_project(port) == os.path.realpath(a.root)
-                and server_backend(port) == backend_name()):
+                and server_backend(port) == effective):
             url = gallery_url(port)
             print(f"[atelier] gallery already running on :{port} → reusing it "
                   f"(rebuilt; stable URL, no duplicate server)")
@@ -450,7 +459,7 @@ def cmd_foreground(a) -> None:
             return
         print(f"[atelier] port {port} busy (not our gallery) → using a free port", file=sys.stderr)
         port = next((c for c in range(port + 1, port + 50) if not _port_busy(c)), 0) or free_port()
-    command, env = backend_command(a.root, port)
+        command, env = backend_command(a.root, port)
     print(f"[atelier] starting server on :{port}  (cwd={a.root})")
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))  # SIGTERM -> SystemExit -> finally tears down the server (no orphan)
     srv = subprocess.Popen(command, cwd=a.root, env=env)
@@ -476,13 +485,15 @@ def cmd_open(a) -> None:
     out = build(a.root)
     print(f"[atelier] built {out}")
     port = resolve_port_for_host(a.root, a.port)
+    command_env = backend_command(a.root, port)
+    effective = command_backend(command_env[0])
     url = gallery_url(port)
     served_project = server_project(port) if _port_busy(port) else None
     if (served_project == os.path.realpath(a.root)
-            and server_backend(port) == backend_name()):
+            and server_backend(port) == effective):
         print(f"[atelier] gallery already running on :{port} → reusing it")
     else:
-        pid, log_path = start_detached_server(a.root, port)
+        pid, log_path = start_detached_server(a.root, port, command_env)
         if wait_up(port):
             print(f"[atelier] started detached server pid {pid} on :{port}")
         else:
@@ -558,10 +569,9 @@ def cmd_codex_serve(a) -> None:
     env = dict(os.environ, GALLERY_ROOT=a.root, FIG_PORT=str(a.port or project_port(a.root)),
                ATELIER_AGENT_HOST="codex")
     os.chdir(a.root)
-    if os.environ.get("ATELIER_BACKEND", "python").strip().lower() == "rust":
-        command, _ = backend_command(a.root, int(a.port or project_port(a.root)))
-        os.execve(command[0], command, env)
-    os.execve(sys.executable, [sys.executable, SERVER], env)
+    command, command_env = backend_command(a.root, int(a.port or project_port(a.root)))
+    command_env.update(env)
+    os.execve(command[0], command, command_env)
 
 
 def cmd_rust_serve(a) -> None:

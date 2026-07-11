@@ -31,6 +31,14 @@ if command -v cargo >/dev/null 2>&1 && [[ -f "${REPO}/rust/Cargo.toml" ]]; then
     cp -f "${REPO}/dist/bin/atelier-server" "${BIN}/atelier-server"
     cp -f "${REPO}/dist/bin/atelier-cli" "${BIN}/atelier-cli"
     chmod +x "${BIN}/atelier-server" "${BIN}/atelier-cli"
+    if command -v xattr >/dev/null 2>&1; then
+      xattr -d com.apple.provenance "${BIN}/atelier-server" 2>/dev/null || true
+      xattr -d com.apple.provenance "${BIN}/atelier-cli" 2>/dev/null || true
+    fi
+    if [[ "$(uname -s)" == "Darwin" ]] && command -v codesign >/dev/null 2>&1; then
+      codesign --force --sign - "${BIN}/atelier-server"
+      codesign --force --sign - "${BIN}/atelier-cli"
+    fi
     echo "  ✓ installed ${BIN}/atelier-server"
     echo "  ✓ installed ${BIN}/atelier-cli"
     RUST_OK=1

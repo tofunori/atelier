@@ -819,7 +819,7 @@ window.DiffVersions = function(opts){
       ta.focus(); ta.select();
       // message Haiku en arrière-plan : ne remplace que si l'utilisateur n'a pas touché
       const seq = ++aiSeq;
-      fetch("/commitmsg?path=" + encodeURIComponent(path))
+      fetch("/commitmsg", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ path }) })
         .then(r => r.json())
         .then(j => {
           if(seq !== aiSeq || commitPop.style.display === "none") return;
@@ -832,7 +832,7 @@ window.DiffVersions = function(opts){
     aiBtn.onclick = async () => {
       aiBtn.disabled = true; aiBtn.textContent = "…";
       try{
-        const r = await fetch("/commitmsg?path=" + encodeURIComponent(path));
+        const r = await fetch("/commitmsg", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ path }) });
         const j = await r.json();
         if(j && j.ok && j.msg){ ta.value = j.msg; ta.focus(); ta.select(); }
         else notify("pas de proposition (fichier sans diff ?)");

@@ -1372,21 +1372,16 @@ def write_contact_sheet(out_path, files):
         name = html.escape(os.path.basename(p))
         thumb = '<div class="ph">' + html.escape(ext.lstrip(".").upper() or "FILE") + '</div>'
         if ext in RASTER:
-            tmp = p + ".contact.jpg"
-            try:
-                subprocess.run(["sips", "-Z", "460", "-s", "format", "jpeg", p, "--out", tmp],
-                               capture_output=True, timeout=20)
-                if os.path.isfile(tmp):
-                    with open(tmp, "rb") as fh:
-                        thumb = '<img src="data:image/jpeg;base64,' + base64.b64encode(fh.read()).decode() + '">'
-            except Exception:
-                pass
-            finally:
-                if os.path.exists(tmp):
-                    try:
-                        os.remove(tmp)
-                    except OSError:
-                        pass
+            with tempfile.TemporaryDirectory(prefix="atelier-contact-") as tmpdir:
+                tmp = os.path.join(tmpdir, "preview.jpg")
+                try:
+                    subprocess.run(["sips", "-Z", "460", "-s", "format", "jpeg", p, "--out", tmp],
+                                   capture_output=True, timeout=20)
+                    if os.path.isfile(tmp):
+                        with open(tmp, "rb") as fh:
+                            thumb = '<img src="data:image/jpeg;base64,' + base64.b64encode(fh.read()).decode() + '">'
+                except Exception:
+                    pass
         cells.append('<figure>' + thumb + '<figcaption>' + name + '</figcaption></figure>')
     doc = ('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Contact sheet</title><style>'
            'body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;margin:24px;background:#fff;color:#111}'
@@ -1750,7 +1745,7 @@ class Handler(SimpleHTTPRequestHandler):
                        os.path.isfile(candidate))
         content_type = mimetypes.guess_type(clean)[0]
         executable_document = content_type in ("text/html", "application/xhtml+xml", "image/svg+xml")
-        if CODEX_PREVIEW and not trusted and executable_document:
+        if not trusted and executable_document:
             self.send_header("Content-Security-Policy",
                              "sandbox allow-scripts allow-forms allow-modals allow-popups")
         super().end_headers()
@@ -1765,6 +1760,7 @@ class Handler(SimpleHTTPRequestHandler):
         body = json.dumps(payload).encode()
         self.send_response(code)
         self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
@@ -2268,45 +2264,6 @@ class Handler(SimpleHTTPRequestHandler):
                 if text is None:
                     return self._respond(200, {"ok": False})
                 return self._respond(200, {"ok": True, "text": text})
-            except Exception:
-                return self._respond(200, {"ok": False})
-        if self.path.startswith("/commitmsg?"):
-            # message de commit proposé par Haiku depuis le diff vs base.
-            # ok:false = pas de diff / pas de claude : le client garde son message auto.
-            try:
-                from urllib.parse import parse_qs, urlparse
-                q = parse_qs(urlparse(self.path).query)
-                p = self._safe_path(q.get("path", [""])[0])
-                if not p:
-                    return self._respond(200, {"ok": False})
-                root, rel = _git_root_rel(p)
-                if not root:
-                    return self._respond(200, {"ok": False})
-                base = _git_base(root)
-                diff = _git_out(["diff", base, "--", rel], root)
-                if not diff or not diff.strip():
-                    return self._respond(200, {"ok": False})
-                claude = shutil.which("claude")
-                if not claude:
-                    return self._respond(200, {"ok": False})
-                sys_prompt = ("Tu écris des messages de commit git. Réponds UNIQUEMENT avec le "
-                              "message : une seule ligne, impérative, concise (max 72 caractères), "
-                              "en français, sans guillemets, sans préfixe conventionnel, sans explication.")
-                env = dict(os.environ, MAX_THINKING_TOKENS="0")
-                try:
-                    r = subprocess.run(
-                        [claude, "-p", "--model", "haiku", "--setting-sources", "project",
-                         "--system-prompt", sys_prompt,
-                         "--disallowedTools", "Bash,Edit,Write,Read,Grep,Glob,Task,WebFetch,WebSearch,NotebookEdit"],
-                        input="Fichier : %s\n\nDiff :\n%s" % (rel, diff[:8000]),
-                        cwd=root, env=env, capture_output=True, text=True, timeout=20)
-                    text = r.stdout.strip() if r.returncode == 0 else ""
-                except Exception:
-                    text = ""
-                if not text:
-                    return self._respond(200, {"ok": False})
-                msg = re.sub(r"^[\"'`]+|[\"'`]+$", "", text.splitlines()[0])[:100]
-                return self._respond(200, {"ok": True, "msg": msg})
             except Exception:
                 return self._respond(200, {"ok": False})
         if self.path.startswith("/code?"):
@@ -3218,6 +3175,44 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._respond(400, {"error": "bad request: " + str(e)})
             except Exception as e:
                 return self._respond(500, {"error": str(e)})
+        if self.path == "/commitmsg":
+            # POST only: generating a message launches Claude and must not be
+            # triggerable by a cross-site image/navigation GET.
+            if not self._local_only():
+                return self._respond(403, {"error": "cross-origin blocked"})
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+                req = json.loads(self.rfile.read(length))
+                p = self._safe_path(req.get("path") or "")
+                if not p:
+                    return self._respond(200, {"ok": False})
+                root, rel = _git_root_rel(p)
+                if not root:
+                    return self._respond(200, {"ok": False})
+                base = _git_base(root)
+                diff = _git_out(["diff", base, "--", rel], root)
+                if not diff or not diff.strip():
+                    return self._respond(200, {"ok": False})
+                claude = shutil.which("claude")
+                if not claude:
+                    return self._respond(200, {"ok": False})
+                sys_prompt = ("Tu écris des messages de commit git. Réponds UNIQUEMENT avec le "
+                              "message : une seule ligne, impérative, concise (max 72 caractères), "
+                              "en français, sans guillemets, sans préfixe conventionnel, sans explication.")
+                env = dict(os.environ, MAX_THINKING_TOKENS="0")
+                result = subprocess.run(
+                    [claude, "-p", "--model", "haiku", "--setting-sources", "user",
+                     "--system-prompt", sys_prompt,
+                     "--disallowedTools", "Bash,Edit,Write,Read,Grep,Glob,Task,WebFetch,WebSearch,NotebookEdit"],
+                    input="Fichier : %s\n\nDiff :\n%s" % (rel, diff[:8000]),
+                    cwd=root, env=env, capture_output=True, text=True, timeout=20)
+                text = result.stdout.strip() if result.returncode == 0 else ""
+                if not text:
+                    return self._respond(200, {"ok": False})
+                msg = re.sub(r"^[\"'`]+|[\"'`]+$", "", text.splitlines()[0])[:100]
+                return self._respond(200, {"ok": True, "msg": msg})
+            except Exception:
+                return self._respond(200, {"ok": False})
         if self.path == "/gitcommit":
             # commit du fichier courant SEUL (jamais -A) — bouton commit de l'éditeur
             try:
@@ -3241,8 +3236,7 @@ class Handler(SimpleHTTPRequestHandler):
                     clean = _git_out(["diff", "--quiet", base, "HEAD", "--", rel], root)
                     if clean is not None:  # exit 0 = identique à la base : rien à committer
                         return self._respond(200, {"ok": False, "error": "git commit a échoué (rien à committer ?)"})
-                    if _git_out(["commit", "--no-verify", "--allow-empty", "-m", msg], root) is None:
-                        return self._respond(200, {"ok": False, "error": "git commit a échoué"})
+                    return self._respond(200, {"ok": False, "error": "git commit ciblé a échoué"})
                 sha = (_git_out(["rev-parse", "--short", "HEAD"], root) or "").strip()
                 return self._respond(200, {"ok": True, "sha": sha})
             except (KeyError, ValueError, json.JSONDecodeError) as e:

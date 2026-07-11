@@ -195,7 +195,9 @@ rebuild clean).
 | `ATELIER_RUST_SERVER` | absolute path to a custom `atelier-server` binary |
 | `ATELIER_BUILD_TYPESCRIPT=1` | recompile the TypeScript client during a build/rebuild |
 
-The Rust backend is the **default** with full route parity (`tests/contract`).
+The Rust backend is the **default** with 75 ported routes and three documented
+compatibility differences (`/ping`, `/quote`, `/save`; see
+`docs/rust-route-parity.md`).
 Install builds release binaries into `~/.local/bin` (`atelier-server`,
 `atelier-cli`). Gallery HTML rebuilds still call `build_gallery.py` (Python)
 for the index. The Python HTTP server is a temporary fallback when the Rust

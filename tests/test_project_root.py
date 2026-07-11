@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import sys
 
@@ -51,6 +51,36 @@ class ProjectRootTests(unittest.TestCase):
                 patch.object(cmux_gallery, "server_project", return_value="/tmp/other"):
             with self.assertRaises(SystemExit):
                 cmux_gallery.resolve_port_for_host("/tmp/project", 9999)
+
+    def test_resolve_port_reuses_effective_python_fallback(self):
+        python_command = ([cmux_gallery.sys.executable, cmux_gallery.SERVER], {})
+        with patch.object(cmux_gallery, "backend_command", return_value=python_command), \
+                patch.object(cmux_gallery, "_port_busy", return_value=True), \
+                patch.object(cmux_gallery, "server_project", return_value=os.path.realpath("/tmp/project")), \
+                patch.object(cmux_gallery, "server_backend", return_value="python"):
+            self.assertEqual(cmux_gallery.resolve_port_for_host("/tmp/project", 9999), 9999)
+
+    def test_foreground_rebuilds_command_after_port_collision(self):
+        process = MagicMock()
+        process.wait.return_value = 0
+        process.terminate.return_value = None
+
+        def command(root, port):
+            return (["atelier-server", "--root", root, "--port", str(port)], {})
+
+        args = SimpleNamespace(root="/tmp/project", port=0, open=False)
+        with patch.object(cmux_gallery, "build", return_value="/tmp/project/figures_index.html"), \
+                patch.object(cmux_gallery, "project_port", return_value=9000), \
+                patch.object(cmux_gallery, "_port_busy", side_effect=[True, False]), \
+                patch.object(cmux_gallery, "server_project", return_value="/tmp/other"), \
+                patch.object(cmux_gallery, "backend_command", side_effect=command) as backend, \
+                patch.object(cmux_gallery.subprocess, "Popen", return_value=process) as popen, \
+                patch.object(cmux_gallery, "wait_up", return_value=True), \
+                patch.object(cmux_gallery.signal, "signal"):
+            cmux_gallery.cmd_foreground(args)
+
+        self.assertEqual([call.args[1] for call in backend.call_args_list], [9000, 9001])
+        self.assertIn("9001", popen.call_args.args[0])
 
     def test_server_state_round_trip(self):
         with tempfile.TemporaryDirectory() as td:
