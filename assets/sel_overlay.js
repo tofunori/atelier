@@ -9,7 +9,7 @@
 function __ct(){try{return JSON.parse(localStorage.getItem('claudeTargetV1')||'null')}catch(e){return null}}
   var EMBEDDED = (function(){ try { return window.self !== window.top; } catch(e){ return true; } })();
 /* sel_overlay.js — select text in a project HTML report → annotate → send to Claude.
-   Injected by fig_annotate_server into project .html files (never the gallery index
+   Injected by atelier-server into project .html files (never the gallery index
    or the /.fig_thumbs viewers, which have their own selection systems).
    Selecting text: (1) feeds ~/.claude/fig-selection.json via /selinfo (the "ma
    sélection" flow), (2) shows a pill near the selection: [💬 Annoter] [↑ send].

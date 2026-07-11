@@ -36,7 +36,7 @@
       "runtimeExecutable": "sh",
       "runtimeArgs": [
         "-c",
-        "CLAUDE_PREVIEW=1 FIG_PORT=\"${PORT:-9359}\" GALLERY_ROOT=\"$PWD\" /opt/homebrew/opt/python@3.14/bin/python3.14 /Users/tofunori/Documents/cmux-gallery/fig_annotate_server.py"
+        "export CLAUDE_PREVIEW=1; export PORT=\"${PORT:-9359}\"; if [ -d \"$PWD/assets\" ]; then export ATELIER_ASSETS_DIR=\"$PWD/assets\"; elif [ -d \"$HOME/.local/share/atelier/assets\" ]; then export ATELIER_ASSETS_DIR=\"$HOME/.local/share/atelier/assets\"; fi; exec atelier serve --root \"$PWD\" --port \"$PORT\""
       ],
       "port": 9359,
       "autoPort": true
