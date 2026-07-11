@@ -1267,6 +1267,24 @@ async function delOne(rel){
 }
 let lbList = [], lbIdx = -1;
 const lb=()=>document.getElementById('lb');
+// Experimental: open .tex in the unified CM6 shell instead of latex_studio.
+// Enable with ?latexShell=1 on the gallery URL, or localStorage atelier.editor.v1.latexShell=1.
+// Default remains latex_studio.html (soak path).
+function latexShellEnabled(){
+  try{
+    const q=new URLSearchParams(location.search);
+    if(q.get('latexShell')==='1'||q.get('editorShell')==='v2') return true;
+    if(q.get('latexShell')==='0') return false;
+    return localStorage.getItem('atelier.editor.v1.latexShell')==='1';
+  }catch(e){ return false; }
+}
+function texEditorUrl(rel){
+  const abs='__ROOT__/'+rel;
+  if(latexShellEnabled()){
+    return '/.fig_thumbs/code_editor.html?surface=latex&path='+encodeURIComponent(abs)+'&v=__VER__';
+  }
+  return '/.fig_thumbs/latex_studio.html?path='+encodeURIComponent(abs)+'&v=__VER__';
+}
 async function lbShow(i){
   if(lbIdx>=0 && i!==lbIdx && !(await annotGuard())) return;
   if(i<0||i>=lbList.length) return;
@@ -1275,12 +1293,12 @@ async function lbShow(i){
   // Embarqué dans Atelier Studio : les fichiers texte/code s'ouvrent dans un
   // ONGLET Studio (la galerie reste navigable), pas dans la lightbox.
   if((isTex||isMd||isCode||isPdf) && (USE_TABS || window.self!==window.top)){
-    // Routes canoniques unifiées : code → code_editor (shell CM6), TeX → latex_studio,
-    // Markdown source → md_viewer (shell). md_studio reste accessible via ?wysiwyg=1.
+    // Routes canoniques unifiées : code → code_editor (shell CM6), TeX → latex_studio
+    // (défaut) ou shell expérimental si latexShell=1, Markdown → md_viewer.
     let u;
     if(isPdf) u='/.fig_thumbs/pdf_viewer.html?file='+encodeURIComponent(f.rel)+'&v=__VER__';
     else if(isMd) u='/.fig_thumbs/md_viewer.html?path='+encodeURIComponent('__ROOT__/'+f.rel)+'&file='+encodeURIComponent(f.rel)+'&v=__VER__';
-    else if(isTex) u='/.fig_thumbs/latex_studio.html?path='+encodeURIComponent('__ROOT__/'+f.rel)+'&v=__VER__';
+    else if(isTex) u=texEditorUrl(f.rel);
     else u='/.fig_thumbs/code_editor.html?path='+encodeURIComponent('__ROOT__/'+f.rel)+'&v=__VER__';
     // onglet interne si dispo, sinon onglet de l'hôte Atelier Studio
     if(!TabShell.open(u, f.name)) __atelierPost({type:'atelier-open-tab', url:u, title:f.name});
@@ -1288,14 +1306,14 @@ async function lbShow(i){
     return;
   }
   const img=document.getElementById('lbImg'), pdf=document.getElementById('lbPdf'), vid=document.getElementById('lbVid');
-  const vw=isPdf||isMd||isCode||isSvg;
+  const vw=isPdf||isMd||isCode||isSvg||isTex;
   img.style.display=(vw||isVid)?'none':'';
   pdf.style.display=vw?'':'none';
   vid.style.display=isVid?'':'none';
   if(!isVid && vid.getAttribute('src')){vid.pause();vid.removeAttribute('src');vid.load();}  // stop playback when leaving a video
   lb().classList.toggle('vw', vw);  // full-window editor/viewer
   if(isVid){vid.src=f.rel+'?v='+f.mtime;img.src='';pdf.src='';}
-  else if(isTex){pdf.src='/.fig_thumbs/latex_studio.html?path='+encodeURIComponent('__ROOT__/'+f.rel)+'&v=__VER__';img.src='';}
+  else if(isTex){pdf.src=texEditorUrl(f.rel);img.src='';}
   else if(isPdf){pdf.src='/.fig_thumbs/pdf_viewer.html?file='+encodeURIComponent(f.rel)+'&v=__VER__';img.src='';}
   else if(isMd){pdf.src='/.fig_thumbs/md_viewer.html?path='+encodeURIComponent('__ROOT__/'+f.rel)+'&file='+encodeURIComponent(f.rel)+'&v=__VER__';img.src='';}
   else if(isCode){pdf.src='/.fig_thumbs/code_editor.html?path='+encodeURIComponent('__ROOT__/'+f.rel)+'&v=__VER__';img.src='';}

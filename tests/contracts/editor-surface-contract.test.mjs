@@ -128,6 +128,11 @@ describe("Phase 0 — editor surface inventory", () => {
     }
     // Canonical Markdown route is md_viewer (shell); md_studio remains optional WYSIWYG
     assert.ok(html.includes("md_viewer.html"), "canonical md route");
+    // TeX default remains studio; experimental shell behind latexShell flag
+    assert.ok(html.includes("function latexShellEnabled"), "latexShell flag helper");
+    assert.ok(html.includes("function texEditorUrl"), "tex route helper");
+    assert.ok(html.includes("latex_studio.html"), "default tex studio");
+    assert.ok(html.includes("surface=latex"), "experimental shell tex surface");
   });
 
   it("code_editor explorer routes tex vs code", () => {

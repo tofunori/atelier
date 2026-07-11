@@ -177,27 +177,30 @@
     }
 
     async function compile() {
-      await helpersReady;
+      // Lock immediately so a double-click during save-before-compile cannot
+      // start a second save/compile chain.
       if (!ctx.path || compiling || destroyed) return null;
-      // Parity with latex_studio: flush dirty buffer before /compile (disk read).
-      var pers = ctx.persistence;
-      if (pers && typeof pers.isDirty === "function" && pers.isDirty()) {
-        if (ctx.status) ctx.status.set("saved", "saving…");
-        var saved = await pers.save();
-        if (destroyed) return null;
-        if (!saved) {
-          if (ctx.status)
-            ctx.status.set(
-              "conflict",
-              "sauvegarde refusée — compilation annulée"
-            );
-          return { ok: false, error: "save-before-compile failed" };
-        }
-      }
-      if (destroyed) return null;
       compiling = true;
-      if (ctx.status) ctx.status.set("saved", "compiling…");
       try {
+        await helpersReady;
+        if (destroyed) return null;
+        // Parity with latex_studio: flush dirty buffer before /compile (disk read).
+        var pers = ctx.persistence;
+        if (pers && typeof pers.isDirty === "function" && pers.isDirty()) {
+          if (ctx.status) ctx.status.set("saved", "saving…");
+          var saved = await pers.save();
+          if (destroyed) return null;
+          if (!saved) {
+            if (ctx.status)
+              ctx.status.set(
+                "conflict",
+                "sauvegarde refusée — compilation annulée"
+              );
+            return { ok: false, error: "save-before-compile failed" };
+          }
+        }
+        if (destroyed) return null;
+        if (ctx.status) ctx.status.set("saved", "compiling…");
         var j = await global.AtelierLatexCompile.compile(ctx.path);
         if (destroyed) return null;
         lastCompile = { log: String(j.log || j.error || ""), ok: !!j.ok };

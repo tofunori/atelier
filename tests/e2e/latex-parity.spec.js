@@ -652,6 +652,9 @@ test.describe("Phase 4 — shell LaTeX surface (code_editor?surface=latex)", () 
       });
       const result = await page.evaluate(async () => {
         const shell = window.__ATELIER_SHELL__;
+        const logEl = document.getElementById("latexCompileLog");
+        const logBefore = logEl ? logEl.innerHTML : "";
+        const guttersBefore = document.querySelectorAll(".lint-gutter-err").length;
         const p = shell.module.compile(); // do not await yet
         shell.destroy();
         let settled = null;
@@ -660,15 +663,21 @@ test.describe("Phase 4 — shell LaTeX surface (code_editor?surface=latex)", () 
         } catch (e) {
           return { threw: true, message: String(e && e.message) };
         }
-        // After destroy, gutters/listeners should not be re-applied as live UI crashes
+        // Allow microtasks from late compile resolution to settle
+        await new Promise((r) => setTimeout(r, 50));
+        const logAfter = logEl ? logEl.innerHTML : "";
+        const guttersAfter = document.querySelectorAll(".lint-gutter-err").length;
         return {
           threw: false,
           settledOk: settled === null || typeof settled === "object",
-          shellDestroyed: true,
+          logUnchanged: logBefore === logAfter,
+          guttersUnchanged: guttersBefore === guttersAfter,
         };
       });
       expect(result.threw).toBe(false);
       expect(result.settledOk).toBe(true);
+      expect(result.logUnchanged).toBe(true);
+      expect(result.guttersUnchanged).toBe(true);
     });
   });
 });

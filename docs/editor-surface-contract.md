@@ -128,7 +128,20 @@ Tests : `tests/e2e/latex-parity.spec.js` (studio + shell), contrats `latex-surfa
 ### Correctifs parité utilisateur (post-3853e84)
 
 - **Compile-before-save** : si `persistence.isDirty()`, `save()` avant `POST /compile` (comme le studio).
-- E2E shell supplémentaires : buffer dirty → disque, gutters après compile cassée, SyncTeX reverse via `postMessage`, destroy pendant compile async.
+- **Lock compile** : `compiling=true` dès l’entrée (évite double-clic pendant save).
+- E2E shell supplémentaires : buffer dirty → disque, gutters après compile cassée, SyncTeX reverse via `postMessage`, destroy pendant compile async (log/gutters inchangés).
+
+### Option expérimentale : TeX → shell
+
+| Activation | Effet |
+| --- | --- |
+| Défaut | `latex_studio.html` (soak / production) |
+| `?latexShell=1` sur la galerie | `.tex` → `code_editor.html?surface=latex` |
+| `?editorShell=v2` | idem |
+| `localStorage atelier.editor.v1.latexShell=1` | idem (persistant) |
+| `?latexShell=0` | force le studio même si localStorage est à 1 |
+
+Helpers galerie : `latexShellEnabled()`, `texEditorUrl(rel)`.
 
 ## Restant
 

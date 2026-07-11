@@ -94,7 +94,11 @@ test.describe("CM6 editor factory", () => {
     expect(html).toContain("Thème du code");
     expect(html).toContain("atelierCodeTheme");
     expect(html).toContain('data-ext="${escA(f.ext)}"');
-    expect(html).toContain("else if(isTex) u='/.fig_thumbs/latex_studio.html");
+    // TeX: default studio via texEditorUrl(); optional shell when latexShell=1
+    expect(html).toContain("function texEditorUrl");
+    expect(html).toContain("latex_studio.html");
+    expect(html).toContain("surface=latex");
+    expect(html).toContain("else if(isTex) u=texEditorUrl(f.rel)");
     expect(html).toContain("else u='/.fig_thumbs/code_editor.html");
     // Markdown tabs use canonical md_viewer (shell), not md_studio
     expect(html).toContain("else if(isMd) u='/.fig_thumbs/md_viewer.html");
