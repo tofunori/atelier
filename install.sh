@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# atelier installer — links the CLI onto your PATH and sanity-checks the setup.
+# atelier installer — links the CLI onto PATH, builds the Rust backend when possible.
 # Usage:  bash install.sh
 set -euo pipefail
 
@@ -11,16 +11,44 @@ LEGACY_LINK="${BIN}/cmux-gallery"   # compat alias
 echo "atelier: installing from ${REPO}"
 
 if ! command -v python3 >/dev/null 2>&1; then
-  echo "  ✗ python3 not found — install Python 3 first (build needs only the stdlib)." >&2
-  exit 1
+  echo "  ⚠ python3 not found — gallery *rebuild* (build_gallery.py) needs it;"
+  echo "    the Rust server can still serve an already-built project."
+else
+  echo "  ✓ $(python3 --version 2>&1)"
 fi
-echo "  ✓ $(python3 --version 2>&1)"
 
 mkdir -p "${BIN}"
 chmod +x "${REPO}/cmux_gallery.py"
 ln -sf "${REPO}/cmux_gallery.py" "${LINK}"
 ln -sf "${REPO}/cmux_gallery.py" "${LEGACY_LINK}"
-echo "  ✓ linked ${LINK}"
+echo "  ✓ linked ${LINK}  (high-level CLI: run/build/doctor/status)"
+
+# Rust backend (default since phase 9)
+RUST_OK=0
+if command -v cargo >/dev/null 2>&1 && [[ -f "${REPO}/rust/Cargo.toml" ]]; then
+  echo "  → building release binaries (atelier-server, atelier-cli)…"
+  if bash "${REPO}/scripts/build-release.sh"; then
+    cp -f "${REPO}/dist/bin/atelier-server" "${BIN}/atelier-server"
+    cp -f "${REPO}/dist/bin/atelier-cli" "${BIN}/atelier-cli"
+    chmod +x "${BIN}/atelier-server" "${BIN}/atelier-cli"
+    echo "  ✓ installed ${BIN}/atelier-server"
+    echo "  ✓ installed ${BIN}/atelier-cli"
+    RUST_OK=1
+  else
+    echo "  ⚠ cargo build failed — Python fallback will be used until Rust is built" >&2
+  fi
+elif [[ -x "${REPO}/dist/bin/atelier-server" ]]; then
+  cp -f "${REPO}/dist/bin/atelier-server" "${BIN}/atelier-server"
+  [[ -x "${REPO}/dist/bin/atelier-cli" ]] && cp -f "${REPO}/dist/bin/atelier-cli" "${BIN}/atelier-cli"
+  chmod +x "${BIN}/atelier-server" 2>/dev/null || true
+  echo "  ✓ installed prebuilt dist/bin/atelier-server"
+  RUST_OK=1
+elif command -v atelier-server >/dev/null 2>&1; then
+  echo "  ✓ atelier-server already on PATH: $(command -v atelier-server)"
+  RUST_OK=1
+else
+  echo "  ⚠ no Rust toolchain and no prebuilt binary — set ATELIER_BACKEND=python or install rustup"
+fi
 
 # Is ~/.local/bin on PATH?
 case ":${PATH}:" in
@@ -37,19 +65,29 @@ case ":${PATH}:" in
     ;;
 esac
 
-# cmux CLI is needed for `run`/`serve`/open (not for `build`)
 if command -v cmux >/dev/null 2>&1; then
   echo "  ✓ cmux CLI found"
 else
   echo "  ⚠ cmux CLI not found — 'build' works; 'run'/'serve'/open need cmux (https://cmux.com)"
 fi
 
-cat <<'EOF'
+cat <<EOF
 
-Done. Try it in any project directory:
-  atelier run             # build + serve + open in cmux (keep the pane open)
-  atelier build           # just write the HTML (no server)
+Done. Backend default is **Rust** (phase 9).
+  atelier run             # build + serve (Rust) + open
+  atelier status          # project + server health
+  atelier doctor          # diagnose runtime
+  atelier-cli doctor --port <n>   # probe Rust /health only
+  atelier stop
 
-To keep the server alive automatically (recommended), copy dock.example.json
-into the project's .cmux/dock.json — see the README "Keeping it running" section.
+Force legacy Python for one session:
+  ATELIER_BACKEND=python atelier run --no-open
+
 EOF
+
+if [[ "${RUST_OK}" -eq 1 ]]; then
+  echo "Rust server binary: $(command -v atelier-server 2>/dev/null || echo "${BIN}/atelier-server")"
+else
+  echo "Note: Rust binary missing — atelier will log a python fallback until you run:"
+  echo "  bash scripts/build-release.sh && bash install.sh"
+fi

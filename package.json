@@ -3,10 +3,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "npm run typecheck && cargo test --manifest-path rust/Cargo.toml && python3 -m unittest discover -s tests -v && npm run test:e2e",
+    "test": "npm run typecheck && cargo test --manifest-path rust/Cargo.toml && python3 -m pytest tests/contract -q && python3 -m unittest discover -s tests -v && npm run test:e2e",
+    "test:contract": "python3 -m pytest tests/contract -v",
     "test:e2e": "playwright test",
     "typecheck": "tsc --noEmit",
-    "build:frontend": "tsc"
+    "build:frontend": "tsc",
+    "build:rust": "bash scripts/build-release.sh",
+    "build:release": "bash scripts/build-release.sh"
   },
   "devDependencies": {
     "@playwright/test": "^1.61.0",

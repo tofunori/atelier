@@ -77,8 +77,8 @@ atelier status              # project, server, Codex, index and pending annotati
 atelier doctor              # diagnose the local runtime
 atelier doctor --repair     # clear stale state and rebuild missing/stale assets
 
-# progressive Rust backend (Python remains the default)
-ATELIER_BACKEND=rust atelier run --no-open
+# Rust is the default backend (phase 9). Force Python only if needed:
+ATELIER_BACKEND=python atelier run --no-open
 ```
 
 When launched from inside a git checkout, the default root is the checkout root,
@@ -190,14 +190,17 @@ rebuild clean).
 | `GALLERY_NO_THUMBS=1` | skip Quick-Look thumbnail generation |
 | `GALLERY_SHOW_FRAMES=1` | index animation-frame dirs (hidden by default) |
 | `GALLERY_WATCH=0` | disable automatic debounced artifact watching |
-| `ATELIER_BACKEND=rust` | use the Rust server for `run`, `serve` and `foreground` |
+| `ATELIER_BACKEND=rust` | **default** — use the Rust server (`atelier-server`) |
+| `ATELIER_BACKEND=python` | temporary fallback to `fig_annotate_server.py` (logged) |
+| `ATELIER_RUST_SERVER` | absolute path to a custom `atelier-server` binary |
 | `ATELIER_BUILD_TYPESCRIPT=1` | recompile the TypeScript client during a build/rebuild |
 
-The Rust backend is a progressive migration: gallery health, state, provenance,
-rescan, image/text annotations, Codex delivery, and the local watcher are
-implemented first. The Python backend remains the compatibility fallback for
-specialized editor, Git, Zotero, export, and macOS integration routes that are
-not yet ported to Rust.
+The Rust backend is the **default** with full route parity (`tests/contract`).
+Install builds release binaries into `~/.local/bin` (`atelier-server`,
+`atelier-cli`). Gallery HTML rebuilds still call `build_gallery.py` (Python)
+for the index. The Python HTTP server is a temporary fallback when the Rust
+binary is missing or when you set `ATELIER_BACKEND=python` — every fallback is
+logged on stderr.
 
 ## Notes & caveats
 

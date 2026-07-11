@@ -33,3 +33,5 @@ atelier-*-menu*.png
 
 # Rust build output (Cargo.lock is intentionally tracked for the application)
 rust/target/
+dist/bin/
+

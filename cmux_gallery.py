@@ -151,8 +151,17 @@ def server_project(port: int):
     return None
 
 
+def _log_python_fallback(reason: str) -> None:
+    """Journalise chaque bascule vers Python (phase 9 : visible et temporaire)."""
+    print(f"[atelier] backend fallback → python ({reason})", file=sys.stderr)
+
+
 def backend_name() -> str:
-    return "rust" if os.environ.get("ATELIER_BACKEND", "python").strip().lower() == "rust" else "python"
+    """Backend sélectionné. Défaut = rust (phase 9) ; ``ATELIER_BACKEND=python`` force Python."""
+    raw = os.environ.get("ATELIER_BACKEND", "rust").strip().lower()
+    if raw in ("python", "py"):
+        return "python"
+    return "rust"
 
 
 def server_backend(port: int):
@@ -192,35 +201,55 @@ def build(root: str) -> str:
     return os.path.join(root, OUT)
 
 
-def rust_server_binary() -> str:
-    """Build the Rust backend on first opt-in, then reuse the binary."""
+def rust_server_binary(build: bool = True) -> str | None:
+    """Locate atelier-server: PATH, then release/debug build, then optional cargo build."""
+    env_bin = os.environ.get("ATELIER_RUST_SERVER", "").strip()
+    if env_bin and os.path.isfile(env_bin) and os.access(env_bin, os.X_OK):
+        return env_bin
+    which = shutil.which("atelier-server")
+    if which:
+        return which
     candidates = [
+        os.path.join(HERE, "dist", "bin", "atelier-server"),
         os.path.join(HERE, "rust", "target", "release", "atelier-server"),
         os.path.join(HERE, "rust", "target", "debug", "atelier-server"),
     ]
     for candidate in candidates:
         if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
             return candidate
-    if not os.path.isfile(RUST_MANIFEST):
-        raise SystemExit("[atelier] Rust backend is not available in this checkout")
-    subprocess.run(["cargo", "build", "--manifest-path", RUST_MANIFEST,
-                    "-p", "atelier-server"], cwd=HERE, check=True)
-    return candidates[1]
+    if not build or not os.path.isfile(RUST_MANIFEST):
+        return None
+    if shutil.which("cargo") is None:
+        return None
+    subprocess.run(
+        ["cargo", "build", "--release", "--manifest-path", RUST_MANIFEST,
+         "-p", "atelier-server", "-p", "atelier-cli"],
+        cwd=HERE, check=True,
+    )
+    release = candidates[1]
+    return release if os.path.isfile(release) else None
 
 
 def backend_command(root: str, port: int):
     """Return the selected server command and environment.
 
-    Python remains the default. ``ATELIER_BACKEND=rust`` is the explicit
-    migration switch until the Rust routes reach full parity.
+    Rust is the default (phase 9). ``ATELIER_BACKEND=python`` forces the
+    legacy server; if the Rust binary is missing, we fall back to Python
+    and log the reason so the fallback stays observable.
     """
     env = dict(os.environ, FIG_PORT=str(port), GALLERY_ROOT=root,
                ATELIER_TOOL_ROOT=HERE, ATELIER_BUILDER=BUILDER)
-    if os.environ.get("ATELIER_BACKEND", "python").strip().lower() == "rust":
-        command = [rust_server_binary(), "--root", root, "--port", str(port)]
-        command.append("--no-watch" if os.environ.get("GALLERY_WATCH", "1") == "0" else "--watch")
-        return command, env
-    return [sys.executable, SERVER], env
+    wanted = backend_name()
+    if wanted == "python":
+        _log_python_fallback("ATELIER_BACKEND=python")
+        return [sys.executable, SERVER], env
+    binary = rust_server_binary(build=True)
+    if not binary:
+        _log_python_fallback("atelier-server binary unavailable")
+        return [sys.executable, SERVER], env
+    command = [binary, "--root", root, "--port", str(port)]
+    command.append("--no-watch" if os.environ.get("GALLERY_WATCH", "1") == "0" else "--watch")
+    return command, env
 
 
 def wait_up(port: int, timeout: float = 8.0) -> bool:
