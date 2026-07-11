@@ -3,8 +3,6 @@
 <head>
 <meta charset="utf-8">
 <title>LaTeX Studio</title>
-<link rel="stylesheet" href="/.fig_thumbs/cm/codemirror.min.css">
-<link rel="stylesheet" href="/.fig_thumbs/cm/material-darker.min.css">
 <script>(function(){
   try{ var m=(location.hash||'').match(/atelier_nonce=([\w-]+)/); if(m) sessionStorage.setItem('atelier_nonce', m[1]); }catch(e){}
   /* nonce IPC : inclus dans chaque message vers l'app hôte ; l'app rejette sans lui */
@@ -13,34 +11,8 @@
     try{ window.top.postMessage(p, '*'); }catch(e){}
   };
 })();</script>
-<script src="/.fig_thumbs/cm/codemirror.min.js"></script>
-<link rel="stylesheet" href="/.fig_thumbs/cm/addon/dialog.css">
-<link rel="stylesheet" href="/.fig_thumbs/cm/addon/foldgutter.css">
-<link rel="stylesheet" href="/.fig_thumbs/cm/addon/matchesonscrollbar.css">
-<script src="/.fig_thumbs/cm/addon/dialog.js"></script>
-<script src="/.fig_thumbs/cm/addon/searchcursor.js"></script>
-<script src="/.fig_thumbs/cm/addon/search.js"></script>
-<script src="/.fig_thumbs/cm/addon/jump-to-line.js"></script>
-<script src="/.fig_thumbs/cm/addon/annotatescrollbar.js"></script>
-<script src="/.fig_thumbs/cm/addon/matchesonscrollbar.js"></script>
-<script src="/.fig_thumbs/cm/addon/match-highlighter.js"></script>
-<script src="/.fig_thumbs/cm/addon/matchbrackets.js"></script>
-<script src="/.fig_thumbs/cm/addon/closebrackets.js"></script>
-<script src="/.fig_thumbs/cm/addon/foldcode.js"></script>
-<script src="/.fig_thumbs/cm/addon/foldgutter.js"></script>
-<script src="/.fig_thumbs/cm/addon/brace-fold.js"></script>
-<script src="/.fig_thumbs/cm/addon/indent-fold.js"></script>
-<script src="/.fig_thumbs/cm/addon/comment-fold.js"></script>
-<script src="/.fig_thumbs/cm/addon/markdown-fold.js"></script>
-<script src="/.fig_thumbs/cm/addon/xml-fold.js"></script>
-<script src="/.fig_thumbs/cm/mark-selection.min.js"></script>
-<script src="/.fig_thumbs/cm/stex.min.js"></script>
-<script src="/.fig_thumbs/cm/python.min.js"></script>
-<script src="/.fig_thumbs/cm/r.min.js"></script>
-<script src="/.fig_thumbs/cm/markdown.min.js"></script>
-<script src="/.fig_thumbs/cm/julia.min.js"></script>
-<script src="/.fig_thumbs/cm/shell.min.js"></script>
-<script src="/.fig_thumbs/cm/javascript.min.js"></script>
+<!-- Editor: CM6 by default via factory (?editor=cm5 for legacy fallback) -->
+<script src="/.fig_thumbs/editor_factory.js"></script>
 <script src="/.fig_thumbs/pdfjs/pdf.min.js"></script>
 <script src="/.fig_thumbs/marked.min.js"></script>
 <script src="/.fig_thumbs/purify.min.js"></script>
@@ -866,12 +838,13 @@ function ghostInstall(){
 }
 
 async function load(){
+  await AtelierEditor.ready;
   const r = await fetch("/code?path=" + encodeURIComponent(path));
   const j = await r.json();
   if(j.error) return setState("err", j.error);
   recentsAdd(path);
   diskMtime = j.mtime;
-  // re-mesurer CodeMirror quand le panneau est redimensionné (sinon les
+  // re-mesurer l'éditeur quand le panneau est redimensionné (sinon les
   // retours de ligne gardent l'ancienne largeur et l'affichage se décale)
   let __rsT=null;
   window.addEventListener("resize", () => {
@@ -879,7 +852,7 @@ async function load(){
     __rsT=setTimeout(() => { if(cm) cm.refresh(); }, 120);
   });
   lastSavedText = j.text;
-  cm = CodeMirror(document.getElementById("left"), {
+  cm = AtelierEditor.create(document.getElementById("left"), {
     value: j.text, mode: __CM_MODE, theme: "material-darker",
     lineNumbers: true, lineWrapping: true, viewportMargin: 50, styleSelectedText: true,
     matchBrackets: true, autoCloseBrackets: true,

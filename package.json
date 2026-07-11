@@ -8,6 +8,7 @@
     "test:e2e": "playwright test",
     "typecheck": "tsc --noEmit",
     "build:frontend": "tsc",
+    "build:cm6": "npm --prefix cm6-src run build",
     "build:rust": "bash scripts/build-release.sh",
     "build:release": "bash scripts/build-release.sh",
     "check:no-python": "bash scripts/check-no-python.sh"

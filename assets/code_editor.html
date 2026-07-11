@@ -3,16 +3,8 @@
 <head>
 <meta charset="utf-8">
 <title>Editor</title>
-<link rel="stylesheet" href="/.fig_thumbs/cm/codemirror.min.css">
-<link rel="stylesheet" href="/.fig_thumbs/cm/material-darker.min.css">
-<script src="/.fig_thumbs/cm/codemirror.min.js"></script>
-<script src="/.fig_thumbs/cm/mark-selection.min.js"></script>
-<script src="/.fig_thumbs/cm/stex.min.js"></script>
-<script src="/.fig_thumbs/cm/python.min.js"></script>
-<script src="/.fig_thumbs/cm/r.min.js"></script>
-<script src="/.fig_thumbs/cm/markdown.min.js"></script>
-<script src="/.fig_thumbs/cm/julia.min.js"></script>
-<script src="/.fig_thumbs/cm/shell.min.js"></script>
+<!-- Editor: CM6 by default via factory (?editor=cm5 for legacy fallback) -->
+<script src="/.fig_thumbs/editor_factory.js"></script>
 <script src="/.fig_thumbs/diff.min.js"></script>
 <script src="/.fig_thumbs/diff_versions.js"></script>
 <style>
@@ -217,6 +209,7 @@ const __dv = path ? DiffVersions({
 }) : null;
 
 async function load(){
+  await AtelierEditor.ready;
   const r = await fetch("/code?path=" + encodeURIComponent(path));
   const j = await r.json();
   if(j.error){ setState("conflict", j.error); return; }
@@ -225,13 +218,12 @@ async function load(){
   if(!cm){
   let __rsT=null;
   window.addEventListener("resize", () => { clearTimeout(__rsT); __rsT=setTimeout(() => { if(cm) cm.refresh(); }, 120); });
-    cm = CodeMirror(document.getElementById("ed"), {
+    cm = AtelierEditor.create(document.getElementById("ed"), {
       value: j.text, mode: MODES[ext] || null, theme: "material-darker",
       lineNumbers: true, lineWrapping: true, viewportMargin: 50, styleSelectedText: true
     });
-  // Rewrap façon VS Code : les lignes repliées s'alignent sous le début du
-  // texte de la ligne (indentation préservée), pas sous le gutter.
-  (function(){
+  // Rewrap façon VS Code (CM5 only — CM6 wraps via EditorView.lineWrapping)
+  if(AtelierEditor.engine() === "cm5" && typeof CodeMirror.countColumn === "function"){
     const basePad = 4;
     cm.on("renderLine", function(cm, line, elt){
       const off = CodeMirror.countColumn(line.text, null, cm.getOption("tabSize")) * cm.defaultCharWidth();
@@ -239,7 +231,7 @@ async function load(){
       elt.style.paddingLeft = (basePad + off) + "px";
     });
     cm.refresh();
-  })();
+  }
 
     cm.on("change", (_, ch) => { if(ch.origin !== "setValue"){ dirty = true; setState("dirty", "modified"); } });
     let selT = null;

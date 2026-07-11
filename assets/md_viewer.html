@@ -5,11 +5,8 @@
 <title>Markdown</title>
 <script src="marked.min.js"></script>
 <script src="purify.min.js"></script>
-<link rel="stylesheet" href="/.fig_thumbs/cm/codemirror.min.css">
-<link rel="stylesheet" href="/.fig_thumbs/cm/material-darker.min.css">
-<script src="/.fig_thumbs/cm/codemirror.min.js"></script>
-<script src="/.fig_thumbs/cm/mark-selection.min.js"></script>
-<script src="/.fig_thumbs/cm/markdown.min.js"></script>
+<!-- Editor: CM6 by default via factory (?editor=cm5 for legacy fallback) -->
+<script src="/.fig_thumbs/editor_factory.js"></script>
 <style>
 :root{--ui-font:-apple-system,'SF Pro Text','Inter Variable',sans-serif;--code-font:ui-monospace,'SF Mono',Menlo,monospace;--bg:#202024;--card:#27272a;--card2:#1f1f23;--txt:#dbdfe5;--muted:#a1a1aa;--accent:#5b9dff;--border:#3f3f46}
   html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);
@@ -146,9 +143,10 @@ async function load(){
   }catch(e){ wrap.innerHTML = '<div id="err">Server off — ' + esc(e.message) + '</div>'; }
 }
 
-function initEditor(text){
+async function initEditor(text){
   if(cm) return;
-  cm = CodeMirror(document.getElementById("edPane"), {
+  await AtelierEditor.ready;
+  cm = AtelierEditor.create(document.getElementById("edPane"), {
     value: text != null ? text : "", mode: "markdown", theme: "material-darker",
     lineNumbers: true, lineWrapping: true, viewportMargin: 50, styleSelectedText: true
   });
@@ -200,8 +198,8 @@ function setMode(m){
   edPane.classList.toggle("show", m === "split" || m === "edit");
   prevPane.classList.toggle("show", m === "prev" || m === "split");
   if(m === "split" || m === "edit"){
-    if(!cm) initEditor(srcText);   // first pass: fill the editor with the loaded text
-    setTimeout(() => cm && cm.refresh(), 0);
+    if(!cm) initEditor(srcText).then(() => setTimeout(() => cm && cm.refresh(), 0));
+    else setTimeout(() => cm && cm.refresh(), 0);
   }
   document.getElementById("hint").style.display = "";   // keep it visible in Preview too (selection works there)
 }
