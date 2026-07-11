@@ -92,10 +92,21 @@ Voir aussi `docs/plan-ide-unifie-cm6-runtime-rust.md`.
 - [x] e2e `tests/e2e/latex-parity.spec.js` + contrats `tests/contracts/latex-surface-contract.test.mjs`
 - [x] e2e « codex annotation bank » corrigé (`agent_bridge_ui.js` visible en top-level)
 
-## Restant (après Gate C)
+## Reproductibilité (P0 — 2026-07-11)
+
+- Commit `094d033` tracke `assets/editor/**`, `assets/cm6/**`, `assets/editor_factory.js`, `cm6-src/{facade,build,package*}`, tests/contracts, tests/e2e shell, fixtures.
+- Preuve : `git worktree` détaché sur HEAD → `npm --prefix cm6-src ci && npm run build` → 29 contrats + 15 e2e editor verts.
+- Script : `npm run test:editor` / `bash scripts/verify-ide-checkout.sh`
+
+## Corrections cycle de vie / état
+
+- Markdown : `destroy()` retire `change` / `mouseup` / `mousemove` (plus de fuites multi-onglets).
+- Fusion externe : chrome `dirty` (pas `saved`) tant que non sauvegardé.
+- E2E réels : wrap win/off/80, rewrap commentaires, viewport 375 px, 2 instances CM6 indépendantes.
+
+## Restant (après Gate C / après P0)
 
 - Phase 4 fin : retirer le monolithe `latex_studio` seulement après soak (studio délègue déjà aux helpers)
 - Phase 7 : LSP
 - Phase 8 : retrait CM5 (soak + approbation humaine)
 - Migration URLs de session historiques
-- Test multi-iframe simultané
