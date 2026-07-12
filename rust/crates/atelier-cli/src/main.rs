@@ -4,6 +4,7 @@
 //! Le binaire `atelier-server` est cherché à côté du CLI, puis sur PATH.
 
 mod control_client;
+mod daemon;
 
 use clap::{Parser, Subcommand};
 use md5::{Digest, Md5};
@@ -127,6 +128,12 @@ enum CommandKind {
         root: PathBuf,
         #[arg(long, default_value_t = 0)]
         port: u16,
+    },
+    /// Manage the persistent atelier-daemon (launchd).
+    Daemon {
+        /// Subcommand: install|uninstall|start|stop|restart|status|doctor|logs
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
     },
 }
 
@@ -622,5 +629,6 @@ fn main() -> Result<(), String> {
             }
         }
         CommandKind::Foreground { root, port } => serve(&root, port, true),
+        CommandKind::Daemon { args } => daemon::handle(&args),
     }
 }

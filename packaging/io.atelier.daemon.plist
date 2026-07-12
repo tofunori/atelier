@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>io.atelier.daemon</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>__ATELIER_BIN__/atelier-daemon</string>
+    <string>--port</string>
+    <string>9359</string>
+    <string>--state-dir</string>
+    <string>__ATELIER_STATE__</string>
+    <string>--assets</string>
+    <string>__ATELIER_ASSETS__</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <dict>
+    <key>SuccessfulExit</key>
+    <false/>
+  </dict>
+  <key>ThrottleInterval</key>
+  <integer>5</integer>
+  <key>ProcessType</key>
+  <string>Interactive</string>
+  <key>StandardOutPath</key>
+  <string>/dev/null</string>
+  <key>StandardErrorPath</key>
+  <string>__ATELIER_LOGS__/bootstrap.log</string>
+</dict>
+</plist>
