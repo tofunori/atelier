@@ -104,7 +104,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         config.idle_grace_seconds,
         config.suspend_after_seconds,
     );
-    let _sessions = SessionStore::empty(config.sessions_path());
+    let sessions = SessionStore::load(
+        config.sessions_path(),
+        config.ticket_ttl_seconds,
+        config.session_ttl_seconds,
+    )?;
 
     let control_path = args
         .control_socket
@@ -147,6 +151,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         token: Arc::new(token),
         registry: registry.clone(),
         host: host.clone(),
+        sessions: sessions.clone(),
         shutting_down: shutting_down.clone(),
         shutdown: shutdown.clone(),
     };
@@ -156,6 +161,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         clock: clock.clone(),
         registry,
         host: host.clone(),
+        sessions: sessions.clone(),
     };
     let app = public_router(http_state);
 

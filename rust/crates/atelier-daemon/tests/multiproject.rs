@@ -66,6 +66,7 @@ fn start_daemon() -> Daemon {
             "--log-level",
             "error",
         ])
+        .env("ATELIER_DAEMON_ALLOW_ANON", "1")
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
@@ -215,6 +216,7 @@ fn two_projects_are_isolated_on_same_port() {
             "--log-level",
             "error",
         ])
+        .env("ATELIER_DAEMON_ALLOW_ANON", "1")
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()

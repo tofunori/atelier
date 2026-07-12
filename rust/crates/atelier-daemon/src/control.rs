@@ -5,6 +5,7 @@ use crate::{
     config::DaemonConfig,
     host::ProjectHost,
     registry::ProjectRegistry,
+    sessions::SessionStore,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -62,6 +63,7 @@ pub struct ControlState {
     pub token: Arc<String>,
     pub registry: ProjectRegistry,
     pub host: ProjectHost,
+    pub sessions: SessionStore,
     pub shutting_down: Arc<AtomicBool>,
     pub shutdown: Arc<Notify>,
 }
@@ -276,6 +278,76 @@ async fn dispatch(request: ControlRequest, state: &ControlState) -> ControlRespo
                     error: None,
                 },
                 None => error_response(request.id, "PROJECT_NOT_FOUND", "project not found"),
+            }
+        }
+        "project.open" => {
+            let key = request
+                .params
+                .get("key")
+                .and_then(Value::as_str)
+                .map(str::to_string);
+            let key = match key {
+                Some(key) => key,
+                None => {
+                    let Some(root) = request.params.get("root").and_then(Value::as_str) else {
+                        return error_response(request.id, "INVALID_PARAMS", "key or root required");
+                    };
+                    match state.registry.register(std::path::Path::new(root)).await {
+                        Ok((key, _)) => key,
+                        Err(message) => {
+                            return error_response(request.id, "REGISTER_FAILED", message);
+                        }
+                    }
+                }
+            };
+            if let Err(error) = state.host.activate(&key).await {
+                return error_response(request.id, error.code(), error.message());
+            }
+            let consumer = request
+                .params
+                .get("consumer")
+                .and_then(Value::as_str)
+                .map(str::to_string);
+            let theme = request
+                .params
+                .get("theme")
+                .and_then(Value::as_str)
+                .map(str::to_string);
+            let native_fs = request
+                .params
+                .get("nativeFs")
+                .and_then(Value::as_bool)
+                .unwrap_or(true);
+            match state
+                .sessions
+                .mint_ticket(&key, consumer, theme.clone(), native_fs)
+                .await
+            {
+                Ok(ticket) => {
+                    let url = format!(
+                        "http://{}:{}/p/{}/figures_index.html?nativeFs={}&theme={}",
+                        state.config.host,
+                        state.config.port,
+                        key,
+                        if native_fs { "1" } else { "0" },
+                        theme.as_deref().unwrap_or("Codex")
+                    );
+                    let open_url = format!(
+                        "http://{}:{}/open/{}",
+                        state.config.host, state.config.port, ticket
+                    );
+                    ControlResponse {
+                        id: request.id,
+                        ok: true,
+                        result: Some(json!({
+                            "key": key,
+                            "url": url,
+                            "openUrl": open_url,
+                        })),
+                        error: None,
+                    }
+                }
+                Err(message) => error_response(request.id, "TICKET_FAILED", message),
             }
         }
         "project.suspend" => {

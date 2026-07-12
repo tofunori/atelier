@@ -55,7 +55,7 @@ fn start_daemon() -> Daemon {
         .arg(port.to_string())
         .arg("--state-dir")
         .arg(&state_dir)
-        .arg("--log-level")
+        .env("ATELIER_DAEMON_ALLOW_ANON", "1").arg("--log-level")
         .arg("error")
         .stdout(Stdio::null())
         .stderr(Stdio::null())
