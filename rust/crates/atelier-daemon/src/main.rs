@@ -89,13 +89,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     ensure_private_state_dir(&config.state_dir)?;
     let token = load_or_create_token(&config.control_token_path())?;
-    let asset_hash = config
-        .assets_dir
-        .as_ref()
-        .and_then(|path| path.file_name())
-        .and_then(|name| name.to_str())
-        .unwrap_or("dev")
-        .to_string();
+    // Expose assets to legacy project static_asset (/.fig_thumbs/* → ATELIER_ASSETS_DIR).
+    if let Some(ref assets) = config.assets_dir {
+        // SAFETY: single-threaded startup before serving traffic.
+        unsafe {
+            std::env::set_var("ATELIER_ASSETS_DIR", assets);
+        }
+    }
+    // Until versioned asset directories are real, never invent a path segment from
+    // the assets folder basename (that produced /assets/assets/... 404s).
+    let asset_hash = "dev".to_string();
     let build = Arc::new(BuildInfo::current(asset_hash));
     let clock = Arc::new(RuntimeClock::new());
     let config = Arc::new(config);

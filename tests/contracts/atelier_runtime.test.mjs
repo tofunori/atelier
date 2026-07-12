@@ -43,8 +43,8 @@ test("daemon bootstrap prefixes api and assets", () => {
     bootstrap: {
       projectKey: key,
       basePath: `/p/${key}`,
-      apiBase: `/p/${key}/api/v1`,
-      assetBase: "/assets/deadbeef",
+      apiBase: `/p/${key}`,
+      assetBase: "/assets",
       daemonInstance: "inst-1",
     },
     pathname: `/p/${key}/figures_index.html`,
@@ -52,10 +52,12 @@ test("daemon bootstrap prefixes api and assets", () => {
   assert.equal(rt.ready, true);
   assert.equal(rt.legacy, false);
   assert.equal(rt.projectKey, key);
-  assert.equal(rt.api("/code"), `/p/${key}/api/v1/code`);
-  assert.equal(rt.asset("gallery_template.html"), "/assets/deadbeef/gallery_template.html");
+  assert.equal(rt.api("/code"), `/p/${key}/code`);
+  assert.equal(rt.asset("gallery_template.html"), "/assets/gallery_template.html");
+  assert.equal(rt.rewriteUrl("/.fig_thumbs/agent_bridge_ui.js"), `/p/${key}/.fig_thumbs/agent_bridge_ui.js`);
   assert.equal(rt.relativePath(`/p/${key}/notes.md`), "notes.md");
-  assert.match(rt.openEditor("scripts/a.py", "code"), /code_editor|path=scripts/);
+  assert.match(rt.openEditor("scripts/a.py", "code"), new RegExp(`/p/${key}/\\.fig_thumbs/code_editor`));
+  assert.match(rt.openEditor("scripts/a.py", "code"), /path=scripts/);
 });
 
 test("bootstrap/path mismatch refuses mutations", () => {

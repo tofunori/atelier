@@ -75,7 +75,6 @@
     var p = String(path || "");
     if (p.charAt(0) !== "/") p = "/" + p;
     if (boot.legacy || !boot.apiBase) return p;
-    // Allow callers to pass "/code" or "code" or full "files/code".
     return joinBase(boot.apiBase, p);
   }
 
@@ -83,14 +82,59 @@
     var p = String(path || "");
     if (p.charAt(0) !== "/") p = "/" + p;
     if (boot.legacy) {
-      // Historical assets lived at the origin root (/gallery_template… /cm/…).
+      // Mono-server: leave absolute asset paths alone.
       return p;
     }
-    return joinBase(boot.assetBase, p);
+    // Strip historical /.fig_thumbs prefix when mapping into /assets.
+    if (p.indexOf("/.fig_thumbs/") === 0) {
+      p = p.slice("/.fig_thumbs".length);
+      if (p.charAt(0) !== "/") p = "/" + p;
+    }
+    return joinBase(boot.assetBase, p.replace(/^\//, ""));
+  }
+
+  /**
+   * Rewrite absolute same-origin paths for daemon project scope.
+   * - /.fig_thumbs/* → /p/{key}/.fig_thumbs/*
+   * - bare project API paths → /p/{key}/...
+   * Leaves /assets, /open, /healthz, /version and already-scoped /p/ alone.
+   */
+  function rewriteUrl(value) {
+    if (boot.legacy || value == null) return value;
+    if (typeof value !== "string") return value;
+    var text = value;
+    if (!text) return text;
+    try {
+      if (/^https?:\/\//i.test(text) && global.location) {
+        var abs = new URL(text, global.location.origin);
+        if (abs.origin !== global.location.origin) return value;
+        text = abs.pathname + abs.search + abs.hash;
+        var rewritten = rewritePathOnly(text);
+        return abs.origin + rewritten;
+      }
+    } catch (_) {
+      /* fall through */
+    }
+    if (text.charAt(0) !== "/") return value;
+    return rewritePathOnly(text);
+  }
+
+  function rewritePathOnly(text) {
+    if (text.indexOf(boot.basePath + "/") === 0 || text === boot.basePath) return text;
+    if (text.indexOf("/assets/") === 0 || text === "/assets") return text;
+    if (text.indexOf("/open/") === 0) return text;
+    if (text.indexOf("/healthz") === 0 || text.indexOf("/version") === 0) return text;
+    if (text.indexOf("/.fig_thumbs/") === 0) {
+      return joinBase(boot.basePath, text);
+    }
+    // Bare project API / static under origin root.
+    if (text.charAt(0) === "/" && text.indexOf("//") !== 0) {
+      return api(text);
+    }
+    return text;
   }
 
   function eventsUrl() {
-    // Prefer the short project path; daemon also mounts /api/v1/events.
     if (boot.legacy || !boot.basePath) return "/events";
     return joinBase(boot.basePath, "/events");
   }
@@ -99,7 +143,6 @@
     if (value == null) return "";
     var text = String(value);
     if (!text) return "";
-    // Strip absolute origin if present.
     try {
       if (/^https?:\/\//i.test(text) && global.location) {
         var url = new URL(text, global.location.origin);
@@ -124,34 +167,27 @@
     var page;
     switch (surf) {
       case "latex":
-        page = "/assets/latex_studio.html";
+        page = "latex_studio.html";
         break;
       case "markdown":
-        page = "/assets/md_studio.html";
+        page = "md_studio.html";
         break;
       case "pdf":
-        page = "/assets/pdf_viewer.html";
+        page = "pdf_viewer.html";
         break;
       case "svg":
-        page = "/assets/svg_viewer.html";
+        page = "svg_viewer.html";
         break;
       case "code":
       default:
-        page = "/assets/code_editor.html";
+        page = "code_editor.html";
         break;
     }
-    // Prefer asset() so hashed assets work; fall back to root assets in legacy.
-    var href = boot.legacy
-      ? page.replace(/^\/assets/, "") + "?" + q
-      : asset(page.replace(/^\/assets\//, "")) + "?" + q;
-    // When assets are shared under /assets/{hash}, the studio pages live there;
-    // project-relative open still goes through basePath for same-origin cookies.
-    if (!boot.legacy && boot.basePath) {
-      // Keep cookie path by opening under project base when the surface is a project page.
-      // Shared asset pages read bootstrap from parent / postMessage later.
-      href = asset(page.replace(/^\/assets\//, "")) + "?" + q;
+    if (boot.legacy) {
+      return "/.fig_thumbs/" + page + "?" + q;
     }
-    return href;
+    // Keep cookie Path by loading surfaces under the project prefix.
+    return joinBase(boot.basePath, "/.fig_thumbs/" + page) + "?" + q;
   }
 
   function guessSurface(rel) {
@@ -163,26 +199,93 @@
     return "code";
   }
 
-  // Patch fetch so legacy absolute project API paths resolve under /p/{key}/…
-  // when the daemon bootstrap is present. Assets and daemon global routes stay absolute.
-  if (!boot.legacy && typeof global.fetch === "function") {
-    var originalFetch = global.fetch.bind(global);
-    global.fetch = function (input, init) {
-      if (typeof input === "string") {
-        if (
-          input.charAt(0) === "/" &&
-          input.indexOf("//") !== 0 &&
-          input.indexOf(boot.basePath) !== 0 &&
-          input.indexOf("/assets") !== 0 &&
-          input.indexOf("/open/") !== 0 &&
-          input.indexOf("/healthz") !== 0 &&
-          input.indexOf("/version") !== 0
-        ) {
-          input = api(input);
+  if (!boot.legacy) {
+    // fetch
+    if (typeof global.fetch === "function") {
+      var originalFetch = global.fetch.bind(global);
+      global.fetch = function (input, init) {
+        if (typeof input === "string") {
+          input = rewriteUrl(input);
+        } else if (input && typeof Request !== "undefined" && input instanceof Request) {
+          try {
+            var rewritten = rewriteUrl(input.url);
+            if (rewritten !== input.url) {
+              input = new Request(rewritten, input);
+            }
+          } catch (_) {
+            /* keep original */
+          }
         }
-      }
-      return originalFetch(input, init);
-    };
+        return originalFetch(input, init);
+      };
+    }
+
+    // EventSource
+    if (typeof global.EventSource === "function") {
+      var OrigES = global.EventSource;
+      global.EventSource = function (url, config) {
+        return new OrigES(rewriteUrl(String(url)), config);
+      };
+      global.EventSource.prototype = OrigES.prototype;
+      global.EventSource.CONNECTING = OrigES.CONNECTING;
+      global.EventSource.OPEN = OrigES.OPEN;
+      global.EventSource.CLOSED = OrigES.CLOSED;
+    }
+
+    // Worker
+    if (typeof global.Worker === "function") {
+      var OrigWorker = global.Worker;
+      global.Worker = function (scriptURL, options) {
+        return new OrigWorker(rewriteUrl(String(scriptURL)), options);
+      };
+      global.Worker.prototype = OrigWorker.prototype;
+    }
+
+    // element src / href attribute assignment
+    if (typeof Element !== "undefined" && Element.prototype) {
+      var origSetAttribute = Element.prototype.setAttribute;
+      Element.prototype.setAttribute = function (name, value) {
+        var n = String(name || "").toLowerCase();
+        if (
+          (n === "src" ||
+            n === "href" ||
+            n === "data" ||
+            n === "xlink:href" ||
+            n === "poster") &&
+          typeof value === "string"
+        ) {
+          value = rewriteUrl(value);
+        }
+        return origSetAttribute.call(this, name, value);
+      };
+
+      // Property setters for script/iframe/img/link
+      [
+        ["HTMLScriptElement", "src"],
+        ["HTMLIFrameElement", "src"],
+        ["HTMLImageElement", "src"],
+        ["HTMLLinkElement", "href"],
+        ["HTMLAnchorElement", "href"],
+        ["HTMLSourceElement", "src"],
+        ["HTMLVideoElement", "src"],
+        ["HTMLAudioElement", "src"],
+      ].forEach(function (pair) {
+        var ctorName = pair[0];
+        var prop = pair[1];
+        var Ctor = global[ctorName];
+        if (!Ctor || !Ctor.prototype) return;
+        var desc = Object.getOwnPropertyDescriptor(Ctor.prototype, prop);
+        if (!desc || !desc.set) return;
+        Object.defineProperty(Ctor.prototype, prop, {
+          configurable: true,
+          enumerable: desc.enumerable,
+          get: desc.get,
+          set: function (value) {
+            desc.set.call(this, typeof value === "string" ? rewriteUrl(value) : value);
+          },
+        });
+      });
+    }
   }
 
   global.AtelierRuntime = {
@@ -195,6 +298,7 @@
     daemonInstance: boot.daemonInstance,
     api: api,
     asset: asset,
+    rewriteUrl: rewriteUrl,
     eventsUrl: eventsUrl,
     relativePath: relativePath,
     openEditor: openEditor,

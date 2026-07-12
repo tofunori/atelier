@@ -72,8 +72,11 @@ test("no bare absolute project fetch() in first-party assets", () => {
   );
 });
 
-test("atelier_runtime.js patches fetch in daemon mode", () => {
+test("atelier_runtime.js patches fetch and rewrites fig_thumbs in daemon mode", () => {
   const src = readFileSync(join(root, "atelier_runtime.js"), "utf8");
   assert.match(src, /global\.fetch\s*=\s*function/);
-  assert.match(src, /api\(input\)/);
+  assert.match(src, /function rewriteUrl/);
+  assert.match(src, /\/\.fig_thumbs\//);
+  assert.match(src, /HTMLScriptElement/);
+  assert.match(src, /HTMLIFrameElement/);
 });

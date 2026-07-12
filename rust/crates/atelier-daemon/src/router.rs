@@ -38,6 +38,10 @@ pub fn public_router(state: DaemonHttpState) -> Router {
         .route("/version", get(version))
         .route("/open/{ticket}", get(open_ticket))
         .route("/assets/{*path}", get(shared_asset))
+        // Legacy absolute UI paths (gallery_template still emits /.fig_thumbs/…).
+        // Prefer project-scoped URLs after HTML rewrite; this route is the safety net
+        // and serves the same shared assets directory.
+        .route("/.fig_thumbs/{*path}", get(fig_thumbs_asset))
         .route("/p/{project_key}/api/v1/events", get(project_events_sse))
         .route("/p/{project_key}/events", get(project_events_sse))
         .route("/p/{project_key}", any(project_dispatch))
@@ -109,21 +113,32 @@ async fn open_ticket(State(state): State<DaemonHttpState>, Path(ticket): Path<St
 }
 
 async fn shared_asset(State(state): State<DaemonHttpState>, Path(path): Path<String>) -> Response {
-    let Some(assets_dir) = state.config.assets_dir.as_ref() else {
-        // Fallback: serve from ATELIER_ASSETS_DIR or sibling assets.
-        let fallback = std::env::var_os("ATELIER_ASSETS_DIR")
-            .map(std::path::PathBuf::from)
-            .or_else(|| {
-                std::env::current_exe()
-                    .ok()
-                    .and_then(|exe| exe.parent().map(|p| p.join("../share/atelier/assets")))
-            });
-        let Some(root) = fallback else {
-            return (StatusCode::NOT_FOUND, "assets not configured").into_response();
-        };
-        return read_asset(&root, &path);
+    serve_from_assets_dir(&state, &path)
+}
+
+async fn fig_thumbs_asset(
+    State(state): State<DaemonHttpState>,
+    Path(path): Path<String>,
+) -> Response {
+    // Same shared tree as /assets/* — historical mono-server URL shape.
+    serve_from_assets_dir(&state, &path)
+}
+
+fn serve_from_assets_dir(state: &DaemonHttpState, path: &str) -> Response {
+    let root = state
+        .config
+        .assets_dir
+        .clone()
+        .or_else(|| std::env::var_os("ATELIER_ASSETS_DIR").map(std::path::PathBuf::from))
+        .or_else(|| {
+            std::env::current_exe()
+                .ok()
+                .and_then(|exe| exe.parent().map(|p| p.join("../share/atelier/assets")))
+        });
+    let Some(root) = root.filter(|p| p.is_dir()) else {
+        return (StatusCode::NOT_FOUND, "assets not configured").into_response();
     };
-    read_asset(assets_dir, &path)
+    read_asset(&root, path)
 }
 
 fn read_asset(root: &std::path::Path, rel: &str) -> Response {
@@ -232,8 +247,22 @@ async fn inject_bootstrap_if_html(
         .unwrap_or("")
         .to_string();
 
-    let Ok(bytes) = axum::body::to_bytes(body, 12 * 1024 * 1024).await else {
-        return Response::from_parts(parts, Body::empty());
+    let bytes = match axum::body::to_bytes(body, 32 * 1024 * 1024).await {
+        Ok(bytes) => bytes,
+        Err(error) => {
+            // Never return an empty body: the original stream is consumed.
+            let msg = format!(
+                "<!doctype html><html><head><meta charset=\"utf-8\"><title>Atelier</title></head>\
+<body><p>Atelier could not buffer this HTML for bootstrap injection: {error}</p>\
+<p>Reopen Atelier from the plugin.</p></body></html>"
+            );
+            parts.headers.insert(
+                header::CONTENT_TYPE,
+                HeaderValue::from_static("text/html; charset=utf-8"),
+            );
+            parts.headers.remove(header::CONTENT_LENGTH);
+            return Response::from_parts(parts, Body::from(msg));
+        }
     };
 
     let looks_like_html = content_type.contains("text/html") || {
@@ -246,12 +275,8 @@ async fn inject_bootstrap_if_html(
     }
 
     let original = String::from_utf8_lossy(&bytes);
-    // Shared assets are served at /assets/* (hash segment is reserved for future immutable deploys).
-    let asset_base = if build.asset_hash != "dev" && !build.asset_hash.is_empty() {
-        format!("/assets/{}", build.asset_hash)
-    } else {
-        "/assets".to_string()
-    };
+    // Versioned asset directories are not implemented yet — always use /assets.
+    let asset_base = "/assets".to_string();
     let base_path = format!("/p/{project_key}");
     // Project routes are still the legacy paths mounted under /p/{key}/… (not /api/v1 yet).
     let bootstrap = json!({
@@ -267,7 +292,10 @@ async fn inject_bootstrap_if_html(
 <script src="{asset_base}/atelier_events.js"></script>
 "#
     );
-    let injected = inject_before_head_close(&original, &injection);
+    // Rewrite bare absolute /.fig_thumbs/ (legacy mono-server paths) into the
+    // project-scoped prefix so session cookies and static_asset apply.
+    let rewritten = rewrite_fig_thumbs_for_project(&original, project_key);
+    let injected = inject_before_head_close(&rewritten, &injection);
 
     if let Ok(value) = HeaderValue::from_str(project_key) {
         parts.headers.insert(
@@ -290,6 +318,17 @@ async fn inject_bootstrap_if_html(
     parts.headers.remove(header::CONTENT_LENGTH);
 
     Response::from_parts(parts, Body::from(injected))
+}
+
+/// Rewrite absolute `/.fig_thumbs/...` (and unprefixed variants) to
+/// `/p/{project_key}/.fig_thumbs/...` so the project router serves them.
+fn rewrite_fig_thumbs_for_project(html: &str, project_key: &str) -> String {
+    let scoped = format!("/p/{project_key}/.fig_thumbs/");
+    // Avoid double-prefixing already-scoped URLs.
+    let mut out = html.replace(&scoped, "\u{0001}SCOPED_FIG_THUMBS\u{0001}");
+    out = out.replace("/.fig_thumbs/", &scoped);
+    out = out.replace("\u{0001}SCOPED_FIG_THUMBS\u{0001}", &scoped);
+    out
 }
 
 fn inject_before_head_close(html: &str, injection: &str) -> String {
@@ -491,7 +530,9 @@ async fn security_headers(req: Request<Body>, next: Next) -> Response {
     headers.insert(
         header::HeaderName::from_static("content-security-policy"),
         HeaderValue::from_static(
-            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'; frame-src 'self' blob:",
+            // Gallery and editor surfaces still ship inline bootstraps; 'unsafe-inline'
+            // matches production-needed behavior until those scripts are externalized.
+            "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'; frame-src 'self' blob:",
         ),
     );
     response
@@ -499,7 +540,7 @@ async fn security_headers(req: Request<Body>, next: Next) -> Response {
 
 #[cfg(test)]
 mod tests {
-    use super::inject_before_head_close;
+    use super::{inject_before_head_close, rewrite_fig_thumbs_for_project};
 
     #[test]
     fn inject_preserves_body_and_inserts_before_head_close() {
@@ -516,5 +557,25 @@ mod tests {
         let out = inject_before_head_close(html, "<!--BOOT-->");
         assert!(out.starts_with("<!--BOOT-->"));
         assert!(out.contains("only-body"));
+    }
+
+    #[test]
+    fn rewrite_scopes_fig_thumbs_without_double_prefix() {
+        let key = "aaaaaaaaaaaaaaaaaaaaaaaa";
+        let html = r#"<script src="/.fig_thumbs/agent_bridge_ui.js"></script>
+<iframe src="/.fig_thumbs/code_editor.html"></iframe>
+<link href="/p/aaaaaaaaaaaaaaaaaaaaaaaa/.fig_thumbs/editor.css">"#;
+        let out = rewrite_fig_thumbs_for_project(html, key);
+        assert!(out.contains(&format!("/p/{key}/.fig_thumbs/agent_bridge_ui.js")));
+        assert!(out.contains(&format!("/p/{key}/.fig_thumbs/code_editor.html")));
+        assert!(
+            !out.contains(&format!("/p/{key}/p/{key}/")),
+            "double-prefixed: {out}"
+        );
+        assert_eq!(
+            out.matches(&format!("/p/{key}/.fig_thumbs/")).count(),
+            3,
+            "{out}"
+        );
     }
 }

@@ -190,6 +190,104 @@ fn figures_index_keeps_html_and_bootstrap() {
         body.contains("atelier_runtime.js"),
         "runtime script tag missing:\n{body}"
     );
+    assert!(
+        body.contains("\"assetBase\":\"/assets\"") || body.contains(r#""assetBase": "/assets""#),
+        "assetBase must be /assets without fake hash:\n{body}"
+    );
+    assert!(
+        !body.contains("/assets/assets/"),
+        "double assets path leaked into HTML:\n{body}"
+    );
+
+    // Fetch every injected script src and require HTTP 200 + non-empty body.
+    let mut script_srcs = Vec::new();
+    for piece in body.split("src=\"") {
+        if piece.starts_with('/') {
+            let src = piece.split('"').next().unwrap_or("");
+            if src.contains("atelier_runtime") || src.contains("atelier_events") {
+                script_srcs.push(src.to_string());
+            }
+        }
+    }
+    assert!(
+        !script_srcs.is_empty(),
+        "no injected script src found in:\n{body}"
+    );
+    for src in &script_srcs {
+        let resp = http_get(daemon.port, src).unwrap();
+        assert!(
+            resp.contains("200"),
+            "injected script {src} not 200:\n{resp}"
+        );
+        let script_body = resp.split("\r\n\r\n").nth(1).unwrap_or("");
+        assert!(
+            !script_body.is_empty(),
+            "injected script {src} has empty body"
+        );
+        assert!(!src.contains("/assets/assets/"), "bad asset path {src}");
+    }
+
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn gallery_template_fig_thumbs_are_scoped_and_reachable() {
+    let daemon = start_daemon();
+    let root = std::env::temp_dir().join(format!(
+        "atelier-html-gal-{}-{}",
+        std::process::id(),
+        Uuid::new_v4()
+    ));
+    fs::create_dir_all(&root).unwrap();
+    // Use real gallery template if present, else a miniature with fig_thumbs refs.
+    let template = repo_root().join("assets/gallery_template.html");
+    let html = if template.is_file() {
+        fs::read_to_string(&template).unwrap()
+    } else {
+        r#"<!doctype html><html><head>
+<script src="/.fig_thumbs/cm6/editor.bundle.js"></script>
+<script src="/.fig_thumbs/agent_bridge_ui.js"></script>
+</head><body><h1>g</h1></body></html>"#
+            .to_string()
+    };
+    fs::write(root.join("figures_index.html"), &html).unwrap();
+    fs::write(root.join("figures_data.json"), b"{\"files\":[]}\n").unwrap();
+
+    let reg = control(
+        &daemon,
+        "project.register",
+        serde_json::json!({ "root": root.to_string_lossy() }),
+    );
+    let key = reg["result"]["key"].as_str().unwrap();
+    let response = http_get(daemon.port, &format!("/p/{key}/figures_index.html")).unwrap();
+    let body = response.split("\r\n\r\n").nth(1).unwrap_or("");
+    assert!(
+        !body.contains("src=\"/.fig_thumbs/"),
+        "bare /.fig_thumbs still present:\n{}",
+        &body[..body.len().min(500)]
+    );
+    assert!(
+        body.contains(&format!("/p/{key}/.fig_thumbs/")),
+        "project-scoped .fig_thumbs missing"
+    );
+
+    // Probe critical assets under both /assets and scoped .fig_thumbs.
+    for path in [
+        "/assets/atelier_runtime.js".to_string(),
+        "/assets/atelier_events.js".to_string(),
+        format!("/p/{key}/.fig_thumbs/agent_bridge_ui.js"),
+        format!("/p/{key}/.fig_thumbs/cm6/editor.bundle.js"),
+        format!("/p/{key}/.fig_thumbs/ts/atelier-client.js"),
+    ] {
+        let resp = http_get(daemon.port, &path).unwrap();
+        assert!(
+            resp.contains("200"),
+            "{path} not 200 — is ATELIER_ASSETS_DIR set?\n{}",
+            resp.lines().take(5).collect::<Vec<_>>().join("\n")
+        );
+        let b = resp.split("\r\n\r\n").nth(1).unwrap_or("");
+        assert!(!b.is_empty(), "{path} empty body");
+    }
 
     let _ = fs::remove_dir_all(root);
 }
