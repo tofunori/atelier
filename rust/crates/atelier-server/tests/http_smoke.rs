@@ -67,7 +67,10 @@ fn start_server() -> Server {
     let root = std::env::temp_dir().join(format!(
         "atelier-http-smoke-{}-{}",
         std::process::id(),
-        Instant::now().elapsed().as_nanos()
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
     ));
     fs::create_dir_all(&root).unwrap();
     fs::write(

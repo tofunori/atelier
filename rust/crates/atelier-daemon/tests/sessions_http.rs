@@ -148,7 +148,10 @@ fn open_ticket_sets_cookie_and_rejects_replay() {
     let root = std::env::temp_dir().join(format!(
         "atelier-sess-proj-{}-{}",
         std::process::id(),
-        Instant::now().elapsed().as_nanos()
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
     ));
     fs::create_dir_all(&root).unwrap();
     fs::write(root.join("notes.md"), b"# s\n").unwrap();
@@ -230,7 +233,10 @@ fn open_ticket_sets_cookie_and_rejects_replay() {
     let root_b = std::env::temp_dir().join(format!(
         "atelier-sess-proj-b-{}-{}",
         std::process::id(),
-        Instant::now().elapsed().as_nanos()
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
     ));
     fs::create_dir_all(&root_b).unwrap();
     fs::write(root_b.join("notes.md"), b"# b\n").unwrap();

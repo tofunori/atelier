@@ -142,7 +142,10 @@ fn make_project(label: &str, note: &str) -> PathBuf {
         "atelier-proj-{}-{}-{}",
         label,
         std::process::id(),
-        Instant::now().elapsed().as_nanos()
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
     ));
     fs::create_dir_all(&root).unwrap();
     fs::write(root.join("notes.md"), note.as_bytes()).unwrap();
