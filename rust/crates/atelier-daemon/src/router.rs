@@ -214,10 +214,7 @@ async fn project_dispatch(State(state): State<DaemonHttpState>, req: Request) ->
     };
 
     match legacy_project_router(runtime).oneshot(forwarded).await {
-        Ok(mut response) => {
-            inject_bootstrap_if_html(&mut response, &project_key, &state.build);
-            response
-        }
+        Ok(response) => inject_bootstrap_if_html(response, &project_key, &state.build).await,
         Err(error) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(json!({"error": error.to_string()})),
@@ -226,29 +223,107 @@ async fn project_dispatch(State(state): State<DaemonHttpState>, req: Request) ->
     }
 }
 
-fn inject_bootstrap_if_html(response: &mut Response, project_key: &str, build: &BuildInfo) {
-    let is_html = response
-        .headers()
+/// Rebuild HTML responses with the non-executable bootstrap JSON and runtime scripts.
+/// Never drops the original body: on failure the original bytes are restored.
+async fn inject_bootstrap_if_html(
+    response: Response,
+    project_key: &str,
+    build: &BuildInfo,
+) -> Response {
+    let (mut parts, body) = response.into_parts();
+    let content_type = parts
+        .headers
         .get(header::CONTENT_TYPE)
-        .and_then(|v| v.to_str().ok())
-        .is_some_and(|ct| ct.contains("text/html"));
-    if !is_html {
-        // static_asset may omit content-type on some paths; still try for .html fallbacks later.
-        return;
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or("")
+        .to_string();
+
+    let Ok(bytes) = axum::body::to_bytes(body, 12 * 1024 * 1024).await else {
+        return Response::from_parts(parts, Body::empty());
+    };
+
+    let looks_like_html = content_type.contains("text/html")
+        || {
+            let head = String::from_utf8_lossy(&bytes[..bytes.len().min(256)]).to_ascii_lowercase();
+            head.contains("<!doctype html") || head.contains("<html")
+        };
+
+    if !looks_like_html {
+        return Response::from_parts(parts, Body::from(bytes));
     }
-    let body = std::mem::replace(response.body_mut(), Body::empty());
-    // Best-effort: only rewrite small HTML bodies we can buffer.
-    // Full streaming injection is deferred; for Phase 4 tests we set header hint.
-    let _ = body;
-    response.headers_mut().insert(
-        header::HeaderName::from_static("x-atelier-project-key"),
-        HeaderValue::from_str(project_key).unwrap_or_else(|_| HeaderValue::from_static("")),
+
+    let original = String::from_utf8_lossy(&bytes);
+    // Shared assets are served at /assets/* (hash segment is reserved for future immutable deploys).
+    let asset_base = if build.asset_hash != "dev" && !build.asset_hash.is_empty() {
+        format!("/assets/{}", build.asset_hash)
+    } else {
+        "/assets".to_string()
+    };
+    let base_path = format!("/p/{project_key}");
+    // Project routes are still the legacy paths mounted under /p/{key}/… (not /api/v1 yet).
+    let bootstrap = json!({
+        "projectKey": project_key,
+        "basePath": base_path,
+        "apiBase": base_path,
+        "assetBase": asset_base,
+        "daemonInstance": build.daemon_instance,
+    });
+    let injection = format!(
+        r#"<script type="application/json" id="atelier-bootstrap">{bootstrap}</script>
+<script src="{asset_base}/atelier_runtime.js"></script>
+<script src="{asset_base}/atelier_events.js"></script>
+"#
     );
-    response.headers_mut().insert(
-        header::HeaderName::from_static("x-atelier-daemon-instance"),
-        HeaderValue::from_str(&build.daemon_instance)
-            .unwrap_or_else(|_| HeaderValue::from_static("")),
-    );
+    let injected = inject_before_head_close(&original, &injection);
+
+    if let Ok(value) = HeaderValue::from_str(project_key) {
+        parts.headers.insert(
+            header::HeaderName::from_static("x-atelier-project-key"),
+            value,
+        );
+    }
+    if let Ok(value) = HeaderValue::from_str(&build.daemon_instance) {
+        parts.headers.insert(
+            header::HeaderName::from_static("x-atelier-daemon-instance"),
+            value,
+        );
+    }
+    if !content_type.contains("text/html") {
+        parts.headers.insert(
+            header::CONTENT_TYPE,
+            HeaderValue::from_static("text/html; charset=utf-8"),
+        );
+    }
+    parts.headers.remove(header::CONTENT_LENGTH);
+
+    Response::from_parts(parts, Body::from(injected))
+}
+
+fn inject_before_head_close(html: &str, injection: &str) -> String {
+    // Prefer </head> (case-insensitive search on a lowered copy, splice original).
+    let lower = html.to_ascii_lowercase();
+    if let Some(idx) = lower.find("</head>") {
+        let mut out = String::with_capacity(html.len() + injection.len());
+        out.push_str(&html[..idx]);
+        out.push_str(injection);
+        out.push_str(&html[idx..]);
+        return out;
+    }
+    if let Some(idx) = lower.find("<body") {
+        if let Some(end) = lower[idx..].find('>') {
+            let insert_at = idx + end + 1;
+            let mut out = String::with_capacity(html.len() + injection.len());
+            out.push_str(&html[..insert_at]);
+            out.push_str(injection);
+            out.push_str(&html[insert_at..]);
+            return out;
+        }
+    }
+    // No head/body markers: prepend so the page content is never lost.
+    let mut out = String::with_capacity(html.len() + injection.len());
+    out.push_str(injection);
+    out.push_str(html);
+    out
 }
 
 fn cookie_value(headers: &HeaderMap, name: &str) -> Option<String> {
@@ -390,4 +465,26 @@ async fn security_headers(req: Request<Body>, next: Next) -> Response {
         ),
     );
     response
+}
+
+#[cfg(test)]
+mod tests {
+    use super::inject_before_head_close;
+
+    #[test]
+    fn inject_preserves_body_and_inserts_before_head_close() {
+        let html = "<!doctype html><html><head><title>t</title></head><body><h1>hello-gallery</h1></body></html>";
+        let out = inject_before_head_close(html, "<!--BOOT-->");
+        assert!(out.contains("hello-gallery"), "original body lost: {out}");
+        assert!(out.contains("<!--BOOT-->"));
+        assert!(out.find("<!--BOOT-->").unwrap() < out.find("</head>").unwrap());
+    }
+
+    #[test]
+    fn inject_prepends_when_no_head() {
+        let html = "<h1>only-body</h1>";
+        let out = inject_before_head_close(html, "<!--BOOT-->");
+        assert!(out.starts_with("<!--BOOT-->"));
+        assert!(out.contains("only-body"));
+    }
 }

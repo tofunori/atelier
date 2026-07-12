@@ -32,6 +32,21 @@ fn free_port() -> u16 {
         .port()
 }
 
+
+fn short_state_dir(prefix: &str) -> PathBuf {
+    // Unix domain sockets on macOS have a ~104 byte path limit (SUN_LEN).
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static N: AtomicU64 = AtomicU64::new(0);
+    let n = N.fetch_add(1, Ordering::SeqCst);
+    let dir = std::env::temp_dir().join(format!(
+        "{prefix}{}-{n}",
+        std::process::id() % 10_000
+    ));
+    let _ = fs::remove_dir_all(&dir);
+    fs::create_dir_all(&dir).unwrap();
+    dir
+}
+
 fn start_daemon() -> Daemon {
     let repo = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../..")
@@ -42,11 +57,7 @@ fn start_daemon() -> Daemon {
         .canonicalize()
         .expect("build atelier-daemon first");
     let port = free_port();
-    let state_dir = std::env::temp_dir().join(format!(
-        "atelier-daemon-smoke-{}-{}",
-        std::process::id(),
-        Instant::now().elapsed().as_nanos()
-    ));
+    let state_dir = short_state_dir("ad");
     fs::create_dir_all(&state_dir).unwrap();
     let child = Command::new(binary)
         .arg("--host")
