@@ -166,7 +166,8 @@
     async function loadAnnots() {
       if (!ctx.path) return;
       try {
-        var r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/pdfannot?rel="):"/pdfannot?rel=" + encodeURIComponent(annotRel())
+        var annotUrl = "/pdfannot?rel=" + encodeURIComponent(annotRel());
+        var r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api(annotUrl):annotUrl
         );
         var j = await r.json();
         annots = Array.isArray(j.annots) ? j.annots : [];

@@ -80,3 +80,24 @@ test("atelier_runtime.js patches fetch and rewrites fig_thumbs in daemon mode", 
   assert.match(src, /HTMLScriptElement/);
   assert.match(src, /HTMLIFrameElement/);
 });
+
+test("dynamic query values are assembled before AtelierRuntime.api()", () => {
+  const offenders = [];
+  const incompleteDynamicQuery =
+    /AtelierRuntime\.api\(\s*(["'`])\/(?:code\?path|ls\?dir|pdfannot\?rel|git(?:log|show|head)\?path|versions\?path|lint\?path|texroot\?path)=\1\s*\)/g;
+  for (const file of walk(root)) {
+    const rel = relative(root, file);
+    const text = readFileSync(file, "utf8");
+    incompleteDynamicQuery.lastIndex = 0;
+    let match;
+    while ((match = incompleteDynamicQuery.exec(text))) {
+      const line = text.slice(0, match.index).split("\n").length;
+      offenders.push(`${rel}:${line}`);
+    }
+  }
+  assert.deepEqual(
+    offenders,
+    [],
+    `AtelierRuntime.api() received a query name without its dynamic value:\n${offenders.join("\n")}`
+  );
+});

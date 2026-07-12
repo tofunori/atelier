@@ -513,7 +513,8 @@ if(rel) main();
 let PDF_ANNOTS = [];
 let ANNOTS_LOADED = false;  // garde anti-écrasement : jamais de POST avant un GET réussi
 function loadAnnots(attempt){
-  fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/pdfannot?rel="):"/pdfannot?rel=" + encodeURIComponent(rel)).then(r=>r.json())
+  const annotUrl = "/pdfannot?rel=" + encodeURIComponent(rel);
+  fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api(annotUrl):annotUrl).then(r=>r.json())
     .then(j => { PDF_ANNOTS = j.annots || []; ANNOTS_LOADED = true;
       document.querySelectorAll(".pg").forEach(pg => drawAnnots(pg, +pg.dataset.page)); })
     .catch(()=>{ if((attempt||0) < 10) setTimeout(()=>loadAnnots((attempt||0)+1), 2000); });

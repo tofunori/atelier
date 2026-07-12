@@ -977,13 +977,15 @@ window.DiffVersions = function(opts){
       }
       let items = [];
       try{
-        const r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/gitlog?path="):"/gitlog?path=" + encodeURIComponent(path));
+        const gitlogUrl = "/gitlog?path=" + encodeURIComponent(path);
+        const r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api(gitlogUrl):gitlogUrl);
         const j = await r.json();
         if(j && j.ok) items = j.items || [];
       }catch(e){}
       for(const it of items){
         rows.push({label: it.sha, msg: it.msg, sha: it.sha, ts: it.ts, text: async () => {
-          const r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/gitshow?path="):"/gitshow?path=" + encodeURIComponent(path) + "&sha=" + it.sha);
+          const gitshowUrl = "/gitshow?path=" + encodeURIComponent(path) + "&sha=" + encodeURIComponent(it.sha);
+          const r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api(gitshowUrl):gitshowUrl);
           const j = await r.json();
           return (j && j.ok) ? j.text : null;
         }});
@@ -1172,7 +1174,8 @@ window.DiffVersions = function(opts){
   }
   async function fetchHead(){
     try{
-      const r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/githead?path="):"/githead?path=" + encodeURIComponent(path));
+      const githeadUrl = "/githead?path=" + encodeURIComponent(path);
+      const r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api(githeadUrl):githeadUrl);
       const j = await r.json();
       if(!j || !j.ok || typeof j.text !== "string"){ return; }
       const changed = headText !== j.text;
@@ -1385,7 +1388,8 @@ window.DiffVersions = function(opts){
     if(hasLocalV2){ loadData(localData); acknowledgedIds.clear(); }
     let serverData = null;
     try{
-      const r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/versions?path="):"/versions?path=" + encodeURIComponent(path));
+      const versionsUrl = "/versions?path=" + encodeURIComponent(path);
+      const r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api(versionsUrl):versionsUrl);
       const j = await r.json();
       if(j && j.ok) serverData = j;
     }catch(e){}

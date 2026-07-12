@@ -34,7 +34,8 @@
 
     async function load() {
       if (!path) return null;
-      var r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/code?path="):"/code?path=" + encodeURIComponent(path));
+      var codeUrl = "/code?path=" + encodeURIComponent(path);
+      var r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api(codeUrl):codeUrl);
       var j = await r.json();
       if (j.error) {
         if (status()) status().set("conflict", j.error);
@@ -102,7 +103,8 @@
       if (!cm) return;
       if (opts.diffVersions && opts.diffVersions.isBusy && opts.diffVersions.isBusy()) return;
       try {
-        var r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/code?path="):"/code?path=" + encodeURIComponent(path));
+        var codeUrl = "/code?path=" + encodeURIComponent(path);
+        var r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api(codeUrl):codeUrl);
         var j = await r.json();
         if (!(j.mtime && Math.abs(j.mtime - diskMtime) > 0.001)) return;
         var diskText = j.text;

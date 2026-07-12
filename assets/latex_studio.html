@@ -458,7 +458,8 @@ const __CM_MODE = ({tex:"stex", py:"python", r:"r", md:"markdown", jl:"julia",
 let pdfPath = path ? path.replace(/\.tex$/, ".pdf") : null;
 // single initial-load trigger: resolve the real PDF path first, THEN load once
 // (two concurrent getDocument() calls can deadlock pdf.js worker startup)
-if(path) fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/texroot?path="):"/texroot?path=" + encodeURIComponent(path)).then(r=>r.json()).then(j=>{
+const texrootUrl = "/texroot?path=" + encodeURIComponent(path);
+if(path) fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api(texrootUrl):texrootUrl).then(r=>r.json()).then(j=>{
   if(j.pdf) pdfPath = j.pdf;
   if(IS_TEX) loadPdf();
 }).catch(()=>{ if(IS_TEX) loadPdf(); });
@@ -876,7 +877,8 @@ function ghostInstall(){
 
 async function load(){
   await AtelierEditor.ready;
-  const r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/code?path="):"/code?path=" + encodeURIComponent(path));
+  const codeUrl = "/code?path=" + encodeURIComponent(path);
+  const r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api(codeUrl):codeUrl);
   const j = await r.json();
   if(j.error) return setState("err", j.error);
   recentsAdd(path);
@@ -1116,7 +1118,8 @@ let texcCur = null;      // id en cours d'édition (ou objet neuf)
 const texcRel = () => "tex-comments:" + path;
 async function texcLoad(){
   try {
-    const r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/pdfannot?rel="):"/pdfannot?rel=" + encodeURIComponent(texcRel()));
+    const annotUrl = "/pdfannot?rel=" + encodeURIComponent(texcRel());
+    const r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api(annotUrl):annotUrl);
     const j = await r.json();
     texcAll = Array.isArray(j.annots) ? j.annots : [];
     texcAll.forEach(texcMark);
@@ -1833,7 +1836,8 @@ setInterval(async () => {
   // vrai — ne jamais recharger le disque par-dessus (restauré à la sortie)
   if(__dv && __dv.isBusy && __dv.isBusy()) return;
   try{
-    const r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/code?path="):"/code?path=" + encodeURIComponent(path));
+    const codeUrl = "/code?path=" + encodeURIComponent(path);
+    const r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api(codeUrl):codeUrl);
     const j = await r.json();
     if(!(j.mtime && Math.abs(j.mtime - diskMtime) > 0.001)) return;
     const diskText = j.text;
@@ -1897,7 +1901,8 @@ function openTarget(target){
 const EDITABLE = /\.(tex|sty|bib|py|r|R|md|jl|sh|bash|txt|csv|json|yaml|yml|toml)$/;
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 async function pickerShow(dir){
-  const r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/ls?dir="):"/ls?dir=" + encodeURIComponent(dir || (path ? path.replace(/\/[^/]*$/, "") : "")));
+  const lsUrl = "/ls?dir=" + encodeURIComponent(dir || (path ? path.replace(/\/[^/]*$/, "") : ""));
+  const r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api(lsUrl):lsUrl);
   const j = await r.json();
   if(j.error) return;
   document.getElementById("picker").classList.add("show");
@@ -2083,7 +2088,8 @@ if(window.self !== window.top){
   async function runLint(){
     if (__EXT !== "py" || !window.cm) return;
     try {
-      const r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/lint?path="):"/lint?path=" + encodeURIComponent(path));
+      const lintUrl = "/lint?path=" + encodeURIComponent(path);
+      const r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api(lintUrl):lintUrl);
       const j = await r.json();
       lintMarks.forEach((m) => m.clear && m.clear());
       lintMarks = [];

@@ -67,7 +67,8 @@ let diskMtime = 0, dirty = false, editor = null, loading = true;
 
 function setState(cls, txt){ stateEl.className = cls; stateEl.textContent = txt; }
 
-fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/code?path="):"/code?path=" + encodeURIComponent(path)).then(r => r.json()).then(j => {
+const initialCodeUrl = "/code?path=" + encodeURIComponent(path);
+fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api(initialCodeUrl):initialCodeUrl).then(r => r.json()).then(j => {
   diskMtime = j.mtime;
   editor = new toastui.Editor({
     el: document.getElementById("ed"),
@@ -109,10 +110,12 @@ document.addEventListener("keydown", (e) => {
 // reload auto si Claude modifie le fichier sur disque (buffer propre seulement)
 setInterval(async () => {
   try{
-    const j = await (await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/code?path="):"/code?path=" + encodeURIComponent(path) + "&statonly=1")).json();
+    const statUrl = "/code?path=" + encodeURIComponent(path) + "&statonly=1";
+    const j = await (await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api(statUrl):statUrl)).json();
     if(j.mtime && Math.abs(j.mtime - diskMtime) > 0.001){
       if(dirty){ setState("dirty", "le fichier a changé sur disque (Claude ?)"); return; }
-      const full = await (await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/code?path="):"/code?path=" + encodeURIComponent(path))).json();
+      const codeUrl = "/code?path=" + encodeURIComponent(path);
+      const full = await (await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api(codeUrl):codeUrl)).json();
       loading = true;
       diskMtime = full.mtime;
       editor.setMarkdown(full.text, false);

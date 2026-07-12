@@ -560,7 +560,8 @@ document.addEventListener("webkitfullscreenchange", onFullscreenChange);
 async function load(){
   try{
     const ver = new URLSearchParams(location.search).get("v") || "";
-    const r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/"):"/" + file.split("/").map(encodeURIComponent).join("/") + (ver ? "?v=" + ver : ""));
+    const fileUrl = "/" + file.split("/").map(encodeURIComponent).join("/") + (ver ? "?v=" + ver : "");
+    const r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api(fileUrl):fileUrl);
     if(!r.ok) throw new Error(r.status);
     const txt = await r.text();
     // DOMParser handles the <?xml?> + <!DOCTYPE> prefix that innerHTML mangles; CSS sizes it via viewBox
