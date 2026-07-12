@@ -28,6 +28,13 @@ pub const EXCLUDED_DIRECTORIES: &[&str] = &[
     ".claude",
     "_gallery_exports",
     ".prism",
+    "target",
+    "dist",
+    "playwright-report",
+    "test-results",
+    ".turbo",
+    ".next",
+    "coverage",
 ];
 
 #[derive(Debug, Error)]

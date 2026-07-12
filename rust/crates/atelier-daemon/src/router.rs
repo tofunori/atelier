@@ -38,6 +38,8 @@ pub fn public_router(state: DaemonHttpState) -> Router {
         .route("/version", get(version))
         .route("/open/{ticket}", get(open_ticket))
         .route("/assets/{*path}", get(shared_asset))
+        .route("/p/{project_key}/api/v1/events", get(project_events_sse))
+        .route("/p/{project_key}/events", get(project_events_sse))
         .route("/p/{project_key}", any(project_dispatch))
         .route("/p/{project_key}/{*rest}", any(project_dispatch))
         .layer(middleware::from_fn(security_headers))
@@ -258,6 +260,60 @@ fn cookie_value(headers: &HeaderMap, name: &str) -> Option<String> {
         }
     }
     None
+}
+
+
+async fn project_events_sse(
+    State(state): State<DaemonHttpState>,
+    req: Request,
+) -> Response {
+    use axum::response::sse::{Event, KeepAlive, Sse};
+    use futures_util::stream;
+    use std::convert::Infallible;
+
+    let path = req.uri().path().to_string();
+    let Some((project_key, _)) = split_project_path(&path) else {
+        return (StatusCode::NOT_FOUND, "not found").into_response();
+    };
+    let cookie = cookie_value(req.headers(), "atelier_session");
+    let authorized = match cookie.as_deref() {
+        Some(raw) => state.sessions.validate_session(raw, &project_key).await,
+        None => std::env::var("ATELIER_DAEMON_ALLOW_ANON").map(|v| v == "1").unwrap_or(false),
+    };
+    if !authorized {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(json!({"code":"SESSION_INVALID","message":"session required"})),
+        )
+            .into_response();
+    }
+    let runtime = match state.host.activate(&project_key).await {
+        Ok(r) => r,
+        Err(error) => return host_error(error),
+    };
+    let revision = *runtime.revision().read().await;
+    let instance = state.build.daemon_instance.clone();
+    let key = project_key.clone();
+    let stream = stream::iter([Ok::<_, Infallible>(
+        Event::default().event("message").data(
+            json!({
+                "id": uuid::Uuid::new_v4().to_string(),
+                "projectKey": key,
+                "daemonInstance": instance,
+                "revision": revision,
+                "type": "daemon.ready",
+                "timestamp": std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_secs())
+                    .unwrap_or(0),
+                "payload": {}
+            })
+            .to_string(),
+        ),
+    )]);
+    Sse::new(stream)
+        .keep_alive(KeepAlive::default())
+        .into_response()
 }
 
 fn split_project_path(path: &str) -> Option<(String, String)> {

@@ -90,7 +90,9 @@
   }
 
   function eventsUrl() {
-    return api("/events");
+    // Prefer the short project path; daemon also mounts /api/v1/events.
+    if (boot.legacy || !boot.basePath) return "/events";
+    return joinBase(boot.basePath, "/events");
   }
 
   function relativePath(value) {
