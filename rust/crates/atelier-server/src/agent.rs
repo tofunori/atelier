@@ -1,6 +1,5 @@
-use atelier_core::{atomic_write_json, safe_project_path};
+use atelier_core::{atomic_write_json, project_key, safe_project_path};
 use serde_json::{Value, json};
-use sha2::{Digest, Sha256};
 use std::{
     collections::BTreeMap,
     env, fs,
@@ -128,23 +127,22 @@ fn public_consumer(item: &Value, now: f64) -> Value {
     Value::Object(out)
 }
 
-fn project_key(root: &Path) -> String {
-    let mut digest = Sha256::new();
-    digest.update(
-        fs::canonicalize(root)
-            .unwrap_or_else(|_| root.to_path_buf())
-            .to_string_lossy()
-            .as_bytes(),
-    );
-    format!("{:x}", digest.finalize())[..24].to_string()
-}
-
 fn paths(root: &Path) -> (PathBuf, PathBuf, PathBuf) {
     let base = env::var_os("HOME")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("."))
         .join("Library/Application Support/Atelier/agent-inbox");
-    let key = project_key(root);
+    let key = project_key(root).unwrap_or_else(|_| {
+        // Fallback keeps historical behaviour if the root vanished mid-process.
+        use sha2::{Digest, Sha256};
+        let raw = fs::canonicalize(root)
+            .unwrap_or_else(|_| root.to_path_buf())
+            .to_string_lossy()
+            .into_owned();
+        let mut digest = Sha256::new();
+        digest.update(raw.as_bytes());
+        format!("{:x}", digest.finalize())[..24].to_string()
+    });
     (
         base.join(format!("{key}.json")),
         base.join(format!("{key}-history.json")),

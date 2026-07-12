@@ -5,6 +5,7 @@ mod config;
 mod control;
 #[allow(dead_code)]
 mod events;
+mod host;
 #[allow(dead_code)]
 mod lifecycle;
 #[allow(dead_code)]
@@ -17,6 +18,7 @@ use build_info::{BuildInfo, RuntimeClock};
 use clap::Parser;
 use config::DaemonConfig;
 use control::{ControlState, ensure_private_state_dir, load_or_create_token, serve_control};
+use host::ProjectHost;
 use registry::ProjectRegistry;
 use router::{DaemonHttpState, public_router};
 use sessions::SessionStore;
@@ -97,6 +99,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let clock = Arc::new(RuntimeClock::new());
     let config = Arc::new(config);
     let registry = ProjectRegistry::load(config.registry_path())?;
+    let host = ProjectHost::new(
+        registry.clone(),
+        config.idle_grace_seconds,
+        config.suspend_after_seconds,
+    );
     let _sessions = SessionStore::empty(config.sessions_path());
 
     let control_path = args
@@ -138,6 +145,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         build: build.clone(),
         clock: clock.clone(),
         token: Arc::new(token),
+        registry: registry.clone(),
+        host: host.clone(),
         shutting_down: shutting_down.clone(),
         shutdown: shutdown.clone(),
     };
@@ -146,6 +155,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         build: build.clone(),
         clock: clock.clone(),
         registry,
+        host: host.clone(),
     };
     let app = public_router(http_state);
 

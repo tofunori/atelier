@@ -79,6 +79,14 @@ impl ProjectRuntime {
     pub fn root(&self) -> &Path {
         &self.root
     }
+
+    pub fn revision(&self) -> Arc<RwLock<u64>> {
+        self.revision.clone()
+    }
+
+    pub fn watcher(&self) -> Arc<RwLock<WatcherStatus>> {
+        self.watcher.clone()
+    }
 }
 
 #[cfg(test)]

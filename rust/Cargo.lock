@@ -120,6 +120,7 @@ dependencies = [
  "md-5",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "thiserror",
  "walkdir",
 ]
@@ -129,6 +130,7 @@ name = "atelier-daemon"
 version = "0.1.0"
 dependencies = [
  "atelier-core",
+ "atelier-server",
  "axum",
  "clap",
  "hex",
@@ -138,6 +140,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tokio",
+ "tower",
  "tower-http",
  "tracing",
  "tracing-subscriber",

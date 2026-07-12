@@ -5,7 +5,10 @@ use std::path::{Path, PathBuf};
 use thiserror::Error;
 
 pub mod gallery_builder;
+pub mod project;
 pub mod svg_edits;
+
+pub use project::{project_display_name, project_key};
 
 pub const ARTIFACT_EXTENSIONS: &[&str] = &[
     "png", "jpg", "jpeg", "svg", "pdf", "html", "htm", "docx", "xlsx", "xls", "csv", "md", "py",

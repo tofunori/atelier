@@ -3,6 +3,8 @@
 use crate::{
     build_info::{BuildInfo, PROTOCOL_VERSION, RuntimeClock},
     config::DaemonConfig,
+    host::ProjectHost,
+    registry::ProjectRegistry,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -58,6 +60,8 @@ pub struct ControlState {
     pub build: Arc<BuildInfo>,
     pub clock: Arc<RuntimeClock>,
     pub token: Arc<String>,
+    pub registry: ProjectRegistry,
+    pub host: ProjectHost,
     pub shutting_down: Arc<AtomicBool>,
     pub shutdown: Arc<Notify>,
 }
@@ -201,7 +205,7 @@ async fn dispatch(request: ControlRequest, state: &ControlState) -> ControlRespo
                 "host": state.config.host,
                 "port": state.config.port,
                 "stateDir": state.config.state_dir,
-                "projects": 0,
+                "projects": state.registry.project_count().await,
             })),
             error: None,
         },
@@ -218,6 +222,85 @@ async fn dispatch(request: ControlRequest, state: &ControlState) -> ControlRespo
                 id: request.id,
                 ok: true,
                 result: Some(json!({ "shuttingDown": true, "reason": reason })),
+                error: None,
+            }
+        }
+        "project.register" => {
+            let Some(root) = request.params.get("root").and_then(Value::as_str) else {
+                return error_response(request.id, "INVALID_PARAMS", "root required");
+            };
+            match state.registry.register(std::path::Path::new(root)).await {
+                Ok((key, entry)) => ControlResponse {
+                    id: request.id,
+                    ok: true,
+                    result: Some(json!({
+                        "key": key,
+                        "displayName": entry.display_name,
+                        "state": "registeredIdle",
+                        "canonicalRoot": entry.canonical_root,
+                    })),
+                    error: None,
+                },
+                Err(message) => error_response(request.id, "REGISTER_FAILED", message),
+            }
+        }
+        "project.list" => ControlResponse {
+            id: request.id,
+            ok: true,
+            result: Some(json!({ "projects": state.host.list_public().await })),
+            error: None,
+        },
+        "project.status" => {
+            let Some(key) = request
+                .params
+                .get("key")
+                .and_then(Value::as_str)
+                .map(str::to_string)
+                .or_else(|| {
+                    request
+                        .params
+                        .get("root")
+                        .and_then(Value::as_str)
+                        .and_then(|root| {
+                            atelier_core::project_key(std::path::Path::new(root)).ok()
+                        })
+                })
+            else {
+                return error_response(request.id, "INVALID_PARAMS", "key or root required");
+            };
+            match state.host.status(&key).await {
+                Some(status) => ControlResponse {
+                    id: request.id,
+                    ok: true,
+                    result: Some(status),
+                    error: None,
+                },
+                None => error_response(request.id, "PROJECT_NOT_FOUND", "project not found"),
+            }
+        }
+        "project.suspend" => {
+            let Some(key) = request.params.get("key").and_then(Value::as_str) else {
+                return error_response(request.id, "INVALID_PARAMS", "key required");
+            };
+            match state.host.suspend(key).await {
+                Ok(()) => ControlResponse {
+                    id: request.id,
+                    ok: true,
+                    result: Some(json!({ "key": key, "state": "suspended" })),
+                    error: None,
+                },
+                Err(error) => error_response(request.id, error.code(), error.message()),
+            }
+        }
+        "project.forget" => {
+            let Some(key) = request.params.get("key").and_then(Value::as_str) else {
+                return error_response(request.id, "INVALID_PARAMS", "key required");
+            };
+            let removed = state.host.forget(key).await;
+            ControlResponse {
+                id: request.id,
+                ok: true,
+                result: Some(json!({ "key": key, "removed": removed })),
                 error: None,
             }
         }
