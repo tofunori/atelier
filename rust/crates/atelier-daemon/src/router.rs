@@ -12,7 +12,7 @@ use axum::{
     Json, Router,
     body::Body,
     extract::{Path, Request, State},
-    http::{HeaderMap, HeaderValue, StatusCode, Uri, header},
+    http::{HeaderMap, HeaderValue, Method, StatusCode, Uri, header},
     middleware::{self, Next},
     response::{IntoResponse, Redirect, Response},
     routing::{any, get},
@@ -201,6 +201,24 @@ async fn project_dispatch(State(state): State<DaemonHttpState>, req: Request) ->
             .into_response();
     }
 
+    // Daemon-owned project switcher API. It lives behind the current
+    // project session gate; opening another project returns a one-shot ticket
+    // so the browser receives a cookie scoped to the destination project.
+    if stripped == "/api/projects" && req.method() == Method::GET {
+        return (
+            StatusCode::OK,
+            Json(json!({
+                "ok": true,
+                "currentProject": project_key,
+                "projects": state.host.list_public().await,
+            })),
+        )
+            .into_response();
+    }
+    if stripped == "/api/projects/open" && req.method() == Method::POST {
+        return open_project_from_browser(&state, req).await;
+    }
+
     let runtime = match state.host.activate(&project_key).await {
         Ok(runtime) => runtime,
         Err(error) => return host_error(error),
@@ -230,6 +248,105 @@ async fn project_dispatch(State(state): State<DaemonHttpState>, req: Request) ->
         )
             .into_response(),
     }
+}
+
+async fn open_project_from_browser(state: &DaemonHttpState, req: Request) -> Response {
+    let bytes = match axum::body::to_bytes(req.into_body(), 64 * 1024).await {
+        Ok(bytes) => bytes,
+        Err(error) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({"ok": false, "message": error.to_string()})),
+            )
+                .into_response();
+        }
+    };
+    let payload: Value = match serde_json::from_slice(&bytes) {
+        Ok(value) => value,
+        Err(error) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({"ok": false, "message": format!("invalid JSON: {error}")})),
+            )
+                .into_response();
+        }
+    };
+
+    let key = if let Some(key) = payload.get("key").and_then(Value::as_str) {
+        if state.registry.get(key).await.is_none() {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({"ok": false, "message": "project not found"})),
+            )
+                .into_response();
+        }
+        key.to_string()
+    } else if let Some(root) = payload.get("root").and_then(Value::as_str) {
+        let expanded = expand_user_path(root);
+        match state.registry.register(&expanded).await {
+            Ok((key, _)) => key,
+            Err(message) => {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(json!({"ok": false, "message": format!("cannot open folder: {message}")})),
+                )
+                    .into_response();
+            }
+        }
+    } else {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"ok": false, "message": "key or root required"})),
+        )
+            .into_response();
+    };
+
+    if let Err(error) = state.host.activate(&key).await {
+        return host_error(error);
+    }
+    let theme = payload
+        .get("theme")
+        .and_then(Value::as_str)
+        .unwrap_or("Codex");
+    let native_fs = payload
+        .get("nativeFs")
+        .and_then(Value::as_bool)
+        .unwrap_or(true);
+    match state
+        .sessions
+        .mint_ticket(&key, None, Some(theme.to_string()), native_fs)
+        .await
+    {
+        Ok(ticket) => (
+            StatusCode::OK,
+            Json(json!({
+                "ok": true,
+                "key": key,
+                "openUrl": format!("/open/{ticket}"),
+            })),
+        )
+            .into_response(),
+        Err(message) => (
+            StatusCode::TOO_MANY_REQUESTS,
+            Json(json!({"ok": false, "message": message})),
+        )
+            .into_response(),
+    }
+}
+
+fn expand_user_path(raw: &str) -> std::path::PathBuf {
+    let trimmed = raw.trim();
+    if trimmed == "~" {
+        return std::env::var_os("HOME")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| std::path::PathBuf::from(trimmed));
+    }
+    if let Some(rest) = trimmed.strip_prefix("~/")
+        && let Some(home) = std::env::var_os("HOME")
+    {
+        return std::path::PathBuf::from(home).join(rest);
+    }
+    std::path::PathBuf::from(trimmed)
 }
 
 /// Rebuild HTML responses with the non-executable bootstrap JSON and runtime scripts.

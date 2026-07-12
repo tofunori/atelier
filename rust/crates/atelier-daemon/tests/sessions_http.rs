@@ -123,6 +123,20 @@ fn http_raw(
     Ok(out)
 }
 
+fn http_json_post(port: u16, path: &str, cookie: &str, value: serde_json::Value) -> String {
+    let body = value.to_string();
+    let mut stream = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
+    stream.set_read_timeout(Some(Duration::from_secs(3))).ok();
+    let request = format!(
+        "POST {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: close\r\nCookie: {cookie}\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{body}",
+        body.len()
+    );
+    stream.write_all(request.as_bytes()).unwrap();
+    let mut response = String::new();
+    stream.read_to_string(&mut response).unwrap();
+    response
+}
+
 fn control(daemon: &Daemon, method: &str, params: serde_json::Value) -> serde_json::Value {
     let mut stream = UnixStream::connect(daemon.state_dir.join("daemon.sock")).unwrap();
     stream.set_read_timeout(Some(Duration::from_secs(3))).ok();
@@ -259,6 +273,50 @@ fn open_ticket_sets_cookie_and_rejects_replay() {
     assert!(
         cross.contains("401") || cross.contains("SESSION_INVALID"),
         "{cross}"
+    );
+
+    // The authenticated project menu can list known projects and mint a
+    // destination-scoped ticket without exposing the daemon control token.
+    let cookie = format!("atelier_session={session}");
+    let listed = http_raw(
+        daemon.port,
+        "GET",
+        &format!("/p/{key}/api/projects"),
+        Some(&cookie),
+        None,
+    )
+    .unwrap();
+    assert!(listed.contains("200"), "{listed}");
+    assert!(listed.contains(key), "{listed}");
+    assert!(listed.contains(key_b), "{listed}");
+
+    let switched = http_json_post(
+        daemon.port,
+        &format!("/p/{key}/api/projects/open"),
+        &cookie,
+        serde_json::json!({"key": key_b, "theme": "Codex", "nativeFs": true}),
+    );
+    assert!(switched.contains("200"), "{switched}");
+    assert!(switched.contains("openUrl"), "{switched}");
+    let body = switched.split("\r\n\r\n").nth(1).unwrap_or("");
+    let switched_json: serde_json::Value = serde_json::from_str(body).unwrap();
+    let switch_ticket = switched_json["openUrl"]
+        .as_str()
+        .unwrap()
+        .rsplit('/')
+        .next()
+        .unwrap();
+    let target_session = http_raw(
+        daemon.port,
+        "GET",
+        &format!("/open/{switch_ticket}"),
+        None,
+        None,
+    )
+    .unwrap();
+    assert!(
+        target_session.contains(&format!("Path=/p/{key_b}/")),
+        "{target_session}"
     );
 
     let _ = fs::remove_dir_all(root);

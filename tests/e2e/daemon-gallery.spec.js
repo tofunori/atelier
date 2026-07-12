@@ -114,7 +114,9 @@ test('daemon gallery loads runtime/CM6/agent_bridge and opens a file', async ({
   const port = await freePort();
   const stateDir = shortStateDir();
   const project = mkdtempSync(path.join(tmpdir(), 'de2e-'));
+  const projectB = mkdtempSync(path.join(tmpdir(), 'de2e-switch-'));
   writeProject(project);
+  writeProject(projectB);
 
   const child = spawn(
     DAEMON_BIN,
@@ -182,6 +184,36 @@ test('daemon gallery loads runtime/CM6/agent_bridge and opens a file', async ({
     expect(boot).toContain('"assetBase":"/assets"');
     expect(boot).not.toContain('/assets/assets');
 
+    await page.waitForFunction(
+      () => window.AtelierRuntime && window.AtelierRuntime.ready === true,
+      null,
+      { timeout: 10000 }
+    );
+
+    // Register a second project and switch to it from the project-name menu.
+    const registeredB = await controlCall(stateDir, token, 'project.register', {
+      root: projectB,
+    });
+    expect(registeredB.ok, JSON.stringify(registeredB)).toBe(true);
+    const projectKeyB = registeredB.result.key;
+    await page.locator('#projectSwitch').click();
+    await expect(page.locator('#projectMenu')).toHaveClass(/show/);
+    await expect(page.locator(`[data-project-key="${projectKey}"]`)).toContainText('Projet actuel');
+    await expect(page.locator(`[data-project-key="${projectKeyB}"]`)).toBeVisible();
+    await page.locator(`[data-project-key="${projectKeyB}"]`).click();
+    await page.waitForURL((url) => url.pathname.includes(`/p/${projectKeyB}/`), {
+      timeout: 10000,
+    });
+    expect(page.url()).toContain(`/p/${projectKeyB}/figures_index.html`);
+
+    // The destination cookie is scoped correctly, and the same menu can
+    // return to the original project without restarting the daemon.
+    await page.locator('#projectSwitch').click();
+    await expect(page.locator(`[data-project-key="${projectKeyB}"]`)).toContainText('Projet actuel');
+    await page.locator(`[data-project-key="${projectKey}"]`).click();
+    await page.waitForURL((url) => url.pathname.includes(`/p/${projectKey}/`), {
+      timeout: 10000,
+    });
     await page.waitForFunction(
       () => window.AtelierRuntime && window.AtelierRuntime.ready === true,
       null,
@@ -273,6 +305,11 @@ test('daemon gallery loads runtime/CM6/agent_bridge and opens a file', async ({
     }
     try {
       rmSync(project, { recursive: true, force: true });
+    } catch {
+      /* ignore */
+    }
+    try {
+      rmSync(projectB, { recursive: true, force: true });
     } catch {
       /* ignore */
     }

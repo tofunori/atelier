@@ -24,6 +24,40 @@
      se tronquent / disparaissent avant que les boutons ne passent à la ligne */
   .brand .logo,.brand .wm,.chip.dest{flex:none}
   .brand .proj{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:3}
+  .project-switch{min-width:0;max-width:min(280px,32vw);height:26px;padding:0 6px;border:0;
+    display:inline-flex;align-items:center;gap:5px;background:transparent;color:var(--muted);font:inherit}
+  .project-switch:hover,.project-switch.on{background:var(--card2);border-color:transparent;color:var(--txt)}
+  .project-switch svg{width:10px;height:10px;flex:none;transition:transform .12s ease}
+  .project-switch.on svg{transform:rotate(180deg)}
+  #projectMenu{position:fixed;z-index:150;display:none;width:min(330px,calc(100vw - 20px));padding:7px;
+    border:1px solid var(--border-strong);border-radius:10px;background:color-mix(in srgb,var(--card) 97%,transparent);
+    box-shadow:0 16px 42px rgba(0,0,0,.48);backdrop-filter:blur(12px)}
+  #projectMenu.show{display:block}
+  .project-menu-head{padding:5px 7px 7px;color:var(--muted);font-size:10px;font-weight:650;
+    text-transform:uppercase;letter-spacing:.08em}
+  .project-row{width:100%;height:auto;min-height:38px;padding:6px 8px;border:0;display:grid;
+    grid-template-columns:16px minmax(0,1fr) auto;align-items:center;gap:7px;text-align:left;background:transparent}
+  .project-row:hover,.project-row:focus-visible{background:var(--card2);outline:0}
+  .project-row .project-mark{width:16px;color:var(--accent);text-align:center}
+  .project-row .project-copy{min-width:0;display:flex;flex-direction:column;gap:2px}
+  .project-row .project-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12.5px;color:var(--txt)}
+  .project-row .project-state{font-size:10.5px;color:var(--muted)}
+  .project-row .project-pin{font-size:10px;color:var(--faint)}
+  .project-menu-add{width:100%;height:34px;margin-top:5px;border:0;border-top:1px solid var(--border);
+    border-radius:0 0 6px 6px;display:flex;align-items:center;gap:8px;justify-content:flex-start;background:transparent;color:var(--muted)}
+  .project-menu-add:hover{background:var(--card2);color:var(--txt);border-color:var(--border)}
+  #projectDialog{position:fixed;inset:0;z-index:170;display:none;place-items:start center;padding-top:18vh;
+    background:rgba(8,10,12,.58);backdrop-filter:blur(3px)}
+  #projectDialog.show{display:grid}
+  .project-dialog-box{width:min(480px,calc(100vw - 24px));padding:16px;border:1px solid var(--border-strong);
+    border-radius:12px;background:var(--card);box-shadow:0 22px 60px rgba(0,0,0,.55)}
+  .project-dialog-box h2{margin:0 0 5px;font-size:14px;font-weight:650}
+  .project-dialog-box p{margin:0 0 12px;color:var(--muted);font-size:11.5px;line-height:1.4}
+  #projectPath{width:100%;height:34px;padding:0 10px;border:1px solid var(--border);border-radius:7px;
+    background:var(--bg);color:var(--txt);font:12px var(--code-font)}
+  #projectPath:focus{outline:2px solid var(--accent);outline-offset:1px}
+  #projectDialogError{min-height:17px;padding-top:6px;color:#e06c75;font-size:11px}
+  .project-dialog-actions{display:flex;justify-content:flex-end;gap:6px;margin-top:4px}
   .brand .stat{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:5}
   .chip.dest{background:transparent;border-color:transparent}
   .chip.dest:hover{background:var(--card2);border-color:var(--border)}
@@ -386,7 +420,15 @@
   <div class="brand">
     <svg class="logo" width="19" height="19" viewBox="0 0 24 24" fill="currentColor" aria-label="Gallery"><rect x="2" y="2" width="9.5" height="13.5" rx="1.6"/><rect x="2" y="17" width="9.5" height="5" rx="1.6"/><rect x="13.5" y="2" width="8.5" height="5" rx="1.6"/><rect x="13.5" y="9" width="8.5" height="13" rx="1.6"/></svg>
     <span class="wm">__WORDMARK__</span>
-    <span class="proj">__PROJECT__</span>
+    <button type="button" id="projectSwitch" class="project-switch" aria-haspopup="menu" aria-expanded="false" title="Changer de projet">
+      <span class="proj" id="projectCurrent">__PROJECT__</span>
+      <svg viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M2 3.5 5 6.5 8 3.5" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <div id="projectMenu" role="menu" aria-label="Projets Atelier">
+      <div class="project-menu-head">Projets récents</div>
+      <div id="projectList"></div>
+      <button type="button" class="project-menu-add" id="projectAdd">＋ <span>Ouvrir un dossier…</span></button>
+    </div>
     <span id="galleryStat" class="stat">__COUNT__ files · __GEN__</span>
     <span class="brand-sp"></span>
     <span class="chip dest" id="ideChip" title="IDE — fichiers code &amp; LaTeX du projet">IDE</span>
@@ -432,6 +474,15 @@
     <div id="exportMenu" class="menu"></div>
   </div>
 </header>
+<div id="projectDialog" role="dialog" aria-modal="true" aria-labelledby="projectDialogTitle">
+  <div class="project-dialog-box">
+    <h2 id="projectDialogTitle">Ouvrir un dossier</h2>
+    <p>Entre un chemin local. Atelier l’ajoutera à ce menu et ouvrira sa galerie avec le daemon actuel.</p>
+    <input id="projectPath" type="text" spellcheck="false" autocomplete="off" placeholder="~/Documents/mon-projet">
+    <div id="projectDialogError" role="status"></div>
+    <div class="project-dialog-actions"><button type="button" id="projectCancel">Annuler</button><button type="button" id="projectOpen">Ouvrir</button></div>
+  </div>
+</div>
 <script src="/.fig_thumbs/agent_bridge_ui.js?v=18"></script>
 <main id="grid"></main>
 <div id="tabPanes"></div>
@@ -498,6 +549,74 @@ function saveGallerySession(patch){
   gallerySession=Object.assign({},gallerySession,patch||{});
   try{localStorage.setItem(GALLERY_SESSION_KEY,JSON.stringify(gallerySession));}catch(e){}
 }
+
+// Sélecteur de projets du daemon. Le serveur émet un ticket one-shot lors de
+// la bascule afin que chaque projet conserve sa propre session et ses données.
+(function(){
+  const trigger=document.getElementById('projectSwitch');
+  const menu=document.getElementById('projectMenu');
+  const list=document.getElementById('projectList');
+  const add=document.getElementById('projectAdd');
+  const dialog=document.getElementById('projectDialog');
+  const input=document.getElementById('projectPath');
+  const error=document.getElementById('projectDialogError');
+  const open=document.getElementById('projectOpen');
+  const cancel=document.getElementById('projectCancel');
+  if(!trigger||!menu||!window.AtelierRuntime||AtelierRuntime.legacy){
+    if(trigger) trigger.disabled=true;
+    return;
+  }
+  let current='';
+  const api=path=>AtelierRuntime.api(path);
+  const closeMenu=()=>{menu.classList.remove('show');trigger.classList.remove('on');trigger.setAttribute('aria-expanded','false');};
+  const showError=message=>{error.textContent=message||'';};
+  function placeMenu(){
+    const r=trigger.getBoundingClientRect();
+    menu.style.left=Math.max(10,Math.min(r.left,innerWidth-menu.offsetWidth-10))+'px';
+    menu.style.top=(r.bottom+5)+'px';
+  }
+  async function openProject(payload){
+    showError(''); open.disabled=true;
+    try{
+      const response=await fetch(api('/api/projects/open'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(Object.assign({theme:'Codex',nativeFs:true},payload))});
+      const data=await response.json();
+      if(!response.ok||!data.ok) throw new Error(data.message||'Impossible d’ouvrir ce projet');
+      location.assign(data.openUrl);
+    }catch(err){showError(err&&err.message?err.message:String(err));open.disabled=false;}
+  }
+  function renderProjects(data){
+    current=data.currentProject||'';
+    list.replaceChildren();
+    const projects=(data.projects||[]).slice().sort((a,b)=>(Number(b.pinned)-Number(a.pinned))||((b.lastOpenedAt||0)-(a.lastOpenedAt||0)));
+    projects.forEach(project=>{
+      const row=document.createElement('button'); row.type='button'; row.className='project-row'; row.dataset.projectKey=project.key; row.setAttribute('role','menuitem');
+      const mark=document.createElement('span'); mark.className='project-mark'; mark.textContent=project.key===current?'✓':'·';
+      const copy=document.createElement('span'); copy.className='project-copy';
+      const name=document.createElement('span'); name.className='project-name'; name.textContent=project.displayName||project.key;
+      const state=document.createElement('span'); state.className='project-state'; state.textContent=project.key===current?'Projet actuel':(project.state==='active'?'Ouvert':'Récent');
+      const pin=document.createElement('span'); pin.className='project-pin'; pin.textContent=project.pinned?'Épinglé':'';
+      copy.append(name,state); row.append(mark,copy,pin);
+      row.onclick=()=>{if(project.key===current){closeMenu();return;}closeMenu();openProject({key:project.key});};
+      list.appendChild(row);
+    });
+    if(!projects.length){const empty=document.createElement('div');empty.className='project-menu-head';empty.textContent='Aucun autre projet';list.appendChild(empty);}
+  }
+  async function loadProjects(){
+    list.innerHTML='<div class="project-menu-head">Chargement…</div>';
+    try{const response=await fetch(api('/api/projects'),{cache:'no-store'});const data=await response.json();if(!response.ok)throw new Error(data.message||'Erreur');renderProjects(data);}
+    catch(err){list.innerHTML='<div class="project-menu-head">Projets indisponibles</div>';}
+  }
+  trigger.onclick=async event=>{event.stopPropagation();if(menu.classList.contains('show')){closeMenu();return;}menu.classList.add('show');trigger.classList.add('on');trigger.setAttribute('aria-expanded','true');placeMenu();await loadProjects();placeMenu();};
+  add.onclick=()=>{closeMenu();dialog.classList.add('show');input.value='~/Documents/';showError('');requestAnimationFrame(()=>{input.focus();input.setSelectionRange(input.value.length,input.value.length);});};
+  const closeDialog=()=>{dialog.classList.remove('show');open.disabled=false;showError('');};
+  cancel.onclick=closeDialog;
+  open.onclick=()=>{const root=input.value.trim();if(!root){showError('Entre le chemin du dossier.');return;}openProject({root});};
+  input.addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();open.click();}else if(event.key==='Escape')closeDialog();});
+  dialog.addEventListener('mousedown',event=>{if(event.target===dialog)closeDialog();});
+  document.addEventListener('mousedown',event=>{if(menu.classList.contains('show')&&!menu.contains(event.target)&&!trigger.contains(event.target))closeMenu();});
+  document.addEventListener('keydown',event=>{if(event.key==='Escape'){closeMenu();if(dialog.classList.contains('show'))closeDialog();}});
+  addEventListener('resize',()=>{if(menu.classList.contains('show'))placeMenu();});
+})();
 function foldersFromFiles(files){
   return [...new Set((files||[]).map(f=>f.folder||'.'))].sort();
 }
