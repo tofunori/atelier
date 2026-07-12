@@ -1,0 +1,20 @@
+{
+  "name": "atelier",
+  "interface": {
+    "displayName": "Atelier"
+  },
+  "plugins": [
+    {
+      "name": "atelier",
+      "source": {
+        "source": "local",
+        "path": "./plugins/atelier"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

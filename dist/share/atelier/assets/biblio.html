@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bibliothèque</title>
+<style>
+  :root{--ui-font:-apple-system,'SF Pro Text','Inter Variable',sans-serif; --bg:#141619; --card:#1c1f23; --card2:#22262b;
+        --txt:#dbdfe5; --muted:#9aa1ab; --faint:#6b727c; --accent:#7fa3d8; --accent-soft:#233246;
+        --border:#2a2e34; --border-strong:#3a4048}
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;font-family:var(--ui-font);background:var(--bg);color:var(--txt);font-size:13px;overflow:hidden}
+  #app{display:grid;grid-template-columns:300px 4px minmax(0,1fr);grid-template-rows:minmax(0,100%);height:100vh}
+  #left,#reader{min-height:0}
+  #app.no-reader{grid-template-columns:1fr}
+  #app.no-list{grid-template-columns:0 0 minmax(0,1fr)}
+
+  /* ---- liste ---- */
+  #left{display:flex;flex-direction:column;min-width:0;border-right:1px solid var(--border);background:var(--card)}
+  #searchRow{display:flex;align-items:center;gap:7px;padding:10px 12px 6px}
+  #searchRow svg{flex:none;color:var(--faint)}
+  #q{flex:1;min-width:0;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--txt);
+     font-size:13px;height:28px;padding:0 10px;outline:none;font-family:inherit}
+  #q:focus{border-color:var(--accent)}
+  #filters{display:flex;align-items:center;gap:5px;padding:4px 12px 8px;flex-wrap:wrap}
+  #filters button,#filters select{height:24px;padding:0 8px;border-radius:6px;border:1px solid var(--border);
+     background:var(--card2);color:var(--muted);font-size:11.5px;font-family:inherit;cursor:pointer}
+  #filters button.on{color:var(--accent);border-color:var(--accent)}
+  #filters select{max-width:110px}
+  #addNote{padding:2px 12px 6px;font-size:11.5px;color:var(--muted)}
+  #list{flex:1;overflow-y:auto;padding:2px 6px 10px}
+  .row{display:flex;align-items:flex-start;gap:2px;border-radius:8px;padding:6px 4px 6px 10px;cursor:pointer}
+  .row:hover{background:var(--card2)}
+  .row.on{background:var(--accent-soft)}
+  .row .main{flex:1;min-width:0;background:none;border:none;padding:0;text-align:left;color:inherit;font:inherit;cursor:pointer}
+  .row .ttl{display:block;font-weight:600;font-size:12.5px;line-height:1.3;overflow:hidden;display:-webkit-box;
+     -webkit-line-clamp:2;-webkit-box-orient:vertical}
+  .row .meta{display:block;color:var(--muted);font-size:11.5px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .row .star{flex:none;background:none;border:none;color:var(--faint);cursor:pointer;padding:2px 6px;font-size:13px}
+  .row .star.on{color:#e5b567}
+  .empty{color:var(--faint);text-align:center;padding:26px 10px;font-size:12.5px}
+
+  /* ---- divider ---- */
+  #divider{cursor:col-resize;background:transparent}
+  #divider:hover{background:var(--border-strong)}
+  body.dragging{cursor:col-resize;user-select:none}
+  body.dragging iframe{pointer-events:none}
+
+  /* ---- lecteur ---- */
+  #reader{display:flex;flex-direction:column;min-width:0}
+  #rhead{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--border);background:var(--card)}
+  #rhead .ghost{background:none;border:none;color:var(--muted);cursor:pointer;padding:4px;border-radius:6px;display:flex}
+  #rhead .ghost:hover{color:var(--txt);background:var(--card2)}
+  #rtitle{flex:1;min-width:0}
+  #rtitle span{display:block;font-weight:600;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #rtitle small{color:var(--muted);font-size:11px}
+  #cite{display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 10px;border-radius:999px;
+     border:1px solid var(--border);background:var(--card2);color:var(--muted);font-size:12px;font-family:inherit;
+     cursor:pointer;white-space:nowrap}
+  #cite:hover{border-color:var(--accent);color:var(--accent)}
+  #cite.ok{color:#7fd8a3;border-color:#7fd8a3}
+  #cite:disabled{opacity:.4;cursor:default}
+  #frameWrap{flex:1;min-height:0;position:relative;background:#0f1113}
+  #frame{position:absolute;inset:0;width:100%;height:100%;border:none}
+  .placeholder{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--faint);font-size:13px}
+</style>
+<script>(function(){
+  // thème partagé avec la galerie (figTheme) ; les extras --faint/--accent-soft/
+  // --border-strong sont dérivés par interpolation depuis la palette de base.
+  var T={'Encre':{bg:'#1a1917',card:'#232220',card2:'#121110',txt:'#e8e5db',muted:'#948f85',accent:'#cc785c',border:'#332f2a'},
+    'Profond':{bg:'#1e1d1b',card:'#292724',card2:'#161513',txt:'#ece9e1',muted:'#9a968c',accent:'#d97757',border:'#37342e'},
+    'Charbon':{bg:'#211f1c',card:'#2b2926',card2:'#1a1815',txt:'#eae7de',muted:'#9d988d',accent:'#e08a63',border:'#38352f'},
+    'Neutre chaud':{bg:'#1c1c1a',card:'#272623',card2:'#151513',txt:'#e9e7df',muted:'#98958c',accent:'#d97757',border:'#34322d'},
+    'Très foncé':{bg:'#171614',card:'#201f1c',card2:'#100f0d',txt:'#e6e3d9',muted:'#8f8b81',accent:'#d97757',border:'#2e2b26'},
+    'Default':{bg:'#141619',card:'#1c1f23',card2:'#22262b',txt:'#dbdfe5',muted:'#9aa1ab',accent:'#7fa3d8',border:'#2a2e34'},
+    'Codex':{bg:'#282c34',card:'#2f343f',card2:'#21252b',txt:'#abb2bf',muted:'#7f848e',accent:'#4d78cc',border:'#3e4451'},
+    'Dracula':{bg:'#282a36',card:'#343746',card2:'#21222c',txt:'#f8f8f2',muted:'#9aa0b3',accent:'#bd93f9',border:'#44475a'},
+    'Nord':{bg:'#2e3440',card:'#3b4252',card2:'#272c36',txt:'#e5e9f0',muted:'#9aa3b2',accent:'#88c0d0',border:'#434c5e'}};
+  function hx(h){h=h.replace('#','');return [parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)];}
+  function toHex(a){return '#'+a.map(function(n){return ('0'+Math.round(Math.max(0,Math.min(255,n))).toString(16)).slice(-2);}).join('');}
+  function mix(a,b,t){var x=hx(a),y=hx(b);return toHex([x[0]+(y[0]-x[0])*t,x[1]+(y[1]-x[1])*t,x[2]+(y[2]-x[2])*t]);}
+  var name;try{name=localStorage.getItem('figTheme');}catch(e){}
+  var c=T[name]||T['Encre'],r=document.documentElement.style;
+  for(var k in c)r.setProperty('--'+k,c[k]);
+  r.setProperty('--faint', mix(c.muted,c.bg,0.42));
+  r.setProperty('--accent-soft', mix(c.accent,c.bg,0.82));
+  r.setProperty('--border-strong', mix(c.border,c.txt,0.28));
+})();</script>
+</head>
+<body>
+<div id="app">
+  <aside id="left">
+    <div id="searchRow">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.5"/><path d="M11 11l3.2 3.2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      <input type="search" id="q" placeholder="Rechercher titre, auteur, année, tag…">
+    </div>
+    <div id="filters">
+      <button id="fAll">Tous</button>
+      <button id="fFav" title="Favoris">★</button>
+      <button id="fPdf" title="Avec PDF seulement">PDF</button>
+      <select id="fColl"><option value="">Collection</option></select>
+      <select id="fSort">
+        <option value="added">Ajout</option>
+        <option value="year">Année</option>
+        <option value="author">Auteur</option>
+        <option value="title">Titre</option>
+      </select>
+      <button id="fAdd" title="Ajouter des PDF à Zotero (Zotero doit être ouvert)">＋</button>
+      <input type="file" id="addInput" accept=".pdf" multiple style="display:none">
+    </div>
+    <div id="addNote" style="display:none"></div>
+    <div id="list"></div>
+  </aside>
+  <div id="divider"></div>
+  <section id="reader">
+    <div id="rhead">
+      <button class="ghost" id="toggleList" title="Afficher/masquer la liste">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M6 2.5v11"/></svg>
+      </button>
+      <div id="rtitle"><span>Bibliothèque</span><small></small></div>
+      <button id="cite" disabled title="Copier la référence pour Claude (⌘V dans le chat)">@…</button>
+    </div>
+    <div id="frameWrap">
+      <div class="placeholder" id="ph">Sélectionne une référence à gauche</div>
+      <iframe id="frame" style="display:none"></iframe>
+    </div>
+  </section>
+</div>
+<script>
+(function(){
+const LS='cmux-gallery.biblio.';
+const $=id=>document.getElementById(id);
+let items=[], collections=[], selectedKey=localStorage.getItem(LS+'key')||null;
+let filter=localStorage.getItem(LS+'filter')||'all';
+let collectionId=localStorage.getItem(LS+'coll')||'';
+let pdfOnly=localStorage.getItem(LS+'pdfOnly')==='1';
+let sortBy=localStorage.getItem(LS+'sort')||'added';
+let query='';
+
+function persist(){ localStorage.setItem(LS+'key',selectedKey||''); localStorage.setItem(LS+'filter',filter);
+  localStorage.setItem(LS+'coll',collectionId); localStorage.setItem(LS+'pdfOnly',pdfOnly?'1':'0');
+  localStorage.setItem(LS+'sort',sortBy); }
+
+function creatorLine(it){ return [it.creators||'Auteur inconnu', it.year].filter(Boolean).join(' · '); }
+
+function fetchItems(){
+  const p=new URLSearchParams(); if(query)p.set('q',query);
+  if(filter==='collection'&&collectionId)p.set('collection',collectionId);
+  fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api('/zotero-items?'):'/zotero-items?'+p).then(r=>r.json()).then(j=>{
+    if(j.error){ $('list').innerHTML='<div class="empty">'+j.error+'</div>'; items=[]; return; }
+    items=j.items||[]; render();
+  }).catch(()=>{ $('list').innerHTML='<div class="empty">Serveur injoignable</div>'; });
+}
+function fetchCollections(){
+  fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api('/zotero-collections'):'/zotero-collections').then(r=>r.json()).then(j=>{
+    collections=j.collections||[];
+    const sel=$('fColl'); sel.innerHTML='<option value="">Collection</option>'+
+      collections.map(c=>'<option value="'+c.id+'">'+esc(c.name)+'</option>').join('');
+    sel.value=filter==='collection'?collectionId:'';
+  }).catch(()=>{});
+}
+function esc(s){ return String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+function visible(){
+  let list=filter==='fav'?items.filter(i=>i.fav):items.slice();
+  if(pdfOnly)list=list.filter(i=>i.hasPdf);
+  if(sortBy==='added')list.sort((a,b)=>(b.dateAdded||'').localeCompare(a.dateAdded||''));
+  if(sortBy==='year')list.sort((a,b)=>(Number(b.year)||0)-(Number(a.year)||0));
+  if(sortBy==='author')list.sort((a,b)=>(a.creators||'￿').localeCompare(b.creators||'￿',undefined,{sensitivity:'base'}));
+  if(sortBy==='title')list.sort((a,b)=>a.title.localeCompare(b.title,undefined,{sensitivity:'base'}));
+  return list;
+}
+
+function render(){
+  const list=visible();
+  $('fAll').classList.toggle('on',filter==='all');
+  $('fFav').classList.toggle('on',filter==='fav');
+  $('fPdf').classList.toggle('on',pdfOnly);
+  const el=$('list');
+  if(!list.length){ el.innerHTML='<div class="empty">Aucune référence</div>'; return; }
+  el.innerHTML=list.map(it=>
+    '<div class="row'+(it.key===selectedKey?' on':'')+'" data-key="'+it.key+'">'+
+      '<button class="main"><span class="ttl">'+esc(it.title)+'</span>'+
+      '<span class="meta">'+esc(creatorLine(it))+(it.hasPdf?'':' · <i>pas de PDF</i>')+'</span></button>'+
+      '<button class="star'+(it.fav?' on':'')+'" title="Favori">'+(it.fav?'★':'☆')+'</button>'+
+    '</div>').join('');
+  updateReader();
+}
+
+$('list').addEventListener('click',e=>{
+  const row=e.target.closest('.row'); if(!row)return;
+  const key=row.dataset.key;
+  const it=items.find(i=>i.key===key); if(!it)return;
+  if(e.target.closest('.star')){
+    it.fav=!it.fav;
+    fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api('/zotero-fav'):'/zotero-fav',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({key,on:it.fav})}).catch(()=>{});
+    render(); return;
+  }
+  selectedKey=key; persist(); render();
+});
+
+function updateReader(){
+  const it=items.find(i=>i.key===selectedKey);
+  const t=$('rtitle');
+  t.querySelector('span').textContent=it?it.title:'Bibliothèque';
+  t.querySelector('small').textContent=it?creatorLine(it):'';
+  const cite=$('cite');
+  cite.disabled=!it;
+  cite.textContent=it?('@'+(it.citeKey||it.key)):'@…';
+  cite.classList.remove('ok');
+  const frame=$('frame'), ph=$('ph');
+  if(it&&it.hasPdf&&it.pdfKey&&it.pdfFile){
+    const rel='zotero/'+it.pdfKey+'/'+it.pdfFile;
+    const url='/.fig_thumbs/pdf_viewer.html?file='+encodeURIComponent(rel)+
+              '&path='+encodeURIComponent('/zotero/'+encodeURIComponent(it.pdfKey)+'/'+encodeURIComponent(it.pdfFile));
+    if(frame.dataset.rel!==rel){ frame.src=url; frame.dataset.rel=rel; }
+    frame.style.display=''; ph.style.display='none';
+  }else{
+    frame.style.display='none'; frame.removeAttribute('src'); frame.dataset.rel='';
+    ph.style.display='flex';
+    ph.textContent=it?'Pas de PDF attaché à cette référence':'Sélectionne une référence à gauche';
+  }
+}
+
+$('cite').onclick=()=>{
+  const it=items.find(i=>i.key===selectedKey); if(!it)return;
+  const label='@'+(it.citeKey||it.key);
+  const pdf=it.pdfKey&&it.pdfFile?('~/Zotero/storage/'+it.pdfKey+'/'+it.pdfFile):null;
+  const lines=[
+    'Référence (bibliothèque Zotero locale — tout est déjà ici, n\'ouvre PAS Zotero) :',
+    '- Titre : '+it.title,
+    '- Auteurs : '+it.creators+(it.year?' ('+it.year+')':''),
+    it.publication?'- Revue : '+it.publication:null,
+    it.doi?'- DOI : '+it.doi:null,
+    '- Clé de citation : '+label,
+    pdf?'- PDF (lisible directement avec Read) : '+pdf:'- Pas de PDF attaché',
+    it.abstract?'- Résumé : '+it.abstract.slice(0,900):null,
+  ].filter(Boolean).join('\n');
+  navigator.clipboard.writeText(lines).then(()=>{
+    const c=$('cite'); c.classList.add('ok'); c.textContent='✓ Copié — ⌘V dans Claude';
+    setTimeout(()=>{ c.classList.remove('ok'); c.textContent=label; },2200);
+  }).catch(()=>{});
+};
+
+/* filtres */
+$('fAll').onclick=()=>{ filter='all'; collectionId=''; $('fColl').value=''; persist(); fetchItems(); };
+$('fFav').onclick=()=>{ filter=filter==='fav'?'all':'fav'; persist(); render(); };
+$('fPdf').onclick=()=>{ pdfOnly=!pdfOnly; persist(); render(); };
+$('fColl').onchange=e=>{ collectionId=e.target.value; filter=collectionId?'collection':'all'; persist(); fetchItems(); };
+$('fSort').onchange=e=>{ sortBy=e.target.value; persist(); render(); };
+$('fSort').value=sortBy;
+
+/* recherche debounce */
+let qt=null;
+$('q').addEventListener('input',e=>{ clearTimeout(qt); qt=setTimeout(()=>{ query=e.target.value.trim(); fetchItems(); },200); });
+
+/* ajout PDF via connecteur Zotero */
+$('fAdd').onclick=()=>$('addInput').click();
+$('addInput').onchange=async e=>{
+  const files=[...e.target.files]; e.target.value='';
+  if(!files.length)return;
+  const note=$('addNote'); note.style.display=''; note.textContent='Envoi vers Zotero…';
+  const results=[];
+  for(const f of files){
+    try{
+      const r=await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api('/zotero-add?name='):'/zotero-add?name='+encodeURIComponent(f.name),
+        {method:'POST',headers:{'Content-Type':'application/pdf'},body:f});
+      results.push(await r.json());
+    }catch(err){ results.push({name:f.name,ok:false,error:String(err)}); }
+  }
+  const ok=results.filter(r=>r.ok).length;
+  const dups=results.filter(r=>r.error==='duplicate');
+  const off=results.some(r=>r.error==='zotero-off');
+  const parts=[];
+  if(ok)parts.push(ok+' ajouté'+(ok>1?'s':''));
+  if(dups.length)parts.push(dups.length===1?('doublon : '+(dups[0].match||dups[0].name).slice(0,60)):(dups.length+' doublons ignorés'));
+  if(off)parts.push('Zotero n\'est pas ouvert');
+  note.textContent=parts.join(' · ')||'Terminé';
+  setTimeout(()=>{ note.style.display='none'; },8000);
+  if(ok){ setTimeout(fetchItems,2000); setTimeout(fetchItems,8000); }  // reconnaissance métadonnées
+};
+
+/* liste repliable + divider redimensionnable */
+let listW=Number(localStorage.getItem(LS+'listW'))||300;
+if(listW<220||listW>560)listW=300;
+function applyCols(){
+  const app=$('app');
+  // le style inline écraserait .no-list : ne le poser que liste visible
+  app.style.gridTemplateColumns=app.classList.contains('no-list')?'':listW+'px 4px minmax(0,1fr)';
+}
+$('toggleList').onclick=()=>{
+  const app=$('app'); app.classList.toggle('no-list');
+  localStorage.setItem(LS+'list',app.classList.contains('no-list')?'0':'1');
+  applyCols();
+};
+if(localStorage.getItem(LS+'list')==='0')$('app').classList.add('no-list');
+applyCols();
+$('divider').addEventListener('mousedown',e=>{
+  e.preventDefault();
+  const startX=e.clientX, startW=listW;
+  document.body.classList.add('dragging');
+  const move=ev=>{ listW=Math.min(560,Math.max(220,startW+ev.clientX-startX)); applyCols(); };
+  const up=()=>{ localStorage.setItem(LS+'listW',String(listW));
+    document.body.classList.remove('dragging');
+    window.removeEventListener('mousemove',move); window.removeEventListener('mouseup',up); };
+  window.addEventListener('mousemove',move); window.addEventListener('mouseup',up);
+});
+
+/* état initial */
+if(filter==='collection'&&!collectionId)filter='all';
+fetchCollections(); fetchItems();
+})();
+</script>
+</body>
+</html>

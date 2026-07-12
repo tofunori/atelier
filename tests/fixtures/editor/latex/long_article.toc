@@ -1,0 +1,19 @@
+\contentsline {section}{\numberline {1}Introduction}{2}{section.1}%
+\contentsline {subsection}{\numberline {1.1}Motivation}{2}{subsection.1.1}%
+\contentsline {subsection}{\numberline {1.2}Objectives}{2}{subsection.1.2}%
+\contentsline {section}{\numberline {2}Background}{2}{section.2}%
+\contentsline {subsection}{\numberline {2.1}Source model}{2}{subsection.2.1}%
+\contentsline {subsection}{\numberline {2.2}Preview model}{2}{subsection.2.2}%
+\contentsline {section}{\numberline {3}Methods}{2}{section.3}%
+\contentsline {subsection}{\numberline {3.1}Editing protocol}{3}{subsection.3.1}%
+\contentsline {subsection}{\numberline {3.2}Compilation protocol}{3}{subsection.3.2}%
+\contentsline {subsection}{\numberline {3.3}Synchronization protocol}{3}{subsection.3.3}%
+\contentsline {section}{\numberline {4}Results}{3}{section.4}%
+\contentsline {subsection}{\numberline {4.1}Layout stability}{3}{subsection.4.1}%
+\contentsline {subsection}{\numberline {4.2}Status stability}{3}{subsection.4.2}%
+\contentsline {subsection}{\numberline {4.3}Comment stability}{3}{subsection.4.3}%
+\contentsline {subsection}{\numberline {4.4}Multiple tabs}{3}{subsection.4.4}%
+\contentsline {section}{\numberline {5}Extended Discussion}{4}{section.5}%
+\contentsline {section}{\numberline {6}A Small Quantitative Example}{4}{section.6}%
+\contentsline {section}{\numberline {7}Conclusion}{4}{section.7}%
+\contentsline {section}{\numberline {A}Checklist}{5}{appendix.A}%

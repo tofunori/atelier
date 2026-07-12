@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Markdown</title>
+<!-- Unified IDE shell — Markdown module (source + preview) -->
+<script src="/.fig_thumbs/editor_factory.js"></script>
+<script src="/.fig_thumbs/diff.min.js"></script>
+<script src="/.fig_thumbs/diff_versions.js"></script>
+<script src="/.fig_thumbs/marked.min.js"></script>
+<script src="/.fig_thumbs/purify.min.js"></script>
+<script src="/.fig_thumbs/editor/prefs.js"></script>
+<script src="/.fig_thumbs/editor/languages.js"></script>
+<script src="/.fig_thumbs/editor/status.js"></script>
+<script src="/.fig_thumbs/editor/commands.js"></script>
+<script src="/.fig_thumbs/editor/rewrap.js"></script>
+<script src="/.fig_thumbs/editor/core.js"></script>
+<script src="/.fig_thumbs/editor/toolbar.js"></script>
+<script src="/.fig_thumbs/editor/session.js"></script>
+<script src="/.fig_thumbs/editor/persistence.js"></script>
+<script src="/.fig_thumbs/editor/selection.js"></script>
+<script src="/.fig_thumbs/editor/history.js"></script>
+<script src="/.fig_thumbs/editor/modules/code.js"></script>
+<script src="/.fig_thumbs/editor/modules/latex.js"></script>
+<script src="/.fig_thumbs/editor/modules/markdown.js"></script>
+<script src="/.fig_thumbs/editor/shell.js"></script>
+<style>
+:root{--ui-font:-apple-system,'SF Pro Text','Inter Variable',sans-serif;--code-font:ui-monospace,'SF Mono',Menlo,monospace;--bg:#202024;--card:#27272a;--card2:#1f1f23;--txt:#dbdfe5;--muted:#a1a1aa;--accent:#5b9dff;--border:#3f3f46}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);font-family:var(--ui-font);display:flex;flex-direction:column}
+header{background:var(--card);border-bottom:1px solid var(--border);padding:8px 14px;display:flex;gap:10px;align-items:center;font-size:13px;flex-shrink:0;flex-wrap:wrap}
+#fname{font-weight:600}
+#state{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:6px;color:var(--muted);font-size:0;flex:none}
+#state::before{font-size:13px;line-height:1;content:'·'}
+#state.dirty{color:#d9a441;background:rgba(217,164,65,.08)}
+#state.dirty::before{content:'●';font-size:8px}
+#state.saved{color:#75b995}
+#state.saved::before{content:'✓'}
+#state.conflict{color:#e06c75;background:rgba(224,108,117,.09)}
+#state.conflict::before{content:'!';font-weight:700}
+.dvBtn{background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:12px;cursor:pointer}
+.dvBtn:hover{color:var(--txt)}
+#rewrapBtn{width:28px;height:28px;padding:0;display:inline-grid;place-items:center;font-size:15px;line-height:1}
+.rewrapCtl{box-sizing:border-box;width:28px;height:28px;display:inline-grid;place-items:center;border:1px solid var(--border);border-radius:6px;color:var(--muted);cursor:pointer;flex:none}
+.rewrapCtl input{position:absolute;opacity:0;pointer-events:none}
+.rewrapCtl::before{content:'↻';font-size:14px;line-height:1}
+.rewrapCtl:has(input:checked){color:var(--txt);background:var(--border)}
+#diffGrp{display:inline-flex;align-items:center;gap:4px}
+#workspace,#moduleHost{flex:1;display:flex;flex-direction:column;min-height:0}
+#ed{flex:1;display:flex;flex-direction:column;min-height:0;background:#212121}
+.md-preview h1,.md-preview h2,.md-preview h3{color:var(--txt);margin:1em 0 .4em}
+.md-preview p,.md-preview li{color:var(--txt)}
+.md-preview code{background:var(--card2);padding:1px 4px;border-radius:4px;font-family:var(--code-font);font-size:12px}
+.md-preview pre{background:var(--card2);padding:10px;border-radius:8px;overflow:auto}
+.md-preview a{color:var(--accent)}
+@media (max-width:375px){header{gap:6px;padding:6px 8px}#fname{max-width:36vw;overflow:hidden;text-overflow:ellipsis}}
+</style>
+<script>(function(){var T={'Encre':{bg:'#1a1917',card:'#232220',card2:'#121110',txt:'#e8e5db',muted:'#948f85',accent:'#cc785c',border:'#332f2a'},'Profond':{bg:'#1e1d1b',card:'#292724',card2:'#161513',txt:'#ece9e1',muted:'#9a968c',accent:'#d97757',border:'#37342e'},'Charbon':{bg:'#211f1c',card:'#2b2926',card2:'#1a1815',txt:'#eae7de',muted:'#9d988d',accent:'#e08a63',border:'#38352f'},'Neutre chaud':{bg:'#1c1c1a',card:'#272623',card2:'#151513',txt:'#e9e7df',muted:'#98958c',accent:'#d97757',border:'#34322d'},'Très foncé':{bg:'#171614',card:'#201f1c',card2:'#100f0d',txt:'#e6e3d9',muted:'#8f8b81',accent:'#d97757',border:'#2e2b26'},'Default':{bg:'#202024',card:'#27272a',card2:'#1f1f23',txt:'#dbdfe5',muted:'#a1a1aa',accent:'#5b9dff',border:'#3f3f46'},'Codex':{bg:'#282c34',card:'#2f343f',card2:'#21252b',txt:'#abb2bf',muted:'#7f848e',accent:'#4d78cc',border:'#3e4451'},'Dracula':{bg:'#282a36',card:'#343746',card2:'#21222c',txt:'#f8f8f2',muted:'#9aa0b3',accent:'#bd93f9',border:'#44475a'},'Nord':{bg:'#2e3440',card:'#3b4252',card2:'#272c36',txt:'#e5e9f0',muted:'#9aa3b2',accent:'#88c0d0',border:'#434c5e'}};var t;try{t=T[localStorage.getItem('figTheme')];}catch(e){}t=t||T['Encre'];var r=document.documentElement.style;for(var k in t)r.setProperty('--'+k,t[k]);})();</script>
+</head>
+<body>
+<script src="/.fig_thumbs/agent_bridge_ui.js"></script>
+<header>
+  <b id="fname"></b>
+  <button id="openFile" class="dvBtn" style="display:none">Open…</button>
+  <select id="wrapSel" title="Word wrap" style="background:var(--card);color:var(--txt);border:1px solid var(--border);border-radius:6px;padding:3px 6px;font-size:12px;cursor:pointer">
+    <option value="win">Wrap: window</option>
+    <option value="off">Wrap: off</option>
+    <option value="80">Wrap: 80</option>
+    <option value="100">Wrap: 100</option>
+    <option value="120">Wrap: 120</option>
+    <option value="custom">Wrap: custom…</option>
+  </select>
+  <input id="wrapCustom" type="number" min="20" max="400" step="1" placeholder="cols" title="Wrap column"
+         style="display:none;width:56px;background:var(--card);color:var(--txt);border:1px solid var(--border);border-radius:6px;padding:3px 6px;font-size:12px">
+  <button id="rewrapBtn" class="dvBtn" aria-label="Rewrap" title="Rewrap" style="opacity:.45" disabled>↵</button>
+  <label class="rewrapCtl" aria-label="Rewrap automatique" title="Auto-rewrap" style="opacity:.45"><input id="autoRewrap" type="checkbox" disabled><span hidden>Auto</span></label>
+  <button id="previewToggle" class="dvBtn" aria-label="Toggle preview" title="Afficher / masquer l’aperçu">Aperçu</button>
+  <span id="moduleActions" style="display:inline-flex;gap:4px"></span>
+  <span id="diffGrp" style="display:none">
+    <button id="diffPrev" class="dvBtn" style="display:none">&#8249;</button>
+    <button id="diffTag" class="dvBtn" disabled style="opacity:.4">versions</button>
+    <button id="diffNext" class="dvBtn" style="display:none">&#8250;</button>
+    <button id="diffRestore" class="dvBtn" style="display:none">Rétablir</button>
+  </span>
+  <span id="state"></span>
+  <span style="color:var(--muted);font-size:11px;margin-left:auto">Cmd+S save · sélection → agent</span>
+</header>
+<div id="workspace">
+  <div id="moduleHost"><div id="ed"></div></div>
+</div>
+<script>
+const params = new URLSearchParams(location.search);
+const path = params.get("path");
+let shellHandle = null;
+
+(async function main() {
+  await AtelierEditor.ready;
+  AtelierPrefs.migrateOnce();
+  if (!path) {
+    document.getElementById("fname").textContent = "(no file)";
+    return;
+  }
+  shellHandle = await AtelierShell.mount({
+    path,
+    surface: "markdown",
+    els: {
+      fname: document.getElementById("fname"),
+      openFile: document.getElementById("openFile"),
+      wrapSel: document.getElementById("wrapSel"),
+      wrapCustom: document.getElementById("wrapCustom"),
+      rewrapBtn: document.getElementById("rewrapBtn"),
+      autoRewrap: document.getElementById("autoRewrap"),
+      state: document.getElementById("state"),
+      ed: document.getElementById("ed"),
+      moduleHost: document.getElementById("moduleHost"),
+      moduleActions: document.getElementById("moduleActions"),
+      diffGrp: document.getElementById("diffGrp"),
+      diffTag: document.getElementById("diffTag"),
+      diffPrev: document.getElementById("diffPrev"),
+      diffNext: document.getElementById("diffNext"),
+      diffRestore: document.getElementById("diffRestore"),
+    },
+  });
+  window.__ATELIER_SHELL__ = shellHandle;
+  document.getElementById("previewToggle").onclick = () => {
+    if (shellHandle.module && shellHandle.module.togglePreview) shellHandle.module.togglePreview();
+  };
+})().catch(err => {
+  console.error(err);
+  const st = document.getElementById("state");
+  if (st) { st.className = "conflict"; st.textContent = String(err.message || err); }
+});
+
+window.addEventListener("pagehide", () => {
+  if (shellHandle && shellHandle.destroy) shellHandle.destroy();
+});
+</script>
+</body>
+</html>

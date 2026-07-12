@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Editor</title>
+<!-- Unified IDE shell (CM6) — bootstrap page for the code surface -->
+<script src="/.fig_thumbs/editor_factory.js"></script>
+<script src="/.fig_thumbs/diff.min.js"></script>
+<script src="/.fig_thumbs/diff_versions.js"></script>
+<script src="/.fig_thumbs/editor/prefs.js"></script>
+<script src="/.fig_thumbs/editor/languages.js"></script>
+<script src="/.fig_thumbs/editor/status.js"></script>
+<script src="/.fig_thumbs/editor/commands.js"></script>
+<script src="/.fig_thumbs/editor/rewrap.js"></script>
+<script src="/.fig_thumbs/editor/core.js"></script>
+<script src="/.fig_thumbs/editor/toolbar.js"></script>
+<script src="/.fig_thumbs/editor/session.js"></script>
+<script src="/.fig_thumbs/editor/persistence.js"></script>
+<script src="/.fig_thumbs/editor/selection.js"></script>
+<script src="/.fig_thumbs/editor/history.js"></script>
+<script src="/.fig_thumbs/editor/modules/code.js"></script>
+<script src="/.fig_thumbs/editor/modules/latex/outline.js"></script>
+<script src="/.fig_thumbs/editor/modules/latex/compile.js"></script>
+<script src="/.fig_thumbs/editor/modules/latex/synctex.js"></script>
+<script src="/.fig_thumbs/editor/modules/latex/comments.js"></script>
+<script src="/.fig_thumbs/editor/modules/latex/ghost.js"></script>
+<script src="/.fig_thumbs/editor/modules/latex/errors.js"></script>
+<script src="/.fig_thumbs/editor/modules/latex.js"></script>
+<script src="/.fig_thumbs/editor/modules/markdown.js"></script>
+<script src="/.fig_thumbs/editor/shell.js"></script>
+<style>
+:root{--ui-font:-apple-system,'SF Pro Text','Inter Variable',sans-serif;--code-font:ui-monospace,'SF Mono',Menlo,monospace;--bg:#202024;--card:#27272a;--card2:#1f1f23;--txt:#dbdfe5;--muted:#a1a1aa;--accent:#5b9dff;--border:#3f3f46}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);
+            font-family:var(--ui-font);display:flex;flex-direction:column}
+  header{box-sizing:border-box;min-height:44px;background:var(--card);border-bottom:1px solid rgba(255,255,255,.07);padding:6px 12px;
+         display:flex;gap:6px;align-items:center;font-size:13px;flex-shrink:0;flex-wrap:nowrap;overflow:hidden}
+  .tbGroup{display:inline-flex;align-items:center;gap:4px;min-width:0;flex:none}
+  .tbDivider{width:1px;height:20px;background:rgba(255,255,255,.08);margin:0 2px;flex:none}
+  #fname{font-weight:600;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-right:2px}
+  #openFile,#wrapSel,#wrapCustom,.dvBtn,.rewrapCtl{
+    box-sizing:border-box;height:30px;border:1px solid rgba(255,255,255,.08);border-radius:6px;
+    background:rgba(255,255,255,.015);color:var(--muted);font:500 12px/1 var(--ui-font);
+    transition:transform 90ms ease-out,background-color 120ms ease-out,color 120ms ease-out,border-color 120ms ease-out;
+    touch-action:manipulation
+  }
+  #openFile,#wrapSel,#wrapCustom,.dvBtn{padding:0 9px}
+  #openFile{cursor:pointer;white-space:nowrap}
+  #wrapSel{min-width:150px;cursor:pointer;color:var(--txt)}
+  #wrapCustom{width:58px}
+  #openFile:active,.dvBtn:active,.rewrapCtl:active{transform:scale(.96)}
+  @media(hover:hover){
+    #openFile:hover,#wrapSel:hover,.dvBtn:hover,.rewrapCtl:hover{background:rgba(255,255,255,.055);color:var(--txt);border-color:rgba(255,255,255,.12)}
+  }
+  #openFile:focus-visible,#wrapSel:focus-visible,#wrapCustom:focus-visible,.dvBtn:focus-visible,.rewrapCtl:focus-visible{
+    outline:2px solid color-mix(in srgb,var(--accent) 70%,transparent);outline-offset:1px
+  }
+  #state{display:inline-grid;place-items:center;width:26px;height:26px;margin-left:auto;border-radius:6px;color:var(--muted);font-size:0;flex:none}
+  #state:empty{display:none}
+  #state::before{font-size:13px;line-height:1;content:'·'}
+  #state.dirty{color:#d9a441;background:rgba(217,164,65,.08)}
+  #state.dirty::before{content:'●';font-size:8px}
+  #state.saved{color:#75b995}
+  #state.saved::before{content:'✓'}
+  #state.conflict{color:#e06c75;background:rgba(224,108,117,.09)}
+  #state.conflict::before{content:'!';font-weight:700}
+  .CodeMirror,.cm-editor{flex:1;height:auto;font-size:13px;font-family:var(--code-font);line-height:1.5}
+  .CodeMirror-linenumber{padding:0 14px 0 22px !important;color:#5b6270}
+  .CodeMirror-gutters{background:transparent;border-right:1px solid #2a2f3a}
+  .CodeMirror-lines{padding-left:4px}
+  .CodeMirror .CodeMirror-selected{background:transparent !important}
+  .CodeMirror-focused .CodeMirror-selected{background:transparent !important}
+  .CodeMirror-selectedtext{background:rgba(91,157,255,.45) !important;box-shadow:none !important;border-radius:2px}
+  /* CodeMirror already paints the active selection. The annotation anchor is
+     structural only; giving it a second background creates a doubled tint. */
+  .cm-clsel{background:transparent!important;border-radius:0}
+  /* One selection layer only: CM6 remains visible and stable when the
+     annotation composer receives focus; the browser-native layer stays off. */
+  .cm-editor .cm-content ::selection{background:transparent}
+  .cm-editor .cm-selectionBackground{background:rgba(79,126,190,.46)!important}
+  .cm-ghost-suggest{color:#7d858f;opacity:.72;pointer-events:none}
+  .texc-hl{background:rgba(232,130,58,.22);border-radius:2px}
+  .cm-syncline,.cm-error-line{background:rgba(224,108,117,.12) !important}
+  .lint-gutter-err{color:#e06c75}
+  #picker{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;z-index:200;
+          align-items:flex-start;justify-content:center;padding-top:8vh}
+  #picker.show{display:flex}
+  #pickerBox{background:var(--card);border:1px solid var(--border);border-radius:10px;width:520px;
+             max-height:70vh;display:flex;flex-direction:column;overflow:hidden;
+             box-shadow:0 8px 40px rgba(0,0,0,.6)}
+  #pickerPath{padding:10px 14px;font-size:12px;color:var(--muted);border-bottom:1px solid var(--border);
+              white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #pickerList{overflow-y:auto;flex:1}
+  #pickerList div{padding:7px 14px;font-size:13px;cursor:pointer;display:flex;gap:8px}
+  #pickerList div:hover{background:var(--border)}
+  #pickerList .d{color:var(--accent)}
+  .dvBtn{cursor:pointer}
+  .dvBtn:disabled{cursor:default;opacity:.45}
+  #rewrapBtn{width:30px;padding:0;display:inline-grid;place-items:center;line-height:1}
+  #rewrapBtn svg{width:15px;height:15px;display:block}
+  #rewrapBtn.fb-ok{color:#75b995;border-color:#75b995}
+  #rewrapBtn.fb-noop{color:#d9a441;border-color:#d9a441}
+  #rewrapBtn.fb-err{color:#e06c75;border-color:#e06c75}
+  .rewrapCtl{width:30px;display:inline-grid;place-items:center;cursor:pointer;flex:none}
+  .rewrapCtl input{position:absolute;opacity:0;pointer-events:none}
+  .rewrapCtl::before{display:none}
+  .rewrapCtl::after{content:'↵';font:500 14px/1 var(--ui-font)}
+  .rewrapCtl:has(input:checked){color:var(--txt);background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.13)}
+  #diffTag{display:none!important}
+  #diffGrp{display:inline-flex;align-items:center;gap:3px}
+  #diffPrev,#diffNext{width:26px;padding:0}
+  #diffRestore{padding:0 8px}
+  #moduleActions.latexActions{gap:2px;padding-left:2px}
+  .latexActions .dvBtn{width:30px;padding:0;display:inline-grid;place-items:center}
+  .latexActions .dvBtn svg{width:15px;height:15px;display:block}
+  .latexActions .dvBtn.on{color:var(--txt);background:rgba(255,255,255,.075);border-color:rgba(255,255,255,.13)}
+  #latexMoreMenu button:active{transform:scale(.98)}
+  @media(hover:hover){#latexMoreMenu button:hover{background:rgba(255,255,255,.06)}}
+  body:has(.latexActions) #fname{max-width:120px}
+  body:has(.latexActions) #openFile{display:none}
+  body.browse #diffGrp{display:none}
+  #browser{display:none;flex:1;overflow:auto;padding:14px 18px 40px}
+  body.browse #workspace{display:none!important}
+  body.browse #browser{display:block}
+  body.browse #wrapSel,body.browse #wrapCustom,body.browse #state,body.browse #rewrapBtn,body.browse .rewrapCtl{display:none}
+  #browser .bcrumb{color:var(--muted);font-size:12px;margin:0 0 12px;font-family:var(--code-font)}
+  #browser .bgrid{display:flex;flex-direction:column;gap:1px;max-width:720px}
+  #browser .brow{display:flex;align-items:center;gap:9px;padding:7px 10px;border-radius:7px;cursor:pointer;font-size:13px;color:var(--txt)}
+  #browser .brow:hover{background:var(--card2)}
+  #browser .brow .bic{flex:none;width:15px;height:15px;opacity:.7;color:var(--muted)}
+  #browser .brow.dir .bic{color:var(--accent);opacity:.9}
+  #browser .brow .bsub{color:var(--muted);font-size:11px;margin-left:auto}
+  #browser .bhd{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:14px 2px 5px}
+  #browser .bhd:first-child{margin-top:0}
+  #workspace{flex:1;display:flex;flex-direction:column;min-height:0}
+  #moduleHost{flex:1;display:flex;flex-direction:column;min-height:0}
+  #ed{flex:1;display:flex;flex-direction:column;min-height:0;background:#212121}
+  @media (max-width:600px){
+    header{gap:4px;padding:6px 8px}
+    .tbFile{display:none}
+    .tbDivider:first-of-type{display:none}
+    #wrapSel{min-width:132px;width:132px}
+  }
+  @media (prefers-reduced-motion:reduce){
+    #openFile,#wrapSel,#wrapCustom,.dvBtn,.rewrapCtl{transition:none}
+  }
+  .cm-s-material-darker.CodeMirror{background:#1e2126;color:#d8d3c8}
+</style>
+<script>(function(){var T={'Encre':{bg:'#1a1917',card:'#232220',card2:'#121110',txt:'#e8e5db',muted:'#948f85',accent:'#cc785c',border:'#332f2a'},'Profond':{bg:'#1e1d1b',card:'#292724',card2:'#161513',txt:'#ece9e1',muted:'#9a968c',accent:'#d97757',border:'#37342e'},'Charbon':{bg:'#211f1c',card:'#2b2926',card2:'#1a1815',txt:'#eae7de',muted:'#9d988d',accent:'#e08a63',border:'#38352f'},'Neutre chaud':{bg:'#1c1c1a',card:'#272623',card2:'#151513',txt:'#e9e7df',muted:'#98958c',accent:'#d97757',border:'#34322d'},'Très foncé':{bg:'#171614',card:'#201f1c',card2:'#100f0d',txt:'#e6e3d9',muted:'#8f8b81',accent:'#d97757',border:'#2e2b26'},'Default':{bg:'#202024',card:'#27272a',card2:'#1f1f23',txt:'#dbdfe5',muted:'#a1a1aa',accent:'#5b9dff',border:'#3f3f46'},'Codex':{bg:'#282c34',card:'#2f343f',card2:'#21252b',txt:'#abb2bf',muted:'#7f848e',accent:'#4d78cc',border:'#3e4451'},'Dracula':{bg:'#282a36',card:'#343746',card2:'#21222c',txt:'#f8f8f2',muted:'#9aa0b3',accent:'#bd93f9',border:'#44475a'},'Nord':{bg:'#2e3440',card:'#3b4252',card2:'#272c36',txt:'#e5e9f0',muted:'#9aa3b2',accent:'#88c0d0',border:'#434c5e'}};var t;try{t=T[localStorage.getItem('figTheme')];}catch(e){}t=t||T['Encre'];var r=document.documentElement.style;for(var k in t)r.setProperty('--'+k,t[k]);})();</script>
+</head>
+<body>
+<script src="/.fig_thumbs/agent_bridge_ui.js"></script>
+<header>
+  <span class="tbGroup tbFile">
+    <b id="fname"></b>
+    <button id="openFile">Ouvrir…</button>
+  </span>
+  <span class="tbDivider" aria-hidden="true"></span>
+  <span class="tbGroup tbWrap">
+  <select id="wrapSel" title="Word wrap">
+    <option value="win">Wrap: window</option>
+    <option value="off">Wrap: off</option>
+    <option value="80">Wrap: 80</option>
+    <option value="100">Wrap: 100</option>
+    <option value="120">Wrap: 120</option>
+    <option value="custom">Wrap: custom…</option>
+  </select>
+  <input id="wrapCustom" type="number" min="20" max="400" step="1" placeholder="cols" title="Wrap column" style="display:none">
+  <button id="rewrapBtn" class="dvBtn" aria-label="Rewrap" title="Rewrap le paragraphe ou la sélection (⌥Q)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 4.5h8a3 3 0 0 1 0 6H5"/><path d="m7 8.5-2 2 2 2"/></svg></button>
+  <label class="rewrapCtl" aria-label="Rewrap automatique" title="Rewrap automatique à la sauvegarde"><input id="autoRewrap" type="checkbox"><span hidden>Auto</span></label>
+  </span>
+  <span id="moduleActions" class="tbGroup"></span>
+  <span class="tbDivider" aria-hidden="true"></span>
+  <span id="diffGrp" style="display:none">
+    <button id="diffPrev" class="dvBtn" style="display:none" title="Version précédente">&#8249;</button>
+    <button id="diffTag" class="dvBtn" disabled style="opacity:.4" title="Historique des modifications — vide pour l’instant (⌘S ou une modif de l’agent crée une version)"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><rect x="2.5" y="1.5" width="11" height="13" rx="2"/><path d="M8 5.2v4M6 7.2h4M6 11h4"/></svg></button>
+    <button id="diffNext" class="dvBtn" style="display:none" title="Version suivante">&#8250;</button>
+    <button id="diffRestore" class="dvBtn" style="display:none" title="Rétablir la version affichée sur le disque">Rétablir</button>
+  </span>
+  <span id="state"></span>
+</header>
+<div id="workspace">
+  <div id="moduleHost"><div id="ed"></div></div>
+</div>
+<div id="browser"></div>
+<div id="picker"><div id="pickerBox">
+  <div id="pickerPath"></div>
+  <div id="pickerList"></div>
+</div></div>
+<script>
+const params = new URLSearchParams(location.search);
+const path = params.get("path");
+const BROWSE = params.get("browse") === "1";
+const forceSurface = params.get("surface"); // optional: code|latex|markdown
+const shellFlag = params.get("editorShell"); // v2 forces shell modules (default on for this page)
+
+const EDITABLE = /\.(tex|sty|bib|py|r|R|md|jl|sh|bash|txt|csv|json|yaml|yml|toml|rs|js|jsx|ts|tsx|mjs|cjs)$/i;
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const escA = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const ICO_DIR = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M1.5 4.5v8h13v-7H7L5.5 4z"/></svg>';
+const ICO_UP  = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M8 12V4M4.5 7.5L8 4l3.5 3.5"/></svg>';
+const ICO_FILE= '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M4 1.5h5.5L13 5v9.5H4z"/><path d="M9.5 1.5V5H13"/></svg>';
+
+function openTarget(target) {
+  const url = AtelierLanguages.editorUrl(target);
+  if (window.parent !== window) {
+    try { window.parent.postMessage({ type: "gallery-open-tab", url, title: target.split("/").pop() }, "*"); return; } catch (e) {}
+  }
+  location.href = url;
+}
+
+async function renderBrowser(dir) {
+  const lsUrl = "/ls?dir=" + encodeURIComponent(dir || "");
+  const r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api(lsUrl):lsUrl);
+  const j = await r.json();
+  if (j.error) return;
+  const b = document.getElementById("browser");
+  const home = j.path.replace(/^\/Users\/[^/]+/, "~");
+  let html = '<div class="bcrumb">' + esc(home) + '</div><div class="bgrid">';
+  const rec = AtelierSession.recentsGet();
+  if (rec.length && !dir) {
+    html += '<div class="bhd">Récents</div>';
+    rec.slice(0, 6).forEach(p => {
+      html += '<div class="brow" data-file="' + escA(p) + '"><span class="bic">' + ICO_FILE + '</span>' +
+        esc(p.split("/").pop()) + '<span class="bsub">' +
+        esc(p.replace(/^\/Users\/[^/]+\/Documents\//, "").replace(/\/[^/]*$/, "")) + '</span></div>';
+    });
+    html += '<div class="bhd">Dossier</div>';
+  }
+  if (j.parent) html += '<div class="brow dir" data-dir="' + escA(j.parent) + '"><span class="bic">' + ICO_UP + '</span>..</div>';
+  j.items.filter(i => i.dir).forEach(i =>
+    html += '<div class="brow dir" data-dir="' + escA(j.path + "/" + i.name) + '"><span class="bic">' + ICO_DIR + '</span>' + esc(i.name) + '</div>');
+  j.items.filter(i => !i.dir && EDITABLE.test(i.name)).forEach(i =>
+    html += '<div class="brow" data-file="' + escA(j.path + "/" + i.name) + '"><span class="bic">' + ICO_FILE + '</span>' + esc(i.name) + '</div>');
+  html += '</div>';
+  b.innerHTML = html;
+  b.querySelectorAll("[data-dir]").forEach(el => el.onclick = () => renderBrowser(el.dataset.dir));
+  b.querySelectorAll("[data-file]").forEach(el => el.onclick = () => openTarget(el.dataset.file));
+}
+
+async function pickerShow(dir) {
+  const lsUrl = "/ls?dir=" + encodeURIComponent(dir || (path ? path.replace(/\/[^/]*$/, "") : ""));
+  const r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api(lsUrl):lsUrl);
+  const j = await r.json();
+  if (j.error) return;
+  document.getElementById("picker").classList.add("show");
+  document.getElementById("pickerPath").textContent = j.path.replace(/^\/Users\/[^/]+/, "~");
+  const list = document.getElementById("pickerList");
+  list.innerHTML = "";
+  const mk = (label, cls, fn) => {
+    const d = document.createElement("div");
+    d.innerHTML = label; d.className = cls; d.onclick = fn;
+    list.appendChild(d);
+  };
+  const rec = AtelierSession.recentsGet().filter(p => p !== path);
+  if (rec.length) {
+    rec.forEach(p => mk("&#128337; " + esc(p.split("/").pop()) +
+      ' <span style="color:var(--muted);font-size:11px">' + esc(p.replace(/^\/Users\/[^/]+\/Documents\//, "").replace(/\/[^/]*$/, "")) + "</span>",
+      "", () => openTarget(p)));
+    const sep = document.createElement("div");
+    sep.style.cssText = "border-bottom:1px solid var(--border);margin:4px 0;padding:0;height:1px;cursor:default";
+    list.appendChild(sep);
+  }
+  if (j.parent) mk("&#8617; ..", "d", () => pickerShow(j.parent));
+  j.items.filter(i => i.dir).forEach(i => mk("&#128193; " + esc(i.name), "d", () => pickerShow(j.path + "/" + i.name)));
+  j.items.filter(i => !i.dir && EDITABLE.test(i.name)).forEach(i =>
+    mk(esc(i.name), "", () => openTarget(j.path + "/" + i.name)));
+}
+document.getElementById("picker").onclick = e => { if (e.target.id === "picker") e.target.classList.remove("show"); };
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") document.getElementById("picker").classList.remove("show");
+});
+
+let shellHandle = null;
+
+(async function main() {
+  await AtelierEditor.ready;
+  AtelierPrefs.migrateOnce();
+
+  if (path) {
+    const surface = forceSurface || AtelierLanguages.resolve(path).surface || "code";
+    // This page is the code shell; latex/md may still open here with ?surface=
+    shellHandle = await AtelierShell.mount({
+      path,
+      surface: surface === "latex" || surface === "markdown" ? surface : "code",
+      browse: false,
+      els: {
+        fname: document.getElementById("fname"),
+        openFile: document.getElementById("openFile"),
+        wrapSel: document.getElementById("wrapSel"),
+        wrapCustom: document.getElementById("wrapCustom"),
+        rewrapBtn: document.getElementById("rewrapBtn"),
+        autoRewrap: document.getElementById("autoRewrap"),
+        state: document.getElementById("state"),
+        ed: document.getElementById("ed"),
+        moduleHost: document.getElementById("moduleHost"),
+        moduleActions: document.getElementById("moduleActions"),
+        diffGrp: document.getElementById("diffGrp"),
+        diffTag: document.getElementById("diffTag"),
+        diffPrev: document.getElementById("diffPrev"),
+        diffNext: document.getElementById("diffNext"),
+        diffRestore: document.getElementById("diffRestore"),
+      },
+      onOpen: () => pickerShow(),
+    });
+    window.__ATELIER_SHELL__ = shellHandle;
+  } else if (BROWSE) {
+    document.body.classList.add("browse");
+    document.getElementById("fname").textContent = "IDE — fichiers";
+    document.title = "IDE";
+    document.getElementById("openFile").onclick = () => pickerShow();
+    renderBrowser("");
+  } else {
+    document.getElementById("fname").textContent = "(no file)";
+    document.getElementById("openFile").onclick = () => pickerShow();
+  }
+})().catch(err => {
+  console.error(err);
+  const st = document.getElementById("state");
+  if (st) { st.className = "conflict"; st.textContent = String(err.message || err); }
+});
+
+window.addEventListener("pagehide", () => {
+  if (shellHandle && shellHandle.destroy) shellHandle.destroy();
+});
+</script>
+</body>
+</html>

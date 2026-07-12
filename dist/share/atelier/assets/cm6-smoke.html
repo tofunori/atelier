@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>CM6 smoke</title>
+<script src="/editor_factory.js"></script>
+</head>
+<body>
+<div id="host" style="height:240px;display:flex"></div>
+<script>
+window.__CM6_SMOKE__ = { done: false };
+(async function () {
+  try {
+    await AtelierEditor.ready;
+    const cm = AtelierEditor.create(document.getElementById("host"), {
+      value: "hello\nworld",
+      mode: "markdown",
+      lineNumbers: true,
+      lineWrapping: true,
+    });
+    window.__CM6_EDITOR__ = cm;
+    cm.setCursor({ line: 1, ch: 0 });
+    const mark = cm.markText({ line: 1, ch: 0 }, { line: 1, ch: 5 }, { className: "cm-clsel" });
+    cm.setSelection({ line: 1, ch: 0 }, { line: 1, ch: 5 });
+    window.__CM6_SMOKE__ = {
+      done: true,
+      engine: AtelierEditor.engine(),
+      version: CodeMirror.version,
+      getValue: cm.getValue(),
+      lineCount: cm.lineCount(),
+      cursor: cm.getCursor(),
+      selection: cm.getSelection(),
+      markOk: !!(mark && mark.find && mark.find()),
+      hasView: !!(cm._view || cm._engine === "cm6"),
+      scrollApi: typeof cm.getScrollInfo === "function" && typeof cm.scrollTo === "function" && typeof cm.getGutterElement === "function",
+    };
+  } catch (e) {
+    window.__CM6_SMOKE__ = { done: true, error: String(e && e.stack || e) };
+  }
+})();
+</script>
+</body>
+</html>

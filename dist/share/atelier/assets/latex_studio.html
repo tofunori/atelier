@@ -1,0 +1,2122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>LaTeX Studio</title>
+<script>(function(){
+  try{ var m=(location.hash||'').match(/atelier_nonce=([\w-]+)/); if(m) sessionStorage.setItem('atelier_nonce', m[1]); }catch(e){}
+  /* nonce IPC : inclus dans chaque message vers l'app hôte ; l'app rejette sans lui */
+  window.__atelierPost = function(p){
+    try{ p = Object.assign({}, p, {nonce: sessionStorage.getItem('atelier_nonce')||''}); }catch(e){}
+    try{ window.top.postMessage(p, '*'); }catch(e){}
+  };
+})();</script>
+<!-- Editor: CM6 by default via factory (?editor=cm5 for legacy fallback) -->
+<script src="/.fig_thumbs/editor_factory.js"></script>
+<script src="/.fig_thumbs/pdfjs/pdf.min.js"></script>
+<script src="/.fig_thumbs/marked.min.js"></script>
+<script src="/.fig_thumbs/purify.min.js"></script>
+<script src="/.fig_thumbs/diff.min.js"></script>
+<script src="/.fig_thumbs/diff_versions.js"></script>
+<!-- Shared LaTeX helpers (Gate C extraction — studio keeps full UI, uses these for pure logic) -->
+<script src="/.fig_thumbs/editor/rewrap.js"></script>
+<script src="/.fig_thumbs/editor/modules/latex/outline.js"></script>
+<script src="/.fig_thumbs/editor/modules/latex/compile.js"></script>
+<script src="/.fig_thumbs/editor/modules/latex/synctex.js"></script>
+<script src="/.fig_thumbs/editor/modules/latex/comments.js"></script>
+<script src="/.fig_thumbs/editor/modules/latex/ghost.js"></script>
+<script src="/.fig_thumbs/editor/modules/latex/errors.js"></script>
+<link rel="stylesheet" href="/.fig_thumbs/katex/katex.min.css">
+<script src="/.fig_thumbs/katex/katex.min.js"></script>
+<script src="/.fig_thumbs/texvisual.min.js"></script>
+<style>
+:root{--ui-font:-apple-system,'SF Pro Text','Inter Variable',sans-serif;--code-font:ui-monospace,'SF Mono',Menlo,monospace;--bg:#212429;--card:#1a1d22;--card2:#1a1d22;--txt:#dbdfe5;--muted:#868d9a;--accent:#e8823a;--border:#333a45;--border-strong:#3f4652}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);
+            font-family:var(--ui-font);display:flex;flex-direction:column;overflow:hidden}
+  header{background:var(--card);border-bottom:1px solid var(--border);padding:6px 10px;
+         display:flex;gap:6px;align-items:center;font-size:13px;flex-shrink:0;
+         overflow:hidden;white-space:nowrap}
+  header .grp{display:flex;gap:4px;align-items:center;flex:none}
+  header .sep{width:1px;height:18px;background:var(--border);flex:none;margin:0 3px}
+  header button{background:transparent;color:var(--muted);border:1px solid transparent;
+                border-radius:6px;padding:0 10px;height:26px;font-size:12px;cursor:pointer;flex:none}
+  header button:hover{color:var(--txt);background:var(--border)}
+  header button.on{background:var(--border);color:var(--txt)}
+  .modeseg{display:inline-flex;border:1px solid var(--border);border-radius:6px;overflow:hidden;flex:none}
+  .modeseg button{border:none!important;border-radius:0!important;height:24px;padding:0 10px;font-size:12px}
+  .modeseg button.on{background:var(--border);color:var(--txt)}
+  header select{background:transparent;color:var(--txt);border:1px solid var(--border);
+                border-radius:6px;padding:0 6px;height:26px;font-size:12px;cursor:pointer;flex:none}
+  #build{background:transparent;color:var(--txt);border:1px solid var(--border);font-weight:500}
+  #build:hover{border-color:var(--accent);color:var(--accent)}
+  #fname{font-size:13px;font-weight:600;letter-spacing:-.01em;color:var(--txt);max-width:260px;overflow:hidden;text-overflow:ellipsis;flex:none;white-space:nowrap}
+  header .sep{display:none}
+  #findBtn,#moreBtn{width:26px;height:24px;display:inline-flex;align-items:center;justify-content:center;padding:0}
+  header .grp:has(#findBtn){margin-left:auto}
+  #ddot{color:var(--accent);display:none;flex:none}
+  #state{color:var(--muted);flex:1;min-width:0;text-align:right;overflow:hidden;
+         text-overflow:ellipsis;white-space:nowrap}
+  #state.err{color:#ff6b6b}
+  #state.ok{color:var(--muted)}
+  #state.hint{color:var(--muted)}
+  #state.dirty{color:var(--muted)}
+  #helpPop{position:fixed;top:44px;right:10px;z-index:400;display:none;flex-direction:column;gap:7px;
+           background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 16px;
+           font-size:12px;color:var(--muted);box-shadow:0 8px 30px rgba(0,0,0,.5);line-height:1.5}
+  #helpPop b{color:var(--txt);font-weight:600}
+  @media (max-width: 640px){ #state{display:none} }
+  @media (max-width: 520px){ #popPdf .lbl, #build{padding:0 7px} header{gap:3px;padding:4px 6px} }
+  .pdfmode .editonly{display:none!important}
+  body:not(.pdfmode) .pdfonly{display:none!important}
+  .pdfmode #left{display:none}
+  #split{flex:1;display:flex;min-height:0}
+  #left{width:50%;display:flex;flex-direction:column;border-right:1px solid var(--border);min-width:0;background:#1e2126}
+  #right{flex:1;overflow:auto;background:var(--card2);position:relative;scrollbar-gutter:stable}
+  .CodeMirror{flex:1;height:auto;font-size:13px;font-family:var(--code-font);line-height:1.62;background:#1e2126;color:var(--txt)}
+  /* craft éditeur : respiration, ligne active, gouttière lisible, curseur accent */
+  .CodeMirror-lines{padding:10px 0}
+  .CodeMirror pre.CodeMirror-line,.CodeMirror pre.CodeMirror-line-like{padding:0 14px 0 10px}
+  .CodeMirror-gutters{background:#1e2126;border-right:1px solid transparent}
+  .CodeMirror-linenumber{color:#565e6b;padding:0 12px 0 8px;font-size:12px}
+  .cm-activeline{background:rgba(255,255,255,.035)}
+  .cm-activeline-gutter .CodeMirror-linenumber{color:var(--txt)}
+  .CodeMirror-cursor{border-left:2px solid var(--accent)}
+  .CodeMirror-matchingbracket{color:var(--accent)!important;font-weight:600;border-bottom:1px solid var(--accent)}
+  .pdfpage{position:relative;margin:10px auto;background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.5);cursor:crosshair}
+  .pdfpage canvas{display:block}
+  #marker{position:absolute;left:0;right:0;height:22px;background:rgba(232,130,58,.22);
+          border-left:3px solid var(--accent);pointer-events:none;display:none;z-index:5}
+  .cm-syncline{background:rgba(232,130,58,.16)}
+  /* selection hugs the text (mark-selection) instead of filling the whole line */
+  .CodeMirror .CodeMirror-selected{background:transparent !important}
+  .CodeMirror-focused .CodeMirror-selected{background:transparent !important}
+  .CodeMirror-selectedtext{background:rgba(232,130,58,.38) !important;box-shadow:none !important;border-radius:2px}
+  .cm-line-flash{background:rgba(232,130,58,.16) !important;transition:background .6s}
+  .cm-ghost-suggest{color:#7d858f;opacity:.72;pointer-events:none}
+  .cm-ghost-suggest::after{content:"Tab";display:inline-block;margin-left:8px;padding:0 5px;border:1px solid #3a414d;border-radius:4px;
+    color:#646d7b;font:10px/1.4 var(--ui-font);vertical-align:1px;opacity:.85}
+  /* last selection sent to Claude: persistent marker */
+  .cm-clsel{background:rgba(232,130,58,.28);border-radius:2px}
+  #picker{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;z-index:200;
+          align-items:flex-start;justify-content:center;padding-top:8vh}
+  #picker.show{display:flex}
+  #pickerBox{background:var(--card);border:1px solid var(--border);border-radius:10px;width:520px;
+             max-height:70vh;display:flex;flex-direction:column;overflow:hidden;
+             box-shadow:0 8px 40px rgba(0,0,0,.6)}
+  #pickerPath{padding:10px 14px;font-size:12px;color:var(--muted);border-bottom:1px solid var(--border);
+              white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #pickerList{overflow-y:auto;flex:1}
+  #pickerList div{padding:7px 14px;font-size:13px;cursor:pointer;display:flex;gap:8px}
+  #pickerList div:hover{background:var(--border)}
+  #pickerList .d{color:var(--accent)}
+  /* selection pill + annotation card (same language as the gallery/HTML overlay) */
+  #selPill{position:fixed;z-index:300;display:none;align-items:center;gap:10px;min-width:320px;max-width:460px;
+      background:#1d2026;border:1px solid #343842;border-radius:999px;padding:8px 8px 8px 16px;
+      box-shadow:0 12px 36px rgba(0,0,0,.45);color:var(--txt);font-size:13px;user-select:none;-webkit-user-select:none}
+  #selPill .nb{font-size:13px;flex:none;line-height:1}
+  #selPill textarea{flex:1;background:transparent;border:none;outline:none;color:var(--txt);
+      font-size:13px;line-height:1.45;padding:0;resize:none;font-family:inherit;height:20px;max-height:120px}
+  #selPill textarea::placeholder{color:#6d7480}
+  #selPill button{border:none;cursor:pointer;display:flex;align-items:center;justify-content:center}
+  #selPill .del{width:26px;height:26px;border-radius:50%;background:none;color:#6d7480;flex:none;padding:0}
+  #selPill .del:hover{color:#ff7a76}
+  #selPill .del svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.6;
+      stroke-linecap:round;stroke-linejoin:round}
+  #selPill .tgt{width:28px;height:28px;border-radius:50%;background:transparent;
+      border:1px solid #3a4150;color:var(--muted);font-size:13px;flex:none}
+  #selPill .tgt:hover,#selPill .tgt.set{border-color:#e8823a;color:#e8823a}
+  #selPill .go{width:32px;height:32px;border-radius:50%;background:#c96442;color:#fff;font-size:15px;flex:none}
+  #selPill .go:hover{background:#e0714a}
+  /* Embedded Atelier: Codex-native selection composer. */
+  #selPill.codex-composer{gap:6px;width:min(320px,calc(100vw - 24px));min-width:260px;max-width:320px;
+      padding:4px 5px 4px 11px;background:#343944;border:1px solid #444a57;border-radius:999px;
+      box-shadow:0 12px 32px rgba(0,0,0,.38);box-sizing:border-box}
+  #selPill.codex-composer textarea{display:block;height:24px;min-height:24px;max-height:96px;padding:2px 0;
+      color:#c7ccd5;font-size:13px;line-height:20px;caret-color:#c7ccd5}
+  #selPill.codex-composer textarea::placeholder{color:#9ca3af}
+  #selPill.codex-composer .tgt{display:flex;width:26px;height:26px;border:0;background:transparent;color:#858d9b;padding:2px}
+  #selPill.codex-composer .tgt:hover,#selPill.codex-composer .tgt.set{border:0;color:#d1d5dc;background:rgba(255,255,255,.06)}
+  #selPill.codex-composer .tgt svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.5;
+      stroke-linecap:round;stroke-linejoin:round}
+  #selPill .comment{display:none}
+  #selPill.codex-composer .comment{display:flex;width:26px;height:26px;border:0;border-radius:50%;background:transparent;color:#858d9b;padding:3px;flex:none}
+  #selPill.codex-composer .comment:hover{color:#d1d5dc;background:rgba(255,255,255,.06)}
+  #selPill.codex-composer .comment svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+  #selPill.codex-composer .go{display:flex;width:32px;height:32px;background:#aeb5c3;color:#292e38;padding:0}
+  #selPill.codex-composer .go:hover{background:#929aa8}
+  #selPill.codex-composer .go.sending{background:#858d9b;color:#20242c}
+  #selPill.codex-composer .go.sent{background:#739b80;color:#17221b}
+  #selPill.codex-composer .go.failed{background:#a96f68;color:#281714}
+  #selPill.codex-composer .go svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;
+      stroke-linecap:round;stroke-linejoin:round}
+  #tgMenu{position:fixed;z-index:302;display:none;flex-direction:column;min-width:240px;max-width:400px;
+      background:rgba(24,27,34,.98);border:1px solid #3a4150;border-radius:10px;padding:6px;
+      box-shadow:0 14px 48px rgba(0,0,0,.55);color:var(--txt);font-size:13px}
+  #tgMenu .hd{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;padding:5px 9px 3px}
+  #tgMenu .it{display:flex;gap:8px;align-items:center;padding:7px 9px;border-radius:10px;cursor:pointer}
+  #tgMenu .it:hover{background:rgba(255,255,255,.06)}
+  #tgMenu .it .app{flex:none;font-size:10px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;
+      color:#8ab4ff;border:1px solid #33415e;border-radius:6px;padding:1px 5px}
+  #tgMenu .it .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #tgMenu .it.on .t{color:#8ab4ff}
+#mdModeSeg button.mdon{background:var(--accent);color:#10151d;border-color:var(--accent)}
+  #diffPane .dHead{position:sticky;top:0;display:flex;align-items:center;gap:10px;padding:7px 14px;
+    background:var(--card);border-bottom:1px solid var(--border);font-family:var(--ui-font,-apple-system,sans-serif);
+    font-size:12px;color:var(--muted);z-index:5}
+  #diffPane .dHead b{color:var(--txt);font-weight:600}
+  #diffPane .dHead .dx{margin-left:auto;background:transparent;border:1px solid var(--border);border-radius:6px;
+    color:var(--muted);cursor:pointer;padding:2px 10px;font-size:12px}
+  #diffPane .dHead .dx:hover{color:var(--txt);border-color:var(--border-strong)}
+  #diffPane .dBody{padding:12px 16px;white-space:pre-wrap}
+  #diffPane .dFold{display:block;color:var(--faint,#646d7b);background:var(--card2);border:1px dashed var(--border);
+    border-radius:6px;text-align:center;padding:3px 0;margin:6px 0;cursor:pointer;font-size:11px;
+    font-family:var(--ui-font,-apple-system,sans-serif)}
+  #diffPane .dFold:hover{color:var(--muted)}
+  #diffPane{display:none;position:absolute;inset:0;z-index:50;overflow:auto;background:var(--bg,#212429);
+    padding:18px 22px;font-family:var(--code-font);font-size:13px;line-height:1.7;
+    white-space:pre-wrap;word-break:break-word;color:#b6bdc7}
+  #diffPane .dAdd{background:rgba(52,201,142,.16);color:#7fe0b4;border-bottom:1px solid rgba(52,201,142,.6);
+    border-radius:2px;text-decoration:none}
+  #diffPane .dDel{background:rgba(224,108,117,.14);color:#e09aa0;text-decoration:line-through;border-radius:2px}
+  #diffGrp button.on{background:var(--border);color:var(--txt)}
+  #diffGrp .dg-label{color:var(--faint,#646d7b);font-size:11px;letter-spacing:.05em;text-transform:uppercase;margin-right:2px}
+  /* palette LaTeX/code plus riche (par-dessus material-darker) */
+
+  /* ===== thème code « atelier » (surcharge material-darker) ===== */
+  .cm-s-material-darker.CodeMirror{background:#1e2126;color:#d8d3c8}
+  .cm-s-material-darker .cm-keyword{color:#e8823a}
+  .cm-s-material-darker .cm-def{color:#d8d3c8}
+  .cm-s-material-darker .cm-variable{color:#d8d3c8}
+  .cm-s-material-darker .cm-variable-2{color:#c9c3b6}
+  .cm-s-material-darker .cm-property{color:#c9c3b6}
+  .cm-s-material-darker .cm-string{color:#5fb0a5}
+  .cm-s-material-darker .cm-string-2{color:#5fb0a5}
+  .cm-s-material-darker .cm-number{color:#5fb0a5}
+  .cm-s-material-darker .cm-atom{color:#5fb0a5}
+  .cm-s-material-darker .cm-builtin{color:#7fbcb2}
+  .cm-s-material-darker .cm-operator{color:#9a958a}
+  .cm-s-material-darker .cm-comment{color:#868d9a;font-style:italic}
+  .cm-s-material-darker .cm-meta{color:#9a958a}
+  .cm-s-material-darker .cm-qualifier{color:#7fbcb2}
+  .cm-s-material-darker .cm-tag{color:#e8823a}                 /* \commandes */
+  .cm-s-material-darker .cm-bracket{color:#e0b74a}             /* { } [ ] */
+  .cm-s-material-darker .cm-atom{color:#7fbcb2}                /* noms d'environnements */
+  .cm-s-material-darker .cm-string{color:#8fd3a7}              /* math $…$ */
+  .cm-s-material-darker .cm-comment{color:#646d7b;font-style:italic}
+  .cm-s-material-darker .cm-number{color:#e8a35a}
+  .cm-s-material-darker .cm-keyword{color:#d97757}
+  .cm-s-material-darker .cm-builtin{color:#7aa2f7}
+  .cm-s-material-darker .cm-variable-2{color:#9db4d0}
+  .cm-s-material-darker .cm-def{color:#e0b74a}
+  .cm-s-material-darker span.cm-error{background:transparent;color:#e09aa0}
+
+/* ---- option B : status bar + menus (sobre) ---- */
+#statusbar{display:flex;gap:16px;align-items:center;padding:2px 12px;min-height:22px;
+  background:#1a1d22;border-top:1px solid #333a45;font-size:11px;color:#868d9a;
+  font-variant-numeric:tabular-nums}
+#statusbar span{cursor:default}
+#sbWrap:hover,#sbLint:hover{color:#dbdfe5;cursor:pointer}
+#wrapMenu{position:fixed;z-index:400;background:#1b1f26;border:1px solid #333a45;border-radius:10px;
+  padding:5px;min-width:150px;box-shadow:0 8px 24px rgba(0,0,0,.5);font-size:13px;color:#b6bdc7;display:none}
+#wrapMenu .wm-it{padding:6px 10px;border-radius:6px;cursor:pointer}
+#wrapMenu .wm-it:hover,#wrapMenu .wm-it.on{background:#2c313a;color:#dbdfe5}
+#wrapMenu .wm-custom{display:flex;align-items:center;gap:6px;padding:6px 10px;border-top:1px solid #2c313a;margin-top:3px}
+#wrapMenu .wm-custom input{width:52px;background:#20242b;color:#dbdfe5;border:1px solid #3f3f46;
+  border-radius:4px;padding:2px 5px;font-size:12px;font-family:inherit}
+#sbLint.err{color:#e06c75}
+#sbLint.ok{color:#98c379}
+#morePop{position:fixed;top:40px;right:10px;z-index:400;background:#1b1f26;
+  border:1px solid #333a45;border-radius:10px;padding:5px;min-width:220px;
+  box-shadow:0 8px 24px rgba(0,0,0,.5);font-size:13px;color:#b6bdc7}
+#morePop div{padding:6px 10px;border-radius:6px;cursor:pointer;display:flex;justify-content:space-between;gap:14px}
+#morePop div:hover{background:#2c313a}
+#morePop em{font-style:normal;color:#646d7b;font-size:11px}
+#lintPane{max-height:140px;overflow-y:auto;background:#1a1d22;border-top:1px solid #333a45;
+  font:11.5px/1.6 ui-monospace,Menlo,monospace;padding:4px 0}
+#lintPane div{padding:1px 12px;cursor:pointer;color:#b6bdc7}
+#lintPane div:hover{background:#2c313a}
+#lintPane .lc{color:#e06c75;margin-right:8px}
+.CodeMirror-dialog{background:#1b1f26 !important;border-bottom:1px solid #333a45 !important;
+  color:#b6bdc7 !important;padding:5px 10px !important;font-size:13px}
+.CodeMirror-dialog input{background:#2c313a !important;border:1px solid #3f4652 !important;
+  border-radius:6px !important;color:#dbdfe5 !important;padding:3px 8px !important;
+  font-family:inherit !important;outline:none}
+.CodeMirror-search-hint{color:#646d7b !important}
+.cm-matchhighlight{background:rgba(232,130,58,0.14)}
+.CodeMirror-focused .cm-matchhighlight{background:rgba(232,130,58,0.14)}
+.CodeMirror-foldgutter{width:12px}
+.CodeMirror-foldgutter-open:after,.CodeMirror-foldgutter-folded:after{color:#646d7b;font-size:10px}
+.lint-gutter-err{color:#e06c75;font-size:10px;line-height:1}
+.cm-lint-line{border-bottom:1px dotted rgba(224,108,117,.7)}
+
+  /* ===== commentaires ancrés (mode Review sobre) ===== */
+  .texc-hl{background:rgba(224,183,74,.14);border-bottom:1px dotted rgba(224,183,74,.6);cursor:pointer}
+  #texcPop{position:fixed;z-index:310;display:none;width:300px;background:var(--card);
+    border:1px solid var(--border-strong,#3f4652);border-radius:10px;box-shadow:0 10px 34px rgba(0,0,0,.45);padding:10px 12px}
+  #texcPop .tc-quote{font:italic 11.5px/1.4 -apple-system,sans-serif;color:var(--muted);
+    border-left:2px solid var(--border);padding-left:8px;margin-bottom:7px;max-height:60px;overflow:hidden}
+  #texcPop textarea{width:100%;box-sizing:border-box;background:var(--card2);border:1px solid var(--border);
+    border-radius:7px;color:var(--txt);font:12.5px/1.5 -apple-system,sans-serif;padding:6px 8px;resize:vertical;min-height:52px;outline:none}
+  #texcPop .tc-row{display:flex;gap:4px;margin-top:8px;align-items:center}
+  #texcPop .tc-sp{flex:1}
+  #texcPop .tc-row button{border:none;background:transparent;color:var(--muted);width:26px;height:26px;
+    border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0}
+  #texcPop .tc-row button:hover{color:var(--txt);background:var(--card2)}
+  #texcPop .tc-row .tc-claude:hover{color:var(--accent)}
+  #texcPop .tc-row .tc-del:hover{color:#e0726a}
+  /* ===== plan du document ===== */
+  #outline{display:none;position:absolute;top:6px;left:8px;z-index:70;width:250px;max-height:70%;
+    background:var(--card);border:1px solid var(--border-strong,#3f4652);border-radius:10px;
+    box-shadow:0 10px 34px rgba(0,0,0,.4);overflow-y:auto;padding:6px}
+  #outline.open{display:block}
+  #outline .oh{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding:4px 8px 6px}
+  #outline .oi{display:block;width:100%;text-align:left;background:transparent;border:none;color:var(--muted);
+    font:12.5px/1.5 -apple-system,sans-serif;padding:3px 8px;border-radius:6px;cursor:pointer;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #outline .oi:hover{background:var(--card2);color:var(--txt)}
+  #outline .oi.on{color:var(--accent)}
+  #outline .l2{padding-left:20px}
+  #outline .l3{padding-left:32px;font-size:12px}
+  /* ===== console de compilation ===== */
+  #texlog{display:none;flex-shrink:0;max-height:38%;background:var(--card2);border-top:1px solid var(--border);
+    flex-direction:column;min-height:120px}
+  #texlog.open{display:flex}
+  #texlog .tl-head{display:flex;align-items:center;gap:8px;padding:5px 12px;border-bottom:1px solid var(--border);
+    font-size:12px;color:var(--muted);flex-shrink:0}
+  #texlog .tl-head b{color:var(--txt);font-weight:600}
+  #texlog .tl-close{margin-left:auto;background:transparent;border:none;color:var(--muted);cursor:pointer;padding:2px 6px;border-radius:6px}
+  #texlog .tl-close:hover{background:var(--border);color:var(--txt)}
+  #texlog .tl-chat{margin-left:auto;background:transparent;border:1px solid var(--border);color:var(--muted);
+    cursor:pointer;padding:2px 8px;border-radius:6px;font:11px var(--font,system-ui)}
+  #texlog .tl-chat:hover{background:var(--border);color:var(--txt)}
+  #texlog .tl-chat+.tl-close{margin-left:6px}
+  #texlog pre{flex:1;overflow:auto;margin:0;padding:10px 14px;font:11.5px/1.55 var(--code-font,"SF Mono",Menlo,monospace);
+    color:var(--muted);white-space:pre-wrap;word-break:break-word}
+  #texlog .tl-err{color:#e0726a;font-weight:600}
+  #texlog .tl-warn{color:#d7b47a}
+  #texlog .tl-jump{color:var(--accent);cursor:pointer;text-decoration:underline}
+  /* ===== mode Visuel (éditeur CM6, source décorée façon Overleaf) ===== */
+  #texvis{display:none;height:100%;overflow:auto}
+  #right.visual .pdfpage,#right.visual #marker,#right.visual #texread{display:none!important}
+  #right.visual #texvis{display:block}
+  #texvis .tv-b{font-weight:650;color:#f2f4f7}
+  #texvis .tv-i{font-style:italic}
+  #texvis .tv-tt{font-family:var(--code-font,monospace);font-size:.88em;background:rgba(255,255,255,.06);border-radius:4px;padding:0 3px}
+  #texvis .tv-todo{color:#e0726a;font-weight:600}
+  #texvis .tv-cite{color:var(--accent);font-size:.9em}
+  #texvis .tv-comment{color:#646d7b;font-style:italic}
+  #texvis .cm-line.tv-h1{font-size:24px;font-weight:600;letter-spacing:-.01em}
+  #texvis .cm-line.tv-h2{font-size:19px;font-weight:600;letter-spacing:-.01em}
+  #texvis .cm-line.tv-h3{font-size:16px;font-weight:600}
+  #texvis .tv-math .katex{font-size:1.03em}
+  /* ===== mode Lecture (rendu LaTeX-prose façon Claude Science) ===== */
+  #texread{display:none;max-width:760px;margin:0 auto;padding:36px 40px 120px;
+    font-family:Charter,Georgia,"Times New Roman",serif;font-size:17px;line-height:1.7;color:#e6e8ec}
+  #right.reading .pdfpage,#right.reading #marker{display:none!important}
+  #right.reading #texread{display:block}
+  #texread h1{font-size:26px;font-weight:600;text-align:center;margin:0 0 22px;letter-spacing:-.01em}
+  #texread h2{font-size:20px;font-weight:600;margin:30px 0 12px;letter-spacing:-.01em}
+  #texread h3{font-size:17px;font-weight:600;margin:24px 0 10px}
+  #texread h4,#texread h5{font-size:15px;font-weight:600;margin:20px 0 8px;color:#c7ccd4}
+  #texread p{margin:0 0 15px}
+  #texread ul,#texread ol{margin:0 0 15px;padding-left:26px}
+  #texread li{margin:4px 0}
+  #texread strong{font-weight:650;color:#f2f4f7}
+  #texread code{font-family:var(--code-font,"SF Mono",Menlo,monospace);font-size:.88em;
+    background:rgba(255,255,255,.06);padding:1px 5px;border-radius:4px}
+  #texread [data-line]{cursor:text;transition:background .12s;border-radius:3px}
+  #texread [data-line]:hover{background:rgba(232,130,58,.07)}
+  #texread .tex-todo{color:#e0726a;font-weight:600}
+  #texread .tex-cite{color:var(--accent);font-variant:small-caps;font-size:.92em}
+  #texread .tex-ref{color:#868d9a}
+  #texread .tex-fn{color:var(--accent);cursor:help}
+  #texread .tex-env{color:#646d7b;font-style:italic;text-align:center;border:1px dashed #333a45;
+    border-radius:8px;padding:14px;margin:16px 0;font-family:var(--ui-font,sans-serif);font-size:13px}
+  #texread .tex-matherr{color:#e0726a;font-family:monospace;font-size:.9em}
+  #texread .katex{font-size:1.02em}
+  #texread .katex-display{margin:14px 0;overflow-x:auto;overflow-y:hidden}
+</style>
+<script>
+function __ct(){try{return JSON.parse(localStorage.getItem('claudeTargetV1')||'null')}catch(e){return null}}(function(){var T={'Encre':{bg:'#1a1917',card:'#232220',card2:'#121110',txt:'#e8e5db',muted:'#948f85',accent:'#cc785c',border:'#332f2a'},'Profond':{bg:'#1e1d1b',card:'#292724',card2:'#161513',txt:'#ece9e1',muted:'#9a968c',accent:'#d97757',border:'#37342e'},'Charbon':{bg:'#211f1c',card:'#2b2926',card2:'#1a1815',txt:'#eae7de',muted:'#9d988d',accent:'#e08a63',border:'#38352f'},'Neutre chaud':{bg:'#1c1c1a',card:'#272623',card2:'#151513',txt:'#e9e7df',muted:'#98958c',accent:'#d97757',border:'#34322d'},'Très foncé':{bg:'#171614',card:'#201f1c',card2:'#100f0d',txt:'#e6e3d9',muted:'#8f8b81',accent:'#d97757',border:'#2e2b26'},'Default':{bg:'#202024',card:'#27272a',card2:'#1f1f23',txt:'#dbdfe5',muted:'#a1a1aa',accent:'#e8823a',border:'#3f3f46'},'Codex':{bg:'#282c34',card:'#2f343f',card2:'#21252b',txt:'#abb2bf',muted:'#7f848e',accent:'#4d78cc',border:'#3e4451'},'Dracula':{bg:'#282a36',card:'#343746',card2:'#21222c',txt:'#f8f8f2',muted:'#9aa0b3',accent:'#bd93f9',border:'#44475a'},'Nord':{bg:'#2e3440',card:'#3b4252',card2:'#272c36',txt:'#e5e9f0',muted:'#9aa3b2',accent:'#88c0d0',border:'#434c5e'}};var t;try{t=T[localStorage.getItem('figTheme')];}catch(e){}t=t||T['Encre'];var r=document.documentElement.style;for(var k in t)r.setProperty('--'+k,t[k]);})();</script>
+</head>
+<body>
+<script src="/.fig_thumbs/agent_bridge_ui.js?v=18"></script>
+<header>
+  <b id="fname"></b><span id="ddot" title="Modifications non sauvegardées">&#9679;</span>
+  <span class="grp editonly">
+    <button id="build" title="Compiler (&#8984;B)">Compile</button>
+    <button id="saveBtn" title="Sauvegarder (&#8984;S)" style="display:none">Save</button>
+    <button id="openFile" title="Ouvrir un autre fichier" style="display:none">Open&hellip;</button>
+    <select id="wrapSel" title="Retour à la ligne" style="display:none">
+      <option value="win">Wrap: window</option>
+      <option value="off">Wrap: off</option>
+      <option value="80">Wrap: 80</option>
+      <option value="100">Wrap: 100</option>
+      <option value="120">Wrap: 120</option>
+    </select>
+    <button id="rewrapBtn" style="display:none">&#9166;80</button>
+  </span>
+  <span class="sep editonly"></span>
+  <span class="grp editonly">
+    <button id="togglePdf" title="Vue scindée éditeur + PDF">Split</button>
+    <button id="popPdf" title="Ouvrir le PDF dans un onglet séparé — synctex actif (clic PDF &#8594; ligne source ici)">PDF &#8599;</button>
+  </span>
+  <span class="sep"></span>
+  <span class="grp" id="diffGrp">
+    <button id="diffPrev" style="display:none" title="Version précédente">&#8249;</button>
+    <button id="diffTag" disabled style="opacity:.4" title="Historique des modifications — vide pour l’instant (⌘S ou une modif de l’agent crée une version)"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="1.5" width="11" height="13" rx="2"/><path d="M8 5.2v4M6 7.2h4M6 11h4"/></svg></button>
+    <button id="diffNext" style="display:none" title="Version suivante">&#8250;</button>
+    <button id="diffRestore" style="display:none" title="Rétablir la version affichée sur le disque">Rétablir</button>
+  </span>
+  <span style="display:none"></span>
+  <span class="grp pdfonly">
+    <button id="reloadPdf" title="Recharger le PDF">&#8635;</button>
+  </span>
+  <span class="sep"></span>
+  <span class="grp pdfonly">
+    <button id="zoomOut" title="Zoom arrière">&#8722;</button>
+    <button id="zoomFit" title="Ajuster à la largeur">&#10530;</button>
+    <button id="zoomIn" title="Zoom avant">+</button>
+  </span>
+  <span class="grp editonly">
+    <button id="outlineBtn" title="Plan du document (&#8984;&#8679;O)"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M5.5 3.5h8M5.5 8h8M5.5 12.5h8M2 3.5h.01M2 8h.01M2 12.5h.01"/></svg></button>
+    <button id="findBtn" title="Rechercher (&#8984;F)"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="7" cy="7" r="4.4"/><path d="M10.4 10.4L14 14"/></svg></button>
+    <button id="moreBtn" title="Plus&hellip;">&#8943;</button>
+  </span>
+  <span id="state"></span>
+  <button id="helpBtn" title="Raccourcis clavier" style="display:none">?</button>
+  <div id="morePop" style="display:none">
+    <div data-act="save">Sauvegarder <em>&#8984;S</em></div>
+    <div data-act="open">Ouvrir un fichier&hellip;</div>
+    <div data-act="rewrap">Rewrap paragraphe <em>&#8997;Q</em></div>
+    <div data-act="wrap">Wrap : <span id="moreWrapVal"></span></div>
+    <div data-act="help">Raccourcis clavier</div>
+  </div>
+</header>
+<div id="helpPop">
+  <span><b>&#8984;S</b> sauvegarder &nbsp;&middot;&nbsp; <b>&#8984;B</b> compiler</span>
+  <span><b>&#8984;J</b> position source &#8594; PDF (vue scindée et onglet PDF)</span>
+  <span><b>Clic dans le PDF</b> &#8594; saute à la ligne source (synctex)</span>
+  <span><b>Sélection de texte</b> &#8594; pastille : annoter / envoyer à Claude</span>
+  <span><b>Esc</b> annule la sélection</span>
+</div>
+<div id="outline"></div>
+<div id="texcPop"><div class="tc-quote"></div><textarea placeholder="Ton commentaire…"></textarea>
+<div class="tc-row">
+<button class="tc-del" title="Supprimer le commentaire"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M2.5 4h11M6.5 4V2.5h3V4M4 4l.8 9.5h6.4L12 4M6.5 7v4M9.5 7v4"/></svg></button>
+<button class="tc-ok" title="Résoudre (retire le surlignage)"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 8.5l3.5 3.5 7.5-8"/></svg></button>
+<span class="tc-sp"></span>
+<button class="tc-claude" title="Envoyer à Claude (passage + commentaire dans le composer)"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M14 8c0 3-2.7 5.2-6 5.2-.8 0-1.6-.1-2.3-.4L2.5 14l1-2.6C2.6 10.5 2 9.3 2 8c0-3 2.7-5.2 6-5.2S14 5 14 8z"/></svg></button>
+<button class="tc-save" title="Enregistrer (⏎)"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M13 14H3a1 1 0 01-1-1V3a1 1 0 011-1h7.5L14 5.5V13a1 1 0 01-1 1zM5 2v3.5h5V2M5 14v-4.5h6V14"/></svg></button>
+</div></div>
+<div id="texlog"><div class="tl-head"><b>Compilation</b><span id="tlStatus"></span><button class="tl-chat" id="tlChat" title="Envoyer le log au chat"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" style="vertical-align:-2px"><path d="M14 8c0 3-2.7 5.2-6 5.2-.8 0-1.6-.1-2.3-.4L2.5 14l1-2.6C2.6 10.5 2 9.3 2 8c0-3 2.7-5.2 6-5.2S14 5 14 8z"/></svg>&nbsp;Add to chat</button><button class="tl-close" id="tlClose">✕</button></div><pre id="tlBody"></pre></div>
+<div id="statusbar" class="editonly">
+  <span id="sbPos">Ln 1, Col 1</span>
+  <span id="sbMode"></span>
+  <span id="sbWrap" title="Cliquer pour changer le retour à la ligne"></span>
+  <div id="wrapMenu">
+    <div class="wm-it" data-wrap="win">Window</div>
+    <div class="wm-it" data-wrap="off">Off</div>
+    <div class="wm-it" data-wrap="50">50</div>
+    <div class="wm-it" data-wrap="60">60</div>
+    <div class="wm-it" data-wrap="70">70</div>
+    <div class="wm-it" data-wrap="80">80</div>
+    <div class="wm-it" data-wrap="90">90</div>
+    <div class="wm-it" data-wrap="100">100</div>
+    <div class="wm-it" data-wrap="120">120</div>
+    <div class="wm-custom"><span>Autre :</span><input id="wrapMenuInput" type="number" min="20" max="400" step="1" placeholder="cols" title="Colonne de wrap"></div>
+  </div>
+  <span id="sbLint" style="display:none"></span>
+  <span style="flex:1"></span>
+  <span id="sbSaved"></span>
+</div>
+<div id="lintPane" style="display:none"></div>
+<div id="split" style="position:relative">
+  <div id="left"></div>
+  <div id="diffPane"></div>
+  <div id="right"><div id="marker"></div></div>
+</div>
+<div id="picker"><div id="pickerBox">
+  <div id="pickerPath"></div>
+  <div id="pickerList"></div>
+</div></div>
+<div id="selPill"><span class="nb">&#128172;</span><textarea rows="1" placeholder="Ajouter un commentaire&hellip;"></textarea><button class="del" title="Annuler la sélection (&Eacute;chap)"><svg viewBox="0 0 14 14"><path d="M2 3.5h10M5.5 3.5V2.2c0-.4.3-.7.7-.7h1.6c.4 0 .7.3.7.7v1.3M3.5 3.5l.6 8.1c0 .5.4.9.9.9h4c.5 0 .9-.4.9-.9l.6-8.1M5.8 6v4M8.2 6v4"/></svg></button><button class="comment" title="Commenter la sélection"><svg viewBox="0 0 24 24"><path d="M5 5h14v11H9l-4 3z"/></svg></button><button class="tgt" title="Choisir la destination">&#9678;</button><button class="go" title="Ajouter au chat (Entr&eacute;e)">&#8593;</button></div>
+<div id="tgMenu"></div>
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = "/.fig_thumbs/pdfjs/pdf.worker.min.js";
+const path = new URLSearchParams(location.search).get("path");
+const isPdfMode = new URLSearchParams(location.search).get("mode") === "pdf";
+// cross-tab sync (editor tab <-> PDF tab): synctex jumps + reload after compile
+const bc = ("BroadcastChannel" in window && path) ? new BroadcastChannel("latexstudio:" + path) : null;
+const __EXT = (path || "").split(".").pop().toLowerCase();
+const IS_TEX = __EXT === "tex";
+const __CM_MODE = ({tex:"stex", py:"python", r:"r", md:"markdown", jl:"julia",
+  sh:"shell", bash:"shell", zsh:"shell", json:{name:"javascript",json:true},
+  js:"javascript", mjs:"javascript", cjs:"javascript",
+  ts:{name:"javascript",typescript:true}, tsx:{name:"javascript",typescript:true},
+  jsx:"javascript", csv:null, txt:null})[__EXT] ?? null;
+let pdfPath = path ? path.replace(/\.tex$/, ".pdf") : null;
+// single initial-load trigger: resolve the real PDF path first, THEN load once
+// (two concurrent getDocument() calls can deadlock pdf.js worker startup)
+const texrootUrl = "/texroot?path=" + encodeURIComponent(path);
+if(path) fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api(texrootUrl):texrootUrl).then(r=>r.json()).then(j=>{
+  if(j.pdf) pdfPath = j.pdf;
+  if(IS_TEX) loadPdf();
+}).catch(()=>{ if(IS_TEX) loadPdf(); });
+if(!IS_TEX){
+  ["build","togglePdf","popPdf","reloadPdf"].forEach(id => {
+    const el = document.getElementById(id); if(el) el.style.display = "none";
+  });
+  const IS_MD = __EXT === "md";
+  if(IS_MD){
+    // split éditeur | aperçu rendu (comme tex|PDF)
+    const r = document.getElementById("right");
+    if(r){
+      // ne PAS écraser #right (le #marker qu'il contient est référencé plus bas)
+      r.insertAdjacentHTML("beforeend",
+        '<div id="mdprev" style="max-width:820px;margin:0 auto;padding:28px 32px;'
+        + 'font-family:var(--ui-font,-apple-system,sans-serif);font-size:15px;line-height:1.65;color:#d6dae0"></div>');
+      const prev = document.getElementById("mdprev");
+      const render = () => {
+        try{ prev.innerHTML = DOMPurify.sanitize(marked.parse(cm.getValue())); }catch(e){}
+      };
+      // modes markdown : Édition (défaut) | Split | Aperçu
+      const l = document.getElementById("left");
+      function mdApply(mode){
+        localStorage.setItem("mdViewMode", mode);
+        if(mode === "edit"){ r.style.display = "none"; l.style.display = "flex"; l.style.width = "100%"; l.style.borderRight = "none"; }
+        else if(mode === "preview"){ r.style.display = "block"; l.style.display = "none"; }
+        else { r.style.display = "block"; l.style.display = "flex"; l.style.width = "50%"; l.style.borderRight = "1px solid var(--border)"; }
+        document.querySelectorAll("#mdModeSeg button").forEach(b =>
+          b.classList.toggle("mdon", b.dataset.m === mode));
+        if(cm) setTimeout(() => cm.refresh(), 60);
+      }
+      const wrapGrp = document.getElementById("wrapSel")?.closest(".grp");
+      if(wrapGrp){
+        wrapGrp.insertAdjacentHTML("afterend",
+          '<span class="sep editonly"></span><span class="grp editonly" id="mdModeSeg">'
+          + '<button data-m="edit" title="Édition seule">Édition</button>'
+          + '<button data-m="split" title="Éditeur + aperçu">Split</button>'
+          + '<button data-m="preview" title="Aperçu seul">Aperçu</button></span>');
+        document.querySelectorAll("#mdModeSeg button").forEach(b =>
+          b.onclick = () => mdApply(b.dataset.m));
+      }
+      // cm est déclaré (let) plus bas puis créé après le fetch : différer le
+      // premier appel (appel immédiat = TDZ ReferenceError qui tue le script)
+      function initMd(){
+        if(!cm){ setTimeout(initMd, 100); return; }
+        let mdT=null;
+        cm.on("change", () => { clearTimeout(mdT); mdT = setTimeout(render, 300); });
+        render();
+        mdApply(localStorage.getItem("mdViewMode") || "edit");
+      }
+      setTimeout(initMd, 0);
+      // « Add to chat » sur sélection dans l'APERÇU rendu (mode Studio)
+      if(window.self !== window.top){
+        const pillBtn = document.createElement("button");
+        pillBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" style="vertical-align:-2px"><path d="M14 8c0 3-2.7 5.2-6 5.2-.8 0-1.6-.1-2.3-.4L2.5 14l1-2.6C2.6 10.5 2 9.3 2 8c0-3 2.7-5.2 6-5.2S14 5 14 8z"/></svg>&nbsp; Add to chat';
+        pillBtn.style.cssText = "position:fixed;z-index:9999;display:none;background:#2c313a;"
+          + "color:#dbdfe5;border:1px solid #3a414d;border-radius:999px;padding:7px 14px;"
+          + "font-size:13px;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.5);"
+          + "font-family:var(--ui-font)";
+        document.body.appendChild(pillBtn);
+        let selTxt = "";
+        pillBtn.addEventListener("mousedown", (e) => {
+          e.preventDefault(); e.stopPropagation();
+          if(!selTxt) return;
+          // retrouver les lignes source : le rendu enlève la syntaxe md, on
+          // cherche les premiers/derniers mots de la sélection dans la source
+          let page = "";
+          try{
+            const src = cm ? cm.getValue() : "";
+            const words = selTxt.split(/\s+/).filter(Boolean);
+            const head = words.slice(0, 4).join(" ");
+            const tail = words.slice(-4).join(" ");
+            const flat = (x) => x.replace(/[#*_`>\[\]()!-]/g, "").replace(/\s+/g, " ");
+            const srcFlat = flat(src);
+            const i0 = srcFlat.indexOf(flat(head));
+            const i1 = srcFlat.indexOf(flat(tail), Math.max(0, i0));
+            if(i0 >= 0){
+              // reconvertir les index aplatis en numéros de ligne approximatifs
+              const lineOf = (idx) => {
+                let seen = 0, line = 1;
+                for(const ln of src.split("\n")){
+                  seen += flat(ln).length + 1;
+                  if(seen > idx) return line;
+                  line++;
+                }
+                return line;
+              };
+              const a = lineOf(i0), b = i1 >= 0 ? lineOf(i1) : a;
+              page = "L" + a + (b > a ? "-" + b : "");
+            }
+          }catch(err){}
+          fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/quote"):"/quote", {method:"POST", headers:{"Content-Type":"application/json"},
+            body: JSON.stringify({rel: path, page: page, text: selTxt, comment: "", direct: true, embed: true})})
+            .then(r => r.json())
+            .then(j => { if(j && j.message) __atelierPost({type:"atelier-add-to-chat", text:j.message}); })
+            .catch(() => {});
+          pillBtn.style.display = "none";
+          try{ window.getSelection().removeAllRanges(); }catch(err){}
+        });
+        r.addEventListener("mouseup", () => {
+          setTimeout(() => {
+            const sel = window.getSelection();
+            const t = sel ? String(sel).trim() : "";
+            if(!t || !sel || sel.rangeCount === 0){ pillBtn.style.display = "none"; selTxt = ""; return; }
+            selTxt = t;
+            const rect = sel.getRangeAt(0).getBoundingClientRect();
+            pillBtn.style.left = Math.max(8, rect.left + rect.width/2 - 55) + "px";
+            pillBtn.style.top = Math.max(8, rect.top - 42) + "px";
+            pillBtn.style.display = "block";
+          }, 0);
+        });
+      }
+    }
+  } else {
+    // pas d'aperçu pour les autres : l'éditeur prend toute la largeur
+    const r = document.getElementById("right"); if(r) r.style.display = "none";
+    const l = document.getElementById("left");
+    if(l){ l.style.width = "100%"; l.style.borderRight = "none"; }
+  }
+  document.title = (path || "").split("/").pop();
+}
+const _base = path ? path.split("/").pop() : "(no file)";
+document.getElementById("fname").textContent = _base;
+document.title = isPdfMode ? _base + " — PDF" : _base;
+
+let cm = null, diskMtime = 0, dirty = false, lastSavedText = null, pdfDoc = null, pageEls = [], pdfVps = [];
+let zoom = parseFloat(localStorage.getItem("texZoom") || "1");
+const stateEl = document.getElementById("state");
+let __stT = null;
+let __stPrimaryUntil = 0;
+// Primary status (compile / save / conflict / dirty) must not be clobbered by
+// async version-persistence notifications from DiffVersions.
+const setState = (cls, txt) => {
+  stateEl.className = cls;
+  stateEl.textContent = txt;
+  stateEl.title = txt || "";
+  clearTimeout(__stT);
+  if(cls === "ok" || cls === "err" || cls === "dirty"){
+    __stPrimaryUntil = Date.now() + 4000;
+  }
+  if(cls === "ok") __stT = setTimeout(() => {
+    if(stateEl.className === "ok" && Date.now() >= __stPrimaryUntil - 500) stateEl.textContent = "";
+  }, 2500);
+};
+const setStateSoft = (cls, txt) => {
+  if(txt == null || txt === "") return;
+  const cur = stateEl.textContent || "";
+  const holdPrimary = Date.now() < __stPrimaryUntil
+    || /compiled|compiling|saving|saved|✓|✗|échouée|conflit|conflict|modified|sauvegarde/i.test(cur);
+  if(holdPrimary){
+    // Keep the main bar; attach secondary note to tooltip only
+    stateEl.title = (cur ? cur + " · " : "") + txt;
+    return;
+  }
+  setState(cls || "hint", txt);
+};
+const ddot = document.getElementById("ddot");
+
+// word wrap (VS Code-style): off | window | fixed column (80/100/120)
+// parité VS Code : wrap désactivé par défaut. L'ancien défaut "win" re-coupait
+// les sources déjà retournées à la ligne en dur → « paragraphes brisés ». Bascule
+// unique win→off pour les réglages hérités ; un choix explicite reste respecté.
+try { if(localStorage.getItem("cmWrap")==="win" && !localStorage.getItem("cmWrapMig")){
+  localStorage.setItem("cmWrap","off"); localStorage.setItem("cmWrapMig","1"); } } catch(e){}
+const wrapSel = document.getElementById("wrapSel");
+function applyWrap(v){
+  localStorage.setItem("cmWrap", v);
+  const fixed = /^\d+$/.test(v);
+  if(cm){
+    const w = cm.getWrapperElement();
+    // gap beside a capped editor stays #212121 (the editor's own colour, set on #left)
+    // instead of a black panel; thin border marks the chosen column
+    w.style.maxWidth = fixed ? ("calc(" + v + "ch + 70px)") : "";
+    w.style.borderRight = fixed ? "1px solid #33384a" : "";
+    cm.setOption("lineWrapping", v !== "off");
+    cm.refresh();
+  }
+}
+wrapSel.value = localStorage.getItem("cmWrap") || "off";
+wrapSel.onchange = () => applyWrap(wrapSel.value);
+// colonne custom (ex. 55) : aucune <option> ne matche → wrapSel.value = "" ;
+// applyWrap doit alors relire la vraie valeur stockée, pas le select.
+function wrapValue(){ return wrapSel.value || localStorage.getItem("cmWrap") || "off"; }
+
+const LATEX_GHOST_COMMANDS = [
+  "abstract", "author", "begin", "bibliography", "bibliographystyle", "caption",
+  "chapter", "cite", "citep", "citet", "clearpage", "cref", "documentclass",
+  "emph", "end", "eqref", "figure", "footnote", "includegraphics", "item",
+  "label", "maketitle", "newpage", "paragraph", "ref", "section", "subsection",
+  "subsubsection", "table", "textbf", "textit", "texttt", "title", "url"
+];
+const LATEX_GHOST_ENVS = [
+  "document", "abstract", "figure", "table", "itemize", "enumerate",
+  "equation", "equation*", "align", "align*", "gather", "gather*",
+  "tabular", "center", "quote", "verbatim", "thebibliography"
+];
+const LATEX_GHOST_WORDS = [
+  "albedo", "analysis", "approach", "background", "because", "between",
+  "compared", "consistent", "decrease", "effect", "estimated", "figure",
+  "however", "important", "increase", "indicates", "method", "model",
+  "observed", "regional", "response", "results", "section", "significant",
+  "snow", "surface", "therefore", "using", "whereas", "which"
+];
+const LATEX_GHOST_NEXT = {
+  albedo: ["response", "change", "signal"],
+  analysis: ["shows", "indicates", "suggests"],
+  model: ["shows", "estimates", "includes"],
+  our: ["results", "analysis", "model"],
+  results: ["show", "suggest", "indicate"],
+  surface: ["albedo", "response", "conditions"],
+  the: ["model", "results", "analysis", "surface", "observed"],
+  these: ["results", "patterns", "estimates"],
+  this: ["suggests", "indicates", "section", "result"],
+  we: ["find", "estimate", "show", "use"]
+};
+let ghostMark = null, ghostText = "", ghostTimer = null, ghostHiddenUntilChange = false;
+let ghostCacheRaw = null, ghostCacheTokens = null, ghostCacheLabels = null;
+
+function ghostClear(){
+  if(ghostMark){ ghostMark.clear(); ghostMark = null; }
+  ghostText = "";
+}
+function ghostInvalidate(){
+  ghostCacheRaw = ghostCacheTokens = ghostCacheLabels = null;
+}
+function ghostEscape(s){
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+function ghostTextBeforeCursor(){
+  const cur = cm.getCursor();
+  const out = [];
+  const start = Math.max(0, cur.line - 160);
+  for(let i = start; i < cur.line; i++) out.push(cm.getLine(i));
+  out.push(cm.getLine(cur.line).slice(0, cur.ch));
+  return out.join("\n");
+}
+function ghostCleanText(src){
+  return String(src || "")
+    .replace(/(^|[^\\])%.*$/gm, "$1")
+    .replace(/\\(?:begin|end|cite[a-z]*|ref|eqref|cref|label|url|includegraphics)\{[^}]*\}/g, " ")
+    .replace(/\\[a-zA-Z]+\*?(?:\[[^\]]*\])?(?:\{[^}]*\})?/g, " ")
+    .replace(/[{}[\]$^_~&#]/g, " ")
+    .replace(/[.,;:!?()"]/g, " ");
+}
+function ghostTokens(src){
+  return ghostCleanText(src).toLowerCase().match(/[a-z][a-z'-]{2,}/g) || [];
+}
+function ghostDocumentText(){
+  return cm ? cm.getValue() : "";
+}
+function ghostDocumentTokens(){
+  const raw = ghostDocumentText();
+  if(raw !== ghostCacheRaw){
+    ghostCacheRaw = raw;
+    ghostCacheTokens = ghostTokens(raw);
+    ghostCacheLabels = null;
+  }
+  return ghostCacheTokens || [];
+}
+function ghostEnvironmentNames(){
+  const names = LATEX_GHOST_ENVS.slice();
+  const re = /\\begin\{([^}]+)\}/g;
+  let m;
+  while((m = re.exec(ghostDocumentText()))){
+    if(!names.includes(m[1])) names.push(m[1]);
+  }
+  return names;
+}
+function ghostOpenEnvironment(ctx){
+  const stack = [];
+  const re = /\\(begin|end)\{([^}]+)\}/g;
+  let m;
+  while((m = re.exec(ctx))){
+    if(m[1] === "begin") stack.push(m[2]);
+    else {
+      const i = stack.lastIndexOf(m[2]);
+      if(i >= 0) stack.splice(i, 1);
+    }
+  }
+  return stack[stack.length - 1] || "";
+}
+function ghostFallbackWord(prefix){
+  return LATEX_GHOST_WORDS.find(w => w.startsWith(prefix) && w !== prefix) || "";
+}
+function ghostBestWord(prefix){
+  if(prefix.length < 2) return "";
+  const tokens = ghostDocumentTokens();
+  const score = Object.create(null);
+  tokens.forEach((w, i) => {
+    if(w !== prefix && w.startsWith(prefix)){
+      score[w] = (score[w] || 0) + 2 + Math.min(5, i / Math.max(1, tokens.length));
+    }
+  });
+  return Object.keys(score).sort((a,b) => score[b] - score[a] || a.length - b.length)[0] || ghostFallbackWord(prefix);
+}
+function ghostBestNext(prev){
+  if(!prev || prev.length < 3) return "";
+  const tokens = ghostDocumentTokens();
+  const score = Object.create(null);
+  for(let i = 0; i < tokens.length - 1; i++){
+    if(tokens[i] === prev && tokens[i + 1] !== prev) score[tokens[i + 1]] = (score[tokens[i + 1]] || 0) + 1;
+  }
+  return Object.keys(score).sort((a,b) => score[b] - score[a] || a.length - b.length)[0] || (LATEX_GHOST_NEXT[prev] || [])[0] || "";
+}
+function ghostLabelSuggestion(prefix){
+  if(!ghostCacheLabels){
+    const labels = [];
+    const re = /\\(?:label|bibitem)\{([^}]+)\}/g;
+    let m;
+    while((m = re.exec(ghostDocumentText()))) labels.push(m[1]);
+    ghostCacheLabels = labels;
+  }
+  const labels = ghostCacheLabels;
+  return labels.find(x => x.startsWith(prefix) && x !== prefix) || "";
+}
+function ghostSuggestion(){
+  if(!cm || !IS_TEX || ghostHiddenUntilChange || cm.somethingSelected()) return "";
+  const cur = cm.getCursor();
+  const line = cm.getLine(cur.line) || "";
+  const before = line.slice(0, cur.ch);
+  const after = line.slice(cur.ch);
+  if(/\S/.test(after.slice(0, 1))) return "";
+  if(/^\s*%/.test(before)) return "";
+  const dollars = (before.match(/(^|[^\\])\$/g) || []).length;
+  if(dollars % 2) return "";
+
+  let m = before.match(/\\(begin|end)\{([^}]*)$/);
+  if(m){
+    // Shared env completion when available (same algorithm as shell module)
+    if (window.AtelierLatexGhost) {
+      const fullBefore = cm.getRange({line:0,ch:0}, cur);
+      const shared = AtelierLatexGhost.suggestion(cm.getValue(), fullBefore);
+      if (shared) return shared;
+    }
+    const kind = m[1], raw = m[2];
+    const envs = ghostEnvironmentNames();
+    const first = kind === "end" ? ghostOpenEnvironment(ghostTextBeforeCursor()) : "";
+    const ordered = first ? [first].concat(envs.filter(x => x !== first)) : envs;
+    const hit = ordered.find(env => env.startsWith(raw) && env !== raw);
+    return hit ? hit.slice(raw.length) + "}" : "";
+  }
+
+  m = before.match(/\\([A-Za-z]*)$/);
+  if(m){
+    const raw = m[1];
+    if(raw.length < 1) return "";
+    const hit = LATEX_GHOST_COMMANDS.find(cmd => cmd.startsWith(raw) && cmd !== raw);
+    return hit ? hit.slice(raw.length) : "";
+  }
+
+  m = before.match(/\\(?:cite[a-z]*|ref|eqref|cref|Cref)\{([^},\s]*)$/);
+  if(m){
+    const hit = ghostLabelSuggestion(m[1]);
+    return hit ? hit.slice(m[1].length) : "";
+  }
+
+  m = before.match(/([A-Za-z][A-Za-z'-]{1,})$/);
+  if(m){
+    const prefix = m[1].toLowerCase();
+    const hit = ghostBestWord(prefix);
+    return hit ? hit.slice(prefix.length) : "";
+  }
+
+  m = before.match(/([A-Za-z][A-Za-z'-]{2,})\s+$/);
+  if(m){
+    const hit = ghostBestNext(m[1].toLowerCase());
+    return hit ? hit : "";
+  }
+
+  const ctx = ghostTextBeforeCursor();
+  m = ctx.match(/([A-Za-z][A-Za-z'-]{2,})\s*$/);
+  if(m){
+    const hit = ghostBestNext(m[1].toLowerCase());
+    return hit ? " " + hit : "";
+  }
+  return "";
+}
+function ghostShow(text){
+  ghostClear();
+  if(!text || !/\S/.test(text)) return;
+  const span = document.createElement("span");
+  span.className = "cm-ghost-suggest";
+  span.innerHTML = ghostEscape(text).replace(/ /g, "&nbsp;");
+  ghostText = text;
+  ghostMark = cm.setBookmark(cm.getCursor(), {widget: span, insertLeft: false});
+}
+function ghostUpdate(delay){
+  clearTimeout(ghostTimer);
+  ghostTimer = setTimeout(() => ghostShow(ghostSuggestion()), delay ?? 120);
+}
+function ghostAccept(){
+  if(!ghostText) return false;
+  const text = ghostText;
+  ghostClear();
+  cm.replaceRange(text, cm.getCursor(), null, "+ghost");
+  return true;
+}
+function ghostInstall(){
+  if(!cm || !IS_TEX) return;
+  cm.addKeyMap({
+    "Tab": function(){ return ghostAccept() ? null : CodeMirror.Pass; },
+    "Esc": function(){ if(ghostText){ ghostHiddenUntilChange = true; ghostClear(); return null; } return CodeMirror.Pass; }
+  });
+  cm.on("inputRead", () => { ghostHiddenUntilChange = false; ghostUpdate(90); });
+  cm.on("cursorActivity", () => ghostUpdate(120));
+  cm.on("change", (_, ch) => {
+    ghostInvalidate();
+    if(ch.origin !== "+ghost"){
+      ghostHiddenUntilChange = false;
+      ghostUpdate(140);
+    }
+  });
+  cm.on("blur", ghostClear);
+}
+
+async function load(){
+  await AtelierEditor.ready;
+  const codeUrl = "/code?path=" + encodeURIComponent(path);
+  const r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api(codeUrl):codeUrl);
+  const j = await r.json();
+  if(j.error) return setState("err", j.error);
+  recentsAdd(path);
+  diskMtime = j.mtime;
+  // re-mesurer l'éditeur quand le panneau est redimensionné (sinon les
+  // retours de ligne gardent l'ancienne largeur et l'affichage se décale)
+  let __rsT=null;
+  window.addEventListener("resize", () => {
+    clearTimeout(__rsT);
+    __rsT=setTimeout(() => { if(cm) cm.refresh(); }, 120);
+  });
+  lastSavedText = j.text;
+  cm = AtelierEditor.create(document.getElementById("left"), {
+    value: j.text, mode: __CM_MODE, theme: "material-darker",
+    lineNumbers: true, lineWrapping: true, viewportMargin: 50, styleSelectedText: true,
+    matchBrackets: true, autoCloseBrackets: true,
+    foldGutter: true, gutters: ["CodeMirror-linenumbers", "CodeMirror-foldgutter"],
+    highlightSelectionMatches: { annotateScrollbar: true, minChars: 3 }
+  });
+  cm.on("cursorActivity", () => {
+    const c = cm.getCursor();
+    const el = document.getElementById("sbPos");
+    if (el) el.textContent = "Ln " + (c.line + 1) + ", Col " + (c.ch + 1);
+  });
+  // ligne active (VS Code) : surbrillance discrète + numéro de ligne courant en clair
+  let __activeLn = null;
+  cm.on("cursorActivity", () => {
+    const l = cm.getCursor().line;
+    if (l === __activeLn) return;
+    if (__activeLn != null) {
+      cm.removeLineClass(__activeLn, "background", "cm-activeline");
+      cm.removeLineClass(__activeLn, "gutter", "cm-activeline-gutter");
+    }
+    cm.addLineClass(l, "background", "cm-activeline");
+    cm.addLineClass(l, "gutter", "cm-activeline-gutter");
+    __activeLn = l;
+  });
+  cm.on("change", (_, ch) => { if(ch.origin !== "setValue"){ dirty = true; ddot.style.display = "inline"; setState("dirty", "modified"); } });
+  ghostInstall();
+  // ?line=N (ou N-M) : sauter à la ligne et la surligner brièvement (liens fichier:ligne du chat)
+  const __lineParam = new URLSearchParams(location.search).get("line");
+  if(__lineParam){
+    const mm = /^(\d+)(?:-(\d+))?$/.exec(__lineParam);
+    if(mm){
+      const l1 = Math.max(0, parseInt(mm[1],10)-1), l2 = mm[2] ? parseInt(mm[2],10)-1 : l1;
+      setTimeout(() => {
+        cm.setCursor({line:l1, ch:0});
+        cm.scrollIntoView({line:Math.min(l2+3, cm.lineCount()-1), ch:0}, 120);
+        for(let ln=l1; ln<=Math.min(l2, cm.lineCount()-1); ln++) cm.addLineClass(ln, "background", "cm-line-flash");
+        setTimeout(() => { for(let ln=l1; ln<=Math.min(l2, cm.lineCount()-1); ln++) cm.removeLineClass(ln, "background", "cm-line-flash"); }, 2600);
+      }, 60);
+    }
+  }
+  let selT = null;
+  cm.on("cursorActivity", () => {
+    clearTimeout(selT);
+    selT = setTimeout(() => {
+      const sel = cm.getSelection();
+      const f = cm.getCursor("from"), t = cm.getCursor("to");
+      if(sel && sel.trim()){
+        if(window._clMark) window._clMark.clear();
+        window._clMark = cm.markText(f, t, {className: "cm-clsel"});
+        fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/selinfo"):"/selinfo", {method:"POST", headers:{"Content-Type":"application/json"},
+          body: JSON.stringify({
+            lines: t.line - f.line + 1, words: sel.trim().split(/\s+/).length,
+            text: sel, rel: path, name: path.split("/").pop(),
+            page: "L" + (f.line+1) + "-" + (t.line+1)
+          })}).catch(()=>{});
+        selPillShow(f, t, sel);
+      } else {
+        selHide();
+        if(window._clMark){ window._clMark.clear(); window._clMark = null; }
+      }
+    }, 200);
+  });
+  applyWrap(wrapValue());
+  // Rewrap façon VS Code (extension Rewrap, Alt+Q) : reformate RÉELLEMENT le
+  // paragraphe courant (ou la sélection) à 80 colonnes — chaque ligne visible
+  // redevient une vraie ligne numérotée.
+  function rewrapPar(){
+    // colonne = le wrap choisi s'il est numérique (Wrap: 55 → rewrap à 55) ;
+    // sinon largeur visible du panneau (moins gutter/marge), bornée 40-120 :
+    // après rewrap, chaque ligne rentre dans le panneau → un numéro par ligne
+    const chosen = parseInt(localStorage.getItem("cmWrap"), 10);
+    const gutter = cm.getGutterElement().offsetWidth;
+    const col = chosen > 0 ? chosen : Math.max(40, Math.min(120,
+      Math.floor((cm.getWrapperElement().clientWidth - gutter - 16) / cm.defaultCharWidth())));
+    const before = cm.getValue();
+    // Prefer shared safe comment rewrap (never merge mixed % blocks)
+    if (window.AtelierRewrap) {
+      const r = AtelierRewrap.rewrapParagraph(cm, "tex", col, true);
+      if (r && r.ok && window.AtelierLatexComments && typeof texcAll !== "undefined" && texcAll.length) {
+        const re = AtelierLatexComments.reanchor(texcAll, before, cm.getValue());
+        // clear old marks and re-apply
+        Object.keys(texcMarks || {}).forEach(id => { try { texcMarks[id].clear(); } catch(e){} delete texcMarks[id]; });
+        texcAll = re.ok;
+        texcAll.forEach(texcMark);
+        if (typeof texcSave === "function") texcSave();
+      }
+      return;
+    }
+    let from, to;
+    if(cm.somethingSelected()){
+      from = cm.getCursor("from").line; to = cm.getCursor("to").line;
+    } else {
+      const cur = cm.getCursor().line, last = cm.lineCount()-1;
+      from = cur; while(from>0 && cm.getLine(from-1).trim()!=="") from--;
+      to = cur; while(to<last && cm.getLine(to+1).trim()!=="") to++;
+    }
+    const lines=[]; for(let i=from;i<=to;i++) lines.push(cm.getLine(i));
+    const indent=(lines[0].match(/^\s*/)||[""])[0];
+    // préserver un préfixe de commentaire commun (% latex, # py/r/jl, // js)
+    const cm0=(lines[0].match(/^\s*([%#]+|\/\/)\s?/)||[])[1] || "";
+    const allComment = cm0 && lines.every(l => !l.trim() || l.trim().startsWith(cm0));
+    // Gate C: refuse non-comment rewrap (protect code / environments)
+    if(!allComment) return;
+    const prefix = indent + cm0 + " ";
+    const strip = (l) =>
+      l.replace(new RegExp("^\\s*" + cm0.replace(/[%/]/g, "\\$&") + "\\s?"), "").trim();
+    const words=lines.map(strip).join(" ").split(/\s+/).filter(Boolean);
+    const out=[]; let curL="";
+    for(const w of words){
+      if(!curL) curL=prefix+w;
+      else if((curL+" "+w).length<=col) curL+=" "+w;
+      else { out.push(curL); curL=prefix+w; }
+    }
+    if(curL) out.push(curL);
+    cm.replaceRange(out.join("\n"), {line:from,ch:0}, {line:to,ch:cm.getLine(to).length});
+    if (window.AtelierLatexComments && typeof texcAll !== "undefined" && texcAll.length) {
+      const re = AtelierLatexComments.reanchor(texcAll, before, cm.getValue());
+      Object.keys(texcMarks || {}).forEach(id => { try { texcMarks[id].clear(); } catch(e){} delete texcMarks[id]; });
+      texcAll = re.ok;
+      texcAll.forEach(texcMark);
+      if (typeof texcSave === "function") texcSave();
+    }
+  }
+  cm.addKeyMap({"Alt-Q": rewrapPar});
+  document.getElementById("rewrapBtn").onclick = () => { rewrapPar(); cm.focus(); };
+
+  // Rewrap façon VS Code : les lignes repliées s'alignent sous le début du
+  // texte de la ligne (indentation préservée), pas sous le gutter.
+  (function(){
+    const basePad = 4;
+    cm.on("renderLine", function(cm, line, elt){
+      const off = CodeMirror.countColumn(line.text, null, cm.getOption("tabSize")) * cm.defaultCharWidth();
+      elt.style.textIndent = "-" + off + "px";
+      elt.style.paddingLeft = (basePad + off) + "px";
+    });
+    cm.refresh();
+  })();
+
+  // Le divider du panneau (Bibliothèque/atelier) redimensionne l'iframe SANS
+  // émettre de 'resize' fenêtre dans WebKit → CodeMirror gardait son ancien
+  // calcul de wrap/hauteur et la gouttière se décalait (un numéro toutes les
+  // 2 lignes). ResizeObserver capte TOUTE variation de largeur, drag inclus.
+  (function(){
+    let raf = 0;
+    const doRefresh = () => { raf = 0; if(cm) cm.refresh(); };
+    const ro = new ResizeObserver(() => { if(!raf) raf = requestAnimationFrame(doRefresh); });
+    const leftEl = document.getElementById("left");
+    if(leftEl) ro.observe(leftEl);
+  })();
+
+  // initial loadPdf is triggered by the /texroot resolution (single-trigger rule)
+}
+
+async function save(){
+  const r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/codesave"):"/codesave", {method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({path, text: cm.getValue(), mtime: diskMtime})});
+  const j = await r.json();
+  if(j.error === "conflit"){ setState("err", "disk conflict — re-⌘S to overwrite"); diskMtime = j.mtime; return false; }
+  diskMtime = j.mtime; dirty = false; ddot.style.display = "none"; setState("ok", "saved");
+  // versionner AUSSI tes propres modifications (une version par sauvegarde)
+  const savedNow = cm.getValue();
+  if(lastSavedText !== null && typeof diffPush === "function") diffPush(lastSavedText, savedNow, {source:"user-save", status:"applied"});
+  lastSavedText = savedNow;
+  if (window.__onSaved) window.__onSaved();
+  return true;
+}
+
+async function compile(){
+  if(dirty && !(await save())) return;
+  setState("dirty", "compiling…");
+  let j;
+  if (window.AtelierLatexCompile) {
+    j = await AtelierLatexCompile.compile(path);
+  } else {
+    const r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/compile"):"/compile", {method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({path})});
+    j = await r.json();
+  }
+  showCompileLog(j);
+  // Shared error gutters (shell module parity)
+  if (window.AtelierLatexErrors && cm) {
+    AtelierLatexErrors.clearErrorGutters(cm);
+    if (!j.ok) {
+      const lines = AtelierLatexErrors.errorLinesFromLog(j.log || j.error || "");
+      AtelierLatexErrors.applyErrorGutters(cm, lines);
+    }
+  }
+  if(!j.ok) return setState("err", "✗ compilation échouée — voir la console");
+  if(j.pdf) pdfPath = j.pdf;
+  setState("ok", "✓ compiled " + new Date().toLocaleTimeString());
+  loadPdf();
+  if(bc) bc.postMessage({t: "compiled"});   // PDF tabs reload themselves
+}
+
+// console de compilation : log complet, erreurs en rouge, l.<n> cliquable → ligne source
+let lastCompile = null; // {log, ok} — pour « Add to chat »
+function showCompileLog(j){
+  const el = document.getElementById("texlog"), body = document.getElementById("tlBody");
+  lastCompile = { log: String(j.log || j.error || ""), ok: !!j.ok };
+  document.getElementById("tlStatus").textContent = j.ok ? "· réussie" : "· échec";
+  // Shared classifier (parity with AtelierLatexCompile) — original behaviour preserved
+  if (window.AtelierLatexCompile && AtelierLatexCompile.renderLogHtml) {
+    body.innerHTML = AtelierLatexCompile.renderLogHtml(j.log || j.error || "(pas de log)");
+  } else {
+    const esc = (t) => t.replace(/&/g,"&amp;").replace(/</g,"&lt;");
+    body.innerHTML = esc(String(j.log || j.error || "(pas de log)"))
+      .split("\n").map(line => {
+        let cls = "";
+        if(/^!|Fatal error|Emergency stop/.test(line)) cls = "tl-err";
+        else if(/^LaTeX Warning|^Package .* Warning|Overfull|Underfull/.test(line)) cls = "tl-warn";
+        const withJump = line.replace(/\bl\.(\d+)/g, (m,n)=>`<span class="tl-jump" data-l="${n}">l.${n}</span>`)
+                             .replace(/lines? (\d+)/g, (m,n)=>`<span class="tl-jump" data-l="${n}">${m}</span>`);
+        return cls ? `<span class="${cls}">${withJump}</span>` : withJump;
+      }).join("\n");
+  }
+  el.classList.toggle("open", !j.ok);   // s'ouvre à l'échec, se ferme si succès
+  if(!j.ok){ const firstErr = body.querySelector(".tl-err"); if(firstErr) firstErr.scrollIntoView({block:"start"}); }
+}
+// ---- commentaires ancrés : stockés via /pdfannot (rel = tex:<path>) ----
+const texcPop = document.getElementById("texcPop");
+let texcAll = [];        // {id, from, to, text, comment}
+let texcMarks = {};      // id -> markText
+let texcCur = null;      // id en cours d'édition (ou objet neuf)
+const texcRel = () => "tex-comments:" + path;
+async function texcLoad(){
+  try {
+    const annotUrl = "/pdfannot?rel=" + encodeURIComponent(texcRel());
+    const r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api(annotUrl):annotUrl);
+    const j = await r.json();
+    texcAll = Array.isArray(j.annots) ? j.annots : [];
+    texcAll.forEach(texcMark);
+  } catch(e){}
+}
+function texcSave(){
+  fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/pdfannot"):"/pdfannot", {method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({rel: texcRel(), annots: texcAll})}).catch(()=>{});
+}
+function texcMark(c){
+  if(!cm) return;
+  try {
+    texcMarks[c.id] = cm.markText(c.from, c.to, {className: "texc-hl", attributes: {"data-texc": c.id}});
+  } catch(e){}
+}
+function texcOpen(sel){
+  texcCur = { id: "c" + Date.now(), from: sel.from, to: sel.to, text: String(sel.text).slice(0, 300), comment: "" };
+  texcShow(texcCur, true);
+}
+let texcOpenedAt = 0;
+function texcShow(c, isNew){
+  texcOpenedAt = Date.now();
+  texcPop.querySelector(".tc-quote").textContent = "« " + c.text.slice(0, 140) + (c.text.length > 140 ? "…" : "") + " »";
+  texcPop.querySelector("textarea").value = c.comment || "";
+  texcPop.querySelector(".tc-del").style.display = isNew ? "none" : "";
+  texcPop.querySelector(".tc-ok").style.display = isNew ? "none" : "";
+  const co = cm.charCoords(c.to, "window");
+  texcPop.style.display = "block";
+  texcPop.style.left = Math.min(Math.max(8, co.left - 150), innerWidth - 310) + "px";
+  texcPop.style.top = Math.min(co.bottom + 8, innerHeight - texcPop.offsetHeight - 8) + "px";
+  texcPop.querySelector("textarea").focus();
+}
+texcPop.querySelector("textarea").addEventListener("keydown", (e) => {
+  if(e.key === "Enter" && !e.shiftKey){ e.preventDefault(); texcPop.querySelector(".tc-save").click(); }
+});
+texcPop.querySelector(".tc-save").onclick = () => {
+  if(!texcCur) return;
+  texcCur.comment = texcPop.querySelector("textarea").value.trim();
+  if(!texcAll.find(x => x.id === texcCur.id)){ texcAll.push(texcCur); texcMark(texcCur); }
+  texcSave(); texcPop.style.display = "none"; texcCur = null;
+};
+function texcRemove(id){
+  texcAll = texcAll.filter(x => x.id !== id);
+  if(texcMarks[id]){ texcMarks[id].clear(); delete texcMarks[id]; }
+  texcSave(); texcPop.style.display = "none"; texcCur = null;
+}
+texcPop.querySelector(".tc-ok").onclick = () => { if(texcCur) texcRemove(texcCur.id); };
+texcPop.querySelector(".tc-del").onclick = () => { if(texcCur) texcRemove(texcCur.id); };
+texcPop.querySelector(".tc-claude").onclick = () => {
+  if(!texcCur) return;
+  texcCur.comment = texcPop.querySelector("textarea").value.trim();
+  const msg = path + " (" + "L" + (texcCur.from.line+1) + "-" + (texcCur.to.line+1) + ") : \u00ab " + texcCur.text.slice(0,200) + " \u00bb\nCommentaire : " + (texcCur.comment || "(voir passage)");
+  __atelierPost({type: "atelier-add-to-chat", text: msg});
+  if(!texcAll.find(x => x.id === texcCur.id)){ texcAll.push(texcCur); texcMark(texcCur); }
+  texcSave(); texcPop.style.display = "none"; texcCur = null;
+};
+// clic sur un surlignage → rouvrir
+document.addEventListener("click", (e) => {
+  const el = e.target.closest(".texc-hl");
+  if(el){
+    const id = el.getAttribute("data-texc");
+    const c = texcAll.find(x => x.id === id);
+    if(c){ texcCur = c; texcShow(c, false); return; }
+  }
+  // ignorer le clic qui vient d ouvrir (bouton Commenter dans la pilule de sélection)
+  // le mousedown d ouverture cache la pilule → le click suivant atterrit ailleurs : ignorer 350ms
+  if(Date.now() - texcOpenedAt < 350) return;
+  if(!texcPop.contains(e.target) && !e.target.closest("#selPill")) texcPop.style.display = "none";
+});
+// charger quand cm est prêt
+(function waitCmC(){ if(cm){ texcLoad(); } else setTimeout(waitCmC, 150); })();
+
+// ---- plan du document : \section/\subsection → navigation ----
+const outlineEl = document.getElementById("outline");
+function buildOutline(){
+  if(!cm) return;
+  // Shared pure outline parser (Gate C) — HTML render stays identical
+  if (window.AtelierLatexOutline) {
+    const items = AtelierLatexOutline.parseOutline(cm.getValue());
+    outlineEl.innerHTML = AtelierLatexOutline.renderOutlineHtml(items, cm.getCursor().line);
+    return;
+  }
+  const lines = cm.getValue().split("\n");
+  const items = [];
+  const RE = /^\s*\\(section|subsection|subsubsection)\*?\{([^{}]*)\}/;
+  lines.forEach((ln, i) => { const m = RE.exec(ln); if(m) items.push({lvl:{section:1,subsection:2,subsubsection:3}[m[1]], t:m[2], line:i}); });
+  const cur = cm.getCursor().line;
+  let active = -1;
+  items.forEach((it, k) => { if(it.line <= cur) active = k; });
+  outlineEl.innerHTML = '<div class="oh">Plan</div>' + (items.length
+    ? items.map((it,k)=>`<button class="oi l${it.lvl}${k===active?" on":""}" data-l="${it.line}">${it.t.replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]))}</button>`).join("")
+    : '<div class="oi" style="cursor:default">aucune section</div>');
+}
+function toggleOutline(force){
+  const open = force ?? !outlineEl.classList.contains("open");
+  outlineEl.classList.toggle("open", open);
+  if(open) buildOutline();
+}
+outlineEl.addEventListener("click", (e) => {
+  const b = e.target.closest(".oi[data-l]"); if(!b) return;
+  const ln = parseInt(b.dataset.l, 10);
+  cm.setCursor({line: ln, ch: 0}); cm.focus();
+  cm.scrollIntoView({line: ln, ch: 0}, 80);
+  toggleOutline(false);
+});
+document.getElementById("outlineBtn").onclick = () => toggleOutline();
+document.addEventListener("keydown", (e) => {
+  if((e.metaKey||e.ctrlKey) && e.shiftKey && (e.key==="o"||e.key==="O")){ e.preventDefault(); toggleOutline(); }
+  if(e.key==="Escape") toggleOutline(false);
+});
+document.addEventListener("mousedown", (e) => {
+  if(outlineEl.classList.contains("open") && !outlineEl.contains(e.target) && e.target.id!=="outlineBtn" && !e.target.closest("#outlineBtn"))
+    toggleOutline(false);
+});
+document.getElementById("tlClose").onclick = () => document.getElementById("texlog").classList.remove("open");
+// « Add to chat » : envoie le log de compilation au chat de l'app hôte.
+// Sélection dans la console → seulement la sélection ; sinon la fin du log (les erreurs y sont).
+document.getElementById("tlChat").onclick = () => {
+  if(!lastCompile) return;
+  const sel = String(window.getSelection() || "").trim();
+  let extrait = sel;
+  if(!extrait){
+    const lines = lastCompile.log.split("\n");
+    extrait = lines.slice(-120).join("\n");
+    if(extrait.length > 6000) extrait = extrait.slice(-6000);
+  }
+  const nom = (path || "").split("/").pop() || "document.tex";
+  const statut = lastCompile.ok ? "réussie" : "ÉCHEC";
+  __atelierPost({type:"atelier-add-to-chat",
+    text: "Log de compilation LaTeX (" + statut + ") — " + nom + " :\n```\n" + extrait + "\n```"});
+  const b = document.getElementById("tlChat");
+  const prev = b.innerHTML; b.textContent = "✓ envoyé";
+  setTimeout(() => { b.innerHTML = prev; }, 1400);
+};
+document.getElementById("tlBody").addEventListener("click", (e) => {
+  const t = e.target.closest(".tl-jump"); if(!t || !cm) return;
+  const ln = parseInt(t.dataset.l, 10) - 1;
+  cm.setCursor({line: ln, ch: 0}); cm.focus(); cm.scrollIntoView({line: ln, ch: 0}, 120);
+});
+// l'état "✗ …" devient cliquable pour rouvrir la console
+document.getElementById("state").style.cursor = "pointer";
+document.getElementById("state").addEventListener("click", () => {
+  const el = document.getElementById("texlog");
+  if(document.getElementById("tlBody").textContent) el.classList.toggle("open");
+});
+
+let _pdfToken = 0;
+async function loadPdf(){
+  const tok = ++_pdfToken;
+  try{
+    const doc = await pdfjsLib.getDocument({url: "/raw?path=" + encodeURIComponent(pdfPath) + "&t=" + Date.now(),
+      standardFontDataUrl: "/.fig_thumbs/pdfjs/standard_fonts/", cMapUrl: "/.fig_thumbs/pdfjs/cmaps/", cMapPacked: true}).promise;
+    if(tok !== _pdfToken) return;
+    pdfDoc = doc;
+    const right = document.getElementById("right");
+    const scroll = right.scrollTop;
+    [...right.querySelectorAll(".pdfpage")].forEach(e => e.remove());
+    pageEls = []; pdfVps = [];
+    _lastW = right.clientWidth;
+    const w = (right.clientWidth - 24) * zoom;
+    for(let n = 1; n <= doc.numPages; n++){
+      if(tok !== _pdfToken) return;
+      const page = await doc.getPage(n);
+      const base = page.getViewport({scale: 1});
+      const scale = w / base.width;
+      const vp = page.getViewport({scale});
+      const div = document.createElement("div");
+      div.className = "pdfpage"; div.dataset.page = n;
+      div.style.width = vp.width + "px"; div.style.height = vp.height + "px";
+      const cv = document.createElement("canvas");
+      cv.width = vp.width * devicePixelRatio; cv.height = vp.height * devicePixelRatio;
+      cv.style.width = vp.width + "px"; cv.style.height = vp.height + "px";
+      div.appendChild(cv);
+      right.appendChild(div);
+      pageEls[n] = div; pdfVps[n] = {scale, h: base.height};
+      const ctx = cv.getContext("2d");
+      ctx.scale(devicePixelRatio, devicePixelRatio);
+      await page.render({canvasContext: ctx, viewport: vp, intent: "print"}).promise;
+      div.onclick = e => {
+        const r2 = div.getBoundingClientRect();
+        synctexEdit(n, (e.clientX - r2.left) / pdfVps[n].scale, (e.clientY - r2.top) / pdfVps[n].scale);
+      };
+    }
+    right.scrollTop = scroll;
+  }catch(e){ console.warn("loadPdf:", e); /* souvent: pas encore de PDF */ }
+}
+
+function showMarker(page, y0){
+  if(!pageEls[page]) return false;
+  const el = pageEls[page], vp = pdfVps[page];
+  const y = y0 * vp.scale;
+  const marker = document.getElementById("marker");
+  el.appendChild(marker);
+  marker.style.top = (y - 14) + "px";
+  marker.style.display = "block";
+  el.scrollIntoView({block:"nearest"});
+  document.getElementById("right").scrollTop = el.offsetTop + y - document.getElementById("right").clientHeight/2;
+  setTimeout(() => marker.style.display = "none", 2500);
+  return true;
+}
+
+async function synctexView(){
+  if(!cm) return;
+  const line = cm.getCursor().line + 1;
+  let j;
+  if (window.AtelierLatexSynctex) {
+    j = await AtelierLatexSynctex.view({ tex: path, pdf: pdfPath, line });
+  } else {
+    const r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/synctex"):"/synctex", {method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({dir:"view", tex: path, pdf: pdfPath, line})});
+    j = await r.json();
+  }
+  if(!j.page) return setState("hint", "synctex : pas de correspondance ici");
+  if(bc) bc.postMessage({t: "view", page: j.page, y: j.y});   // separate PDF tabs scroll too
+  if(pdfDoc && !showMarker(j.page, j.y) ) setState("err", "synctex: page not rendered");
+}
+
+let lastSyncLine = null;
+function jumpToLine(line){
+  if(!cm) return;
+  const ln = line - 1;
+  cm.setCursor({line: ln, ch: 0});
+  cm.scrollIntoView({line: ln, ch: 0}, 120);
+  if(lastSyncLine !== null) cm.removeLineClass(lastSyncLine, "background", "cm-syncline");
+  cm.addLineClass(ln, "background", "cm-syncline");
+  lastSyncLine = ln;
+  cm.focus();
+}
+async function synctexEdit(page, x, y){
+  let j;
+  if (window.AtelierLatexSynctex) {
+    j = await AtelierLatexSynctex.edit({ tex: path, pdf: pdfPath, page, x, y });
+  } else {
+    const r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/synctex"):"/synctex", {method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({dir:"edit", tex: path, pdf: pdfPath, page, x, y})});
+    j = await r.json();
+  }
+  if(!j.line) return setState("hint", "synctex : pas de correspondance ici");
+  if(cm) jumpToLine(j.line);
+  if(bc) bc.postMessage({t: "jump", line: j.line});   // editor tab jumps when we're the PDF tab
+}
+if(bc) bc.onmessage = e => {
+  const m = e.data || {};
+  if(isPdfMode){
+    if(m.t === "compiled") loadPdf();
+    else if(m.t === "view") showMarker(m.page, m.y);
+  } else if(m.t === "jump"){
+    jumpToLine(m.line);
+  }
+};
+
+// --- selection pill: annotate + send directly to the Claude session (same flow
+//     as the figure pill and the HTML report overlay; /quote with direct:true) ---
+const selPill = document.getElementById("selPill");
+let __goHTML = null;
+function goReset(go){ if (__goHTML) go.innerHTML = __goHTML; else go.textContent = "↑"; }
+const selTa = selPill.querySelector("textarea");
+  // Mode Studio : composer compact dans le même langage visuel que Codex.
+  if (window.self!==window.top){
+    var __go = selPill.querySelector('.go');
+    ['.del','.nb'].forEach(function(sel){
+      var el = selPill.querySelector(sel); if (el) el.style.display = 'none';
+    });
+    selPill.classList.add('codex-composer');
+    var __tgt = selPill.querySelector('.tgt');
+    if (__tgt){
+      __tgt.title = 'Ajouter aux annotations';
+      __tgt.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14v14H5z"/><path d="M8 12h2l1.3 2h1.4L14 12h2"/></svg>';
+    }
+    if (__go){
+      __go.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 12 4 4 8-9"/></svg>';
+      __goHTML = __go.innerHTML;
+    }
+  }
+
+let lastSel = null;
+function selPillShow(f, t, sel){
+  // don't reposition/steal focus while the user is typing a comment
+  if(selPill.style.display === "flex" && (document.activeElement === selTa || selTa.value)) return;
+  lastSel = {text: sel, page: "L" + (f.line+1) + "-" + (t.line+1), from: {line:f.line, ch:f.ch}, to: {line:t.line, ch:t.ch}};
+  const c = cm.charCoords(t, "window");
+  selPill.style.display = "flex";
+  const w = selPill.offsetWidth, h = selPill.offsetHeight;
+  let x = Math.min(Math.max(8, c.left - w/2), innerWidth - w - 8);
+  let y = c.bottom + 10;
+  if(y + h > innerHeight - 8) y = c.top - h - 10;
+  selPill.style.left = x + "px"; selPill.style.top = Math.max(8, y) + "px";
+  if(__EMB) setTimeout(() => selTa.focus({preventScroll:true}), 0);
+}
+function selHide(){ selPill.style.display = "none"; }
+function selCancel(){
+  selHide(); lastSel = null; selTa.value = "";
+  if(cm) cm.setCursor(cm.getCursor());
+  if(window._clMark){ window._clMark.clear(); window._clMark = null; }
+  fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/selinfo"):"/selinfo", {method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({lines:0, words:0})}).catch(()=>{});
+}
+const __EMB=(function(){try{return window.self!==window.top;}catch(e){return true;}})();
+// Codex peut injecter son ancien bouton global dans l'iframe. Le composer Atelier
+// fournit désormais les deux actions utiles, donc ce doublon doit disparaître.
+if(__EMB){
+  const removeLegacyAddToChat = () => {
+    Array.from(document.body.children).forEach(el => {
+      if(el.tagName === 'BUTTON' && el.textContent.trim().toLowerCase() === 'add to chat') el.remove();
+    });
+  };
+  removeLegacyAddToChat();
+  new MutationObserver(removeLegacyAddToChat).observe(document.body, {childList:true});
+}
+function selSend(delivery, actionBtn){
+  if(!lastSel) return;
+  const comment = selTa.value.trim();
+  const go = selPill.querySelector(".go");
+  delivery = delivery || 'annotations';
+  const sendNow = delivery === 'direct';
+  const btn = actionBtn || go;
+  const btnHTML = btn.innerHTML;
+  btn.classList.remove('sent','failed');
+  btn.classList.add('sending');
+  btn.textContent = "⏳";
+  fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/quote"):"/quote", {method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({rel: path, page: lastSel.page, text: lastSel.text, comment: comment || "",
+      direct: sendNow, action: sendNow ? 'apply' : 'ask', held: !sendNow, deliveryMode: delivery,
+      target: __ct(), embed: __EMB})})
+    .then(async r => { const j = await r.json(); if(!r.ok || j.error) throw new Error(j.error || `HTTP ${r.status}`); return j; })
+    .then(j => { if(sendNow && __EMB && j && j.message) __atelierPost({type:'atelier-add-to-chat', text:j.message});
+      if(window._clMark){ window._clMark.clear(); window._clMark = null; }
+      btn.classList.remove('sending'); btn.classList.add('sent'); btn.textContent = "✓";
+      setTimeout(() => { btn.classList.remove('sent'); btn.innerHTML = btnHTML; selTa.value = ""; selHide(); }, 850); })
+    .catch(() => { btn.classList.remove('sending'); btn.classList.add('failed'); btn.textContent = "!";
+      setTimeout(() => { btn.classList.remove('failed'); btn.innerHTML = btnHTML; }, 1600); });
+}
+// clicks on the bar must not destroy the selection — except the textarea, which needs focus
+selPill.addEventListener("mousedown", e => { if(e.target !== selTa) e.preventDefault(); });
+selPill.querySelector(".go").onclick = e => selSend('direct', e.currentTarget);
+selPill.querySelector(".comment").onclick = e => {
+  e.stopPropagation();
+  if(lastSel) texcOpen(lastSel);
+  selHide();
+};
+selPill.querySelector(".del").onclick = e => { e.stopPropagation(); selCancel(); };
+/* ---- Claude-session target picker (stores localStorage 'claudeTargetV1') ---- */
+(function(){
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const tgtBtn = selPill.querySelector(".tgt"), tgMenu = document.getElementById("tgMenu");
+  const markTgt = () => { if(!__EMB) tgtBtn.classList.toggle("set", !!__ct()); };
+  markTgt();
+  tgMenu.addEventListener("mousedown", e => e.preventDefault());
+  tgtBtn.onclick = async e => {
+    e.stopPropagation();
+    if(__EMB){
+      selSend('annotations', tgtBtn);
+      return;
+    }
+    const cur = __ct();
+    let html = '<div class="hd">Envoyer vers</div>'
+      + '<div class="it' + (cur ? '' : ' on') + '" data-i="-1"><span class="app">auto</span>'
+      + '<span class="t">Session du projet (auto)</span></div>';
+    try{
+      const j = await (await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/claude-targets"):"/claude-targets")).json();
+      (j.targets || []).forEach((t, i) => {
+        const on = cur && cur.app === t.app && cur.id === t.id;
+        html += '<div class="it' + (on ? ' on' : '') + '" data-i="' + i + '"><span class="app">'
+          + esc(t.app) + '</span><span class="t">' + esc(t.title || t.id)
+          + (t.inProject ? '' : ' — ' + esc(String(t.cwd || '').split('/').pop())) + '</span></div>';
+      });
+      tgMenu.innerHTML = html;
+      tgMenu.style.display = "flex";
+      const r = tgtBtn.getBoundingClientRect();
+      tgMenu.style.left = Math.max(8, Math.min(r.left - 120, innerWidth - tgMenu.offsetWidth - 8)) + "px";
+      tgMenu.style.top = Math.max(8, r.top - tgMenu.offsetHeight - 10) + "px";
+      tgMenu.querySelectorAll(".it").forEach(it => {
+        it.onclick = ev => {
+          ev.stopPropagation();
+          const i = +it.dataset.i;
+          if(i < 0) localStorage.removeItem("claudeTargetV1");
+          else localStorage.setItem("claudeTargetV1", JSON.stringify({app:j.targets[i].app, id:j.targets[i].id, title:j.targets[i].title}));
+          markTgt(); tgMenu.style.display = "none";
+        };
+      });
+      document.addEventListener("click", function h(){ tgMenu.style.display = "none"; document.removeEventListener("click", h); });
+    }catch(err){ console.warn("claude-targets failed", err); }
+  };
+})();
+selTa.addEventListener("input", () => { selTa.style.height = "20px"; selTa.style.height = Math.min(120, selTa.scrollHeight) + "px"; });
+selTa.addEventListener("keydown", e => {
+  e.stopPropagation();
+  if(e.key === "Enter" && !e.shiftKey){ e.preventDefault(); selSend('annotations', selPill.querySelector('.tgt')); }
+  else if(e.key === "Escape"){ e.preventDefault(); selCancel(); }
+});
+
+document.getElementById("build").onclick = compile;
+document.getElementById("saveBtn").onclick = () => save();
+document.getElementById("reloadPdf").onclick = () => loadPdf();
+const helpPop = document.getElementById("helpPop");
+document.getElementById("helpBtn").onclick = e => {
+  e.stopPropagation();
+  helpPop.style.display = helpPop.style.display === "flex" ? "none" : "flex";
+};
+document.addEventListener("click", () => { helpPop.style.display = "none"; });
+const rightEl = document.getElementById("right");
+function applyPdfVisible(v){
+  if(isPdfMode) return;                       // PDF tab: the PDF pane is the whole view
+  rightEl.style.display = v ? "" : "none";
+  document.getElementById("left").style.width = v ? "50%" : "100%";
+  document.getElementById("left").style.borderRight = v ? "" : "none";
+  document.getElementById("togglePdf").classList.toggle("on", v);
+  localStorage.setItem("texPdfVisible", v ? "1" : "0");
+  if(cm) cm.refresh();
+}
+document.getElementById("togglePdf").onclick = () => applyPdfVisible(rightEl.style.display === "none");
+
+// ===== mode Lecture : rendu LaTeX-prose (KaTeX) dans #right, façon Claude Science =====
+// Parseur LaTeX-prose → HTML (mode Lecture, façon Claude Science).
+// Ambition : rendre la PROSE lisible, pas compiler LaTeX. Dégradation gracieuse :
+// tout ce qu'on ne connaît pas garde son texte, jamais de crash.
+
+function texToHtml(src, katex) {
+  src = String(src || "");
+  // 1. corps entre \begin{document}..\end{document} si présent
+  const doc = /\\begin\{document\}([\s\S]*?)\\end\{document\}/.exec(src);
+  let body = doc ? doc[1] : src;
+
+  // 2. retirer commentaires (% non échappé jusqu'à la fin de ligne)
+  body = body.replace(/(^|[^\\])%.*$/gm, "$1");
+
+  // 3. protéger les maths : on remplace par des jetons, rendus KaTeX après
+  const math = [];
+  const stash = (tex, display) => { math.push({ tex: tex.trim(), display }); return `\x00M${math.length - 1}\x00`; };
+  body = body.replace(/\$\$([\s\S]+?)\$\$/g, (_, t) => stash(t, true));
+  body = body.replace(/\\\[([\s\S]+?)\\\]/g, (_, t) => stash(t, true));
+  body = body.replace(/\\begin\{(equation|align|equation\*|align\*|gather|gather\*)\}([\s\S]*?)\\end\{\1\}/g,
+    (_, env, t) => stash(t, true));
+  body = body.replace(/\$([^$]+?)\$/g, (_, t) => stash(t, false));
+  body = body.replace(/\\\(([\s\S]+?)\\\)/g, (_, t) => stash(t, false));
+
+  // util : échappe le HTML (le texte source n'est jamais du HTML)
+  const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+  // 4. découper en blocs par ligne, en suivant le numéro de ligne source
+  const lines = body.split("\n");
+  const blocks = []; // {type, html, line}
+  let para = [], paraLine = 0, list = null;
+  const flushPara = () => {
+    if (para.length) { blocks.push({ type: "p", text: para.join(" "), line: paraLine }); para = []; }
+  };
+  const flushList = () => { if (list) { blocks.push(list); list = null; } };
+
+  for (let i = 0; i < lines.length; i++) {
+    const raw = lines[i];
+    const line = raw.trim();
+    const ln = i + 1;
+    let m;
+    if (!line) { flushPara(); flushList(); continue; }
+    // titres
+    if ((m = /^\\(title|section|subsection|subsubsection|paragraph)\*?\{([\s\S]*?)\}\s*$/.exec(line))) {
+      flushPara(); flushList();
+      const tag = { title: "h1", section: "h2", subsection: "h3", subsubsection: "h4", paragraph: "h5" }[m[1]];
+      blocks.push({ type: "h", tag, text: m[2], line: ln }); continue;
+    }
+    if (/^\\(begin|end)\{(itemize|enumerate)\}/.test(line)) {
+      flushPara();
+      if (/^\\begin/.test(line)) { flushList(); list = { type: "list", ordered: /enumerate/.test(line), items: [], line: ln }; }
+      else flushList();
+      continue;
+    }
+    if ((m = /^\\item\s*([\s\S]*)$/.exec(line)) && list) { list.items.push({ text: m[1], line: ln }); continue; }
+    // environnements ignorés (rendus en encadré léger)
+    if ((m = /^\\begin\{(figure|table|tabular|tikzpicture|thebibliography|abstract)\*?\}/.exec(line))) {
+      flushPara(); flushList();
+      if (m[1] === "abstract") { blocks.push({ type: "h", tag: "h2", text: "Abstract", line: ln }); continue; }
+      // avaler jusqu'au \end correspondant
+      const envName = m[1];
+      let j = i + 1;
+      while (j < lines.length && !new RegExp("\\\\end\\{" + envName).test(lines[j])) j++;
+      if (envName !== "thebibliography")
+        blocks.push({ type: "env", name: envName, line: ln });
+      i = j; continue;
+    }
+    if (/^\\end\{abstract\}/.test(line)) { flushPara(); flushList(); continue; }
+    // lignes de commande pure sans prose (\maketitle, \newpage, \clearpage, \bibliography, \input...)
+    if (/^\\(maketitle|newpage|clearpage|pagebreak|bibliographystyle|bibliography|input|include|tableofcontents|noindent|centering|raggedright|hline|toprule|midrule|bottomrule)\b/.test(line)) {
+      continue;
+    }
+    // sinon : accumuler dans le paragraphe courant
+    if (!para.length) paraLine = ln;
+    para.push(line);
+  }
+  flushPara(); flushList();
+
+  // 5. rendu inline d'un fragment de texte LaTeX → HTML
+  function inline(t) {
+    t = esc(t);
+    // jetons math d'abord (déjà échappés par le \x00 qui survit à esc)
+    // (on les remplace en toute fin, après les commandes)
+    // typographie
+    t = t.replace(/---/g, "—").replace(/--/g, "–")
+         .replace(/``/g, "“").replace(/''/g, "”").replace(/`/g, "‘")
+         .replace(/~/g, " ")
+         .replace(/\\%/g, "%").replace(/\\&/g, "&amp;").replace(/\\_/g, "_")
+         .replace(/\\#/g, "#").replace(/\\\$/g, "$").replace(/\\ /g, " ")
+         .replace(/\\\\/g, "<br>").replace(/\\newline/g, "<br>");
+    // notes de brouillon : [[...]] et \todo{...}  → rouge
+    t = t.replace(/\[\[([\s\S]*?)\]\]/g, '<span class="tex-todo">[[$1]]</span>');
+    t = t.replace(/\\todo\{([\s\S]*?)\}/g, '<span class="tex-todo">$1</span>');
+    t = t.replace(/\\textcolor\{[^}]*\}\{([\s\S]*?)\}/g, '<span class="tex-todo">$1</span>');
+    // gras / italique / mono / souligné
+    for (let k = 0; k < 3; k++) { // imbrications simples
+      t = t.replace(/\\textbf\{([^{}]*)\}/g, "<strong>$1</strong>")
+           .replace(/\\(emph|textit|textsl)\{([^{}]*)\}/g, "<em>$2</em>")
+           .replace(/\\texttt\{([^{}]*)\}/g, "<code>$1</code>")
+           .replace(/\\underline\{([^{}]*)\}/g, "<u>$1</u>");
+    }
+    // citations / refs / labels
+    t = t.replace(/\\(cite[a-z]*|citep|citet)\{([^}]*)\}/g, '<span class="tex-cite">[$2]</span>');
+    t = t.replace(/\\(eqref|ref|autoref|cref|Cref)\{([^}]*)\}/g, '<span class="tex-ref">§$2</span>');
+    t = t.replace(/\\label\{[^}]*\}/g, "");
+    t = t.replace(/\\footnote\{([\s\S]*?)\}/g, '<sup class="tex-fn" title="$1">*</sup>');
+    t = t.replace(/\\(href)\{([^}]*)\}\{([^}]*)\}/g, '<a href="$2">$3</a>');
+    t = t.replace(/\\url\{([^}]*)\}/g, '<a href="$1">$1</a>');
+    // commande générique inconnue avec argument → garder l'argument
+    for (let k = 0; k < 4; k++) t = t.replace(/\\[a-zA-Z]+\*?\{([^{}]*)\}/g, "$1");
+    // commande sans argument → retirer
+    t = t.replace(/\\[a-zA-Z]+\*?/g, "");
+    // accolades résiduelles
+    t = t.replace(/[{}]/g, "");
+    return t;
+  }
+
+  // 6. rendre KaTeX dans un fragment déjà inliné
+  function withMath(html) {
+    return html.replace(/\x00M(\d+)\x00/g, (_, i) => {
+      const mm = math[Number(i)];
+      if (!mm) return "";
+      try { return katex.renderToString(mm.tex, { displayMode: mm.display, throwOnError: false, errorColor: "#e0726a" }); }
+      catch (e) { return '<span class="tex-matherr">' + esc(mm.tex) + "</span>"; }
+    });
+  }
+
+  // 7. assembler
+  const out = [];
+  for (const b of blocks) {
+    if (b.type === "h") out.push(`<${b.tag} data-line="${b.line}">${withMath(inline(b.text))}</${b.tag}>`);
+    else if (b.type === "p") out.push(`<p data-line="${b.line}">${withMath(inline(b.text))}</p>`);
+    else if (b.type === "list") {
+      const tag = b.ordered ? "ol" : "ul";
+      const items = b.items.map((it) => `<li data-line="${it.line}">${withMath(inline(it.text))}</li>`).join("");
+      out.push(`<${tag}>${items}</${tag}>`);
+    } else if (b.type === "env") {
+      out.push(`<div class="tex-env" data-line="${b.line}">[ ${b.name} ]</div>`);
+    }
+  }
+  return out.join("\n");
+}
+
+if(IS_TEX && window.katex){
+  const right = document.getElementById("right");
+  right.insertAdjacentHTML("beforeend", '<div id="texread"></div>');
+  const readEl = document.getElementById("texread");
+  // bouton Lecture dans la barre, à côté de Split
+  const splitBtn = document.getElementById("togglePdf");
+  const readBtn = document.createElement("button");
+  readBtn.id = "readBtn"; readBtn.title = "Vue Lecture — prose rendue (KaTeX), sans le code";
+  readBtn.textContent = "Lecture";
+  splitBtn.insertAdjacentElement("afterend", readBtn);
+
+  let readOn = false, rafR = 0;
+  function renderRead(){
+    rafR = 0;
+    try{ readEl.innerHTML = texToHtml(cm.getValue(), window.katex); }catch(e){ readEl.innerHTML = '<p style="color:#e0726a">Rendu impossible : '+String(e.message||e)+'</p>'; }
+  }
+  const scheduleRead = () => { if(readOn && !rafR) rafR = requestAnimationFrame(renderRead); };
+
+  function setRead(on){
+    readOn = on;
+    right.classList.toggle("reading", on);
+    readBtn.classList.toggle("on", on);
+    if(on){
+      // afficher le split éditeur | lecture ; masquer le PDF
+      if(right.style.display === "none") applyPdfVisible(true);
+      splitBtn.classList.remove("on");
+      renderRead();
+    } else {
+      right.classList.remove("reading");
+    }
+    if(cm) setTimeout(()=>cm.refresh(), 60);
+  }
+  readBtn.onclick = () => setRead(!readOn);
+
+  // ===== mode Visuel : CM6 éditable (source décorée) — CM5 reste le pivot =====
+  right.insertAdjacentHTML("beforeend", '<div id="texvis"></div>');
+  const visBtn = document.createElement("button");
+  visBtn.id = "visBtn"; visBtn.title = "Vue Visuel — édite la source rendue (math, gras, todos), façon Overleaf";
+  visBtn.textContent = "Visuel";
+  readBtn.insertAdjacentElement("afterend", visBtn);
+  // Split/Lecture/Visuel = un contrôle segmenté (ce sont des modes exclusifs)
+  const seg = document.createElement("span"); seg.className = "modeseg";
+  splitBtn.parentNode.insertBefore(seg, splitBtn);
+  seg.appendChild(splitBtn); seg.appendChild(readBtn); seg.appendChild(visBtn);
+  let visOn = false, visEd = null, visSyncT = null, visSyncing = false;
+  function setVis(on){
+    visOn = on;
+    right.classList.toggle("visual", on);
+    visBtn.classList.toggle("on", on);
+    localStorage.setItem("texVisMode", on ? "1" : "0");
+    if(on){
+      if(readOn) setRead(false);
+      if(right.style.display === "none") applyPdfVisible(true);
+      // plein panneau : cacher l’éditeur code (CM5 reste le pivot caché)
+      document.getElementById("left").style.display = "none";
+      if(!visEd){
+        visEd = TexVisual.create(document.getElementById("texvis"), cm.getValue(), {
+          onChange: (v) => {
+            clearTimeout(visSyncT);
+            visSyncT = setTimeout(() => {
+              visSyncing = true; cm.setValue(v); visSyncing = false;
+              // setValue est exclu du handler dirty (origin) → marquer ici
+              dirty = true; ddot.style.display = "inline"; setState("dirty", "modified");
+            }, 250);
+          },
+        });
+      } else {
+        visEd.setValue(cm.getValue());
+      }
+    } else {
+      document.getElementById("left").style.display = "flex";
+      if(cm) setTimeout(() => cm.refresh(), 60);
+    }
+  }
+  visBtn.onclick = () => setVis(!visOn);
+  splitBtn.addEventListener("click", () => { if(visOn) setVis(false); });
+  document.getElementById("popPdf")?.addEventListener("click", () => { if(visOn) setVis(false); });
+  readBtn.addEventListener("click", () => { if(visOn && readOn) { right.classList.remove("visual"); visBtn.classList.remove("on"); visOn=false; } });
+  // sortir de Lecture si on repasse au PDF
+  splitBtn.addEventListener("click", () => { if(readOn) setRead(false); });
+  document.getElementById("popPdf")?.addEventListener("click", () => { if(readOn) setRead(false); });
+  // mise à jour en direct pendant la frappe — cm est créé dans load() (async),
+  // on attend qu'il existe avant de brancher le listener + restaurer le mode
+  (function waitCm(){
+    if(cm){ cm.on("change", scheduleRead);
+      if(localStorage.getItem("texReadMode") === "1") setRead(true);
+    } else setTimeout(waitCm, 100);
+  })();
+  // clic sur un bloc rendu → saute à la ligne source dans l'éditeur
+  readEl.addEventListener("click", (e) => {
+    const el = e.target.closest("[data-line]");
+    if(!el) return;
+    const ln = parseInt(el.getAttribute("data-line"), 10) - 1;
+    if(isNaN(ln)) return;
+    cm.setCursor({line: ln, ch: 0});
+    cm.focus();
+    cm.scrollIntoView({line: ln, ch: 0}, 100);
+  });
+  // persister le mode à chaque bascule
+  const _origSetRead = setRead;
+  setRead = (on)=>{ localStorage.setItem("texReadMode", on?"1":"0"); _origSetRead(on); };
+}
+
+function setZoom(z){
+  zoom = Math.max(0.4, Math.min(3, z));
+  localStorage.setItem("texZoom", zoom);
+  loadPdf();
+}
+document.getElementById("zoomIn").onclick = () => setZoom(zoom * 1.2);
+document.getElementById("zoomOut").onclick = () => setZoom(zoom / 1.2);
+document.getElementById("zoomFit").onclick = () => setZoom(1);
+let _rzT = null, _lastW = 0;
+new ResizeObserver(() => {
+  clearTimeout(_rzT);
+  _rzT = setTimeout(() => {
+    const w = rightEl.clientWidth;
+    if(pdfDoc && Math.abs(w - _lastW) > 8){ _lastW = w; loadPdf(); }
+  }, 500);
+}).observe(rightEl);
+document.getElementById("popPdf").onclick = () => {
+  // synctex-aware PDF tab (same studio in mode=pdf; BroadcastChannel links the two)
+  const __pdfUrl = "/.fig_thumbs/latex_studio.html?path=" + encodeURIComponent(path) + "&mode=pdf";
+  const __pdfTitle = (path.split("/").pop() || "PDF") + " — PDF";
+  let __nonce = null; try{ __nonce = sessionStorage.getItem("atelier_nonce"); }catch(e){}
+  if(__nonce){
+    // embarqué dans Atelier Studio : ouvrir dans un onglet du panneau
+    __atelierPost({type:'atelier-open-tab', url: __pdfUrl, title: __pdfTitle});
+  } else if(window.parent !== window){
+    // embarqué dans la galerie (onglets internes) : demander un onglet au shell
+    try{ window.parent.postMessage({type:'gallery-open-tab', url: __pdfUrl, title: __pdfTitle}, '*'); }catch(e){}
+  } else {
+    window.open(__pdfUrl, "_blank");
+  }
+  applyPdfVisible(false);
+};
+if(!isPdfMode && localStorage.getItem("texPdfVisible") === "0") applyPdfVisible(false);
+document.addEventListener("keydown", e => {
+  if(e.key === "Escape"){
+    if(cm) selCancel();
+    return;
+  }
+  if((e.metaKey || e.ctrlKey) && e.key === "s" && cm){ e.preventDefault(); save(); }
+  if((e.metaKey || e.ctrlKey) && e.key === "b" && cm && IS_TEX){ e.preventDefault(); compile(); }
+  if((e.metaKey || e.ctrlKey) && e.key === "j" && cm){ e.preventDefault(); synctexView(); }
+});
+
+// L'agent modifie le .tex sur le disque : buffer propre (ou dirty cosmétique
+// aux blancs près) → reload ; dirty réel → fusion trois-voies. En conflit on
+// versionne quand même l'écriture agent pour que la timeline grossisse.
+let __mergeConflictAt = 0;
+function __effectivelyClean(){
+  if(!dirty) return true;
+  if(typeof lastSavedText !== "string" || !cm) return false;
+  return __dv.isEquivalent(cm.getValue(), lastSavedText);
+}
+setInterval(async () => {
+  if(!cm) return;
+  // vue historique du comparateur (± timeline) : le buffer affiché n'est pas le
+  // vrai — ne jamais recharger le disque par-dessus (restauré à la sortie)
+  if(__dv && __dv.isBusy && __dv.isBusy()) return;
+  try{
+    const codeUrl = "/code?path=" + encodeURIComponent(path);
+    const r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api(codeUrl):codeUrl);
+    const j = await r.json();
+    if(!(j.mtime && Math.abs(j.mtime - diskMtime) > 0.001)) return;
+    const diskText = j.text;
+    const cur = cm.getCursor(), s = cm.getScrollInfo();
+    if(__effectivelyClean()){
+      diskMtime = j.mtime;
+      const before = (typeof lastSavedText === "string") ? lastSavedText : cm.getValue();
+      if(before === diskText && cm.getValue() === diskText){ lastSavedText = diskText; dirty = false; ddot.style.display = "none"; return; }
+      cm.setValue(diskText); cm.setCursor(cur); cm.scrollTo(s.left, s.top);
+      dirty = false; ddot.style.display = "none";
+      setState("ok", "reloaded (modified on disk)");
+      if(typeof diffPush === "function") diffPush(before, diskText, {source:"external-reload", status:"applied"});
+      lastSavedText = diskText;
+      return;
+    }
+    // fusion trois-voies : appliquer le patch base→disque sur mon buffer
+    const base = (typeof lastSavedText === "string") ? lastSavedText : null;
+    const merged = base === null ? false
+      : window.Diff && Diff.applyPatch(cm.getValue(), Diff.structuredPatch("a", "b", base, diskText, "", ""), {fuzzFactor: 2});
+    if(merged === false || typeof merged !== "string"){
+      if(j.mtime !== __mergeConflictAt){
+        __mergeConflictAt = j.mtime;
+        if(base != null && typeof diffPush === "function" && base !== diskText) diffPush(base, diskText, {source:"external-conflict", status:"pending-conflict"});
+        setState("err", "l'agent a modifié le fichier et tes modifs non sauvegardées se superposent — ⌘S affichera le conflit · timeline : nouvelle intervention enregistrée");
+      }
+      return;
+    }
+    diskMtime = j.mtime;
+    const beforePush = base != null ? base : cm.getValue();
+    cm.setValue(merged); cm.setCursor(cur); cm.scrollTo(s.left, s.top);
+    dirty = true; ddot.style.display = "inline";
+    setState("ok", "modifs de l'agent fusionnées avec les tiennes (non sauvegardées)");
+    if(typeof diffPush === "function") diffPush(beforePush, diskText, {source:"external-merge", status:"applied"});
+    lastSavedText = diskText;
+  }catch(e){}
+}, 2000);
+
+if(path && isPdfMode){
+  document.body.classList.add("pdfmode");
+  setState("hint", "clic dans le PDF → ligne source dans l'éditeur");
+  // initial loadPdf is triggered by the /texroot resolution above
+} else if(path) load();
+else {
+  setState("ok", "choose a .tex file");
+  pickerShow("");
+}
+
+
+// recent files (shared between studio and editor via localStorage)
+function recentsGet(){ try{return JSON.parse(localStorage.getItem("studioRecents")||"[]")}catch(e){return []} }
+function recentsAdd(p){
+  let r = recentsGet().filter(x => x !== p);
+  r.unshift(p); r = r.slice(0, 10);
+  localStorage.setItem("studioRecents", JSON.stringify(r));
+}
+function openTarget(target){
+  const page = target.endsWith(".tex") ? "latex_studio.html" : "code_editor.html";
+  location.href = "/.fig_thumbs/" + page + "?path=" + encodeURIComponent(target);
+}
+// --- mini file explorer (Open button) ---
+const EDITABLE = /\.(tex|sty|bib|py|r|R|md|jl|sh|bash|txt|csv|json|yaml|yml|toml)$/;
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+async function pickerShow(dir){
+  const lsUrl = "/ls?dir=" + encodeURIComponent(dir || (path ? path.replace(/\/[^/]*$/, "") : ""));
+  const r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api(lsUrl):lsUrl);
+  const j = await r.json();
+  if(j.error) return;
+  document.getElementById("picker").classList.add("show");
+  document.getElementById("pickerPath").textContent = j.path.replace(/^\/Users\/[^/]+/, "~");
+  const list = document.getElementById("pickerList");
+  list.innerHTML = "";
+  const mk = (label, cls, fn) => {
+    const d = document.createElement("div");
+    d.innerHTML = label; d.className = cls; d.onclick = fn;
+    list.appendChild(d);
+  };
+  const rec = recentsGet().filter(p => p !== path);
+  if(rec.length){
+    rec.forEach(p => mk("&#128337; " + esc(p.split("/").pop()) +
+      ' <span style="color:var(--muted);font-size:11px">' + esc(p.replace(/^\/Users\/[^/]+\/Documents\//, "").replace(/\/[^/]*$/, "")) + "</span>",
+      "", () => openTarget(p)));
+    const sep = document.createElement("div");
+    sep.style.cssText = "border-bottom:1px solid var(--border);margin:4px 0;padding:0;height:1px;cursor:default";
+    list.appendChild(sep);
+  }
+  if(j.parent) mk("&#8617; ..", "d", () => pickerShow(j.parent));
+  j.items.filter(i => i.dir).forEach(i => mk("&#128193; " + esc(i.name), "d", () => pickerShow(j.path + "/" + i.name)));
+  j.items.filter(i => !i.dir && EDITABLE.test(i.name)).forEach(i =>
+    mk(esc(i.name), "", () => openTarget(j.path + "/" + i.name)));
+}
+document.getElementById("picker").onclick = e => { if(e.target.id === "picker") e.target.classList.remove("show"); };
+document.addEventListener("keydown", e => { if(e.key === "Escape") document.getElementById("picker").classList.remove("show"); });
+
+document.getElementById("openFile").onclick = () => pickerShow();
+
+// ---- diff de versions (modifications de l'agent) : ± vN + ‹ › + Rétablir ----
+// ---- historique de versions + comparaison in-editor : module partagé ----
+// (assets/diff_versions.js — utilisé aussi par code_editor.html ; persiste côté
+// serveur dans .fig_thumbs/dv_versions/ et intègre git : pseudo-version HEAD,
+// gouttière des changements, Comparer/Rétablir depuis l'historique des commits)
+const __dv = DiffVersions({
+  getCm: () => cm,
+  path,
+  // Secondary channel: never overwrite "✓ compiled" / save / conflict
+  notify: (m) => setStateSoft("hint", m),
+  els: {
+    group: document.getElementById("diffGrp"),
+    tag: document.getElementById("diffTag"),
+    prev: document.getElementById("diffPrev"),
+    next: document.getElementById("diffNext"),
+    restore: document.getElementById("diffRestore"),
+  },
+  restoreText: async (text) => {
+    const r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/codesave"):"/codesave", {method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({path, text, mtime: diskMtime})});
+    const j = await r.json();
+    if(j.error) return false;
+    diskMtime = j.mtime; cm.setValue(text); dirty = false; lastSavedText = text;
+    ddot.style.display = "none"; setState("ok", "version restaur\u00e9e");
+    return true;
+  },
+});
+const diffPush = (before, after, meta) => __dv.push(before, after, meta);
+// Add to chat sur sélection DANS le panneau diff (mode Studio)
+if(window.self !== window.top){
+  const __fn = document.getElementById("fname"); if(__fn) __fn.style.display = "none"; // nom déjà dans l onglet Studio
+  const dPill = document.createElement("button");
+  dPill.innerHTML = '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" style="vertical-align:-2px"><path d="M14 8c0 3-2.7 5.2-6 5.2-.8 0-1.6-.1-2.3-.4L2.5 14l1-2.6C2.6 10.5 2 9.3 2 8c0-3 2.7-5.2 6-5.2S14 5 14 8z"/></svg>&nbsp; Add to chat';
+  dPill.style.cssText = "position:fixed;z-index:9999;display:none;background:#2c313a;color:#dbdfe5;"
+    + "border:1px solid #3a414d;border-radius:999px;padding:7px 14px;font-size:13px;cursor:pointer;"
+    + "box-shadow:0 6px 18px rgba(0,0,0,.5);font-family:var(--ui-font)";
+  document.body.appendChild(dPill);
+  let dSel = "";
+  dPill.addEventListener("mousedown", (e) => {
+    e.preventDefault(); e.stopPropagation();
+    if(!dSel) return;
+    fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/quote"):"/quote", {method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({rel: path, page: "", text: dSel, comment: "", direct: true, embed: true})})
+      .then(r => r.json())
+      .then(j => { if(j && j.message) __atelierPost({type:"atelier-add-to-chat", text:j.message}); })
+      .catch(() => {});
+    dPill.style.display = "none";
+    try{ window.getSelection().removeAllRanges(); }catch(err){}
+  });
+  document.getElementById("left").addEventListener("mouseup", () => {
+    setTimeout(() => {
+      const sel = window.getSelection();
+      const t = sel ? String(sel).trim() : "";
+      if(!t || !sel || sel.rangeCount === 0){ dPill.style.display = "none"; dSel = ""; return; }
+      dSel = t;
+      const rect = sel.getRangeAt(0).getBoundingClientRect();
+      dPill.style.left = Math.max(8, rect.left + rect.width/2 - 55) + "px";
+      dPill.style.top = Math.max(8, rect.top - 42) + "px";
+      dPill.style.display = "block";
+    }, 0);
+  });
+}
+// ===== option B : status bar, menu ⋯, lint ruff =====
+(function(){
+  const sbMode = document.getElementById("sbMode");
+  const sbWrap = document.getElementById("sbWrap");
+  const sbSaved = document.getElementById("sbSaved");
+  const sbLint = document.getElementById("sbLint");
+  const lintPane = document.getElementById("lintPane");
+  const morePop = document.getElementById("morePop");
+  const moreBtn = document.getElementById("moreBtn");
+  if (!sbMode) return;
+  sbMode.textContent = ({stex:"LaTeX", python:"Python", r:"R", markdown:"Markdown",
+    julia:"Julia", shell:"Shell"})[typeof __CM_MODE === "string" ? __CM_MODE : "javascript"]
+    ?? (__EXT || "").toUpperCase() ?? "";
+  const wrapMenu = document.getElementById("wrapMenu");
+  const wrapMenuInput = document.getElementById("wrapMenuInput");
+  function wrapLabel(){
+    const v = localStorage.getItem("cmWrap") || "off";
+    return "Wrap: " + (v === "win" ? "window" : v);
+  }
+  function refreshWrap(){
+    sbWrap.textContent = wrapLabel();
+    const mv = document.getElementById("moreWrapVal");
+    if (mv) mv.textContent = wrapLabel().replace("Wrap: ", "");
+    const cur = localStorage.getItem("cmWrap") || "off";
+    wrapMenu.querySelectorAll(".wm-it").forEach(it => it.classList.toggle("on", it.dataset.wrap === cur));
+  }
+  function setWrap(v){
+    const sel = document.getElementById("wrapSel");
+    if (sel && sel.querySelector('option[value="' + v + '"]')) { sel.value = v; sel.onchange(); }
+    else applyWrap(v);   // arbitrary custom column: wrapSel has no matching <option>
+    refreshWrap();
+  }
+  function closeWrapMenu(){ wrapMenu.style.display = "none"; }
+  function openWrapMenu(){
+    const r = sbWrap.getBoundingClientRect();
+    wrapMenu.style.left = r.left + "px";
+    wrapMenu.style.bottom = "";
+    wrapMenu.style.top = (r.bottom + 6) + "px";
+    wrapMenu.style.display = "block";
+    const cur = localStorage.getItem("cmWrap") || "";
+    wrapMenuInput.value = /^\d+$/.test(cur) && !["50","60","70","80","90","100","120"].includes(cur) ? cur : "";
+  }
+  refreshWrap();
+  sbWrap.onclick = (e) => {
+    e.stopPropagation();
+    if (wrapMenu.style.display === "block") { closeWrapMenu(); return; }
+    openWrapMenu();
+  };
+  wrapMenu.onclick = (e) => {
+    e.stopPropagation();
+    const v = e.target.closest(".wm-it")?.dataset.wrap;
+    if (v){ setWrap(v); closeWrapMenu(); }
+  };
+  function commitWrapMenuInput(){
+    const n = parseInt(wrapMenuInput.value, 10);
+    if (n > 0){ setWrap(String(n)); closeWrapMenu(); }
+  }
+  wrapMenuInput.addEventListener("keydown", e => {
+    e.stopPropagation();
+    if (e.key === "Enter") commitWrapMenuInput();
+    else if (e.key === "Escape") closeWrapMenu();
+  });
+  wrapMenuInput.addEventListener("click", e => e.stopPropagation());
+  document.addEventListener("click", closeWrapMenu);
+  // heure de sauvegarde (hook posé dans saveNow)
+  window.__onSaved = function(){
+    sbSaved.textContent = "sauvegardé " + new Date().toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"});
+    runLint();
+  };
+  // menu ⋯
+  moreBtn.onclick = (e) => {
+    e.stopPropagation();
+    morePop.style.display = morePop.style.display === "none" ? "block" : "none";
+    refreshWrap();
+  };
+  document.addEventListener("click", () => { morePop.style.display = "none"; });
+  morePop.onclick = (e) => {
+    e.stopPropagation();
+    const act = e.target.closest("[data-act]")?.dataset.act;
+    if (act === "save") document.getElementById("saveBtn").click();
+    if (act === "open") document.getElementById("openFile").click();
+    if (act === "rewrap") document.getElementById("rewrapBtn").click();
+    if (act === "help") document.getElementById("helpBtn").click();
+    if (act === "wrap") { sbWrap.onclick(e); return; }
+    if (act !== "wrap") morePop.style.display = "none";
+  };
+  const findBtn = document.getElementById("findBtn");
+  if (findBtn) findBtn.onclick = () => { if (window.cm) cm.execCommand("findPersistent"); };
+  // ---- lint ruff (.py, au save) ----
+  let lintMarks = [];
+  async function runLint(){
+    if (__EXT !== "py" || !window.cm) return;
+    try {
+      const lintUrl = "/lint?path=" + encodeURIComponent(path);
+      const r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api(lintUrl):lintUrl);
+      const j = await r.json();
+      lintMarks.forEach((m) => m.clear && m.clear());
+      lintMarks = [];
+      cm.clearGutter("CodeMirror-linenumbers");
+      if (!j.available) { sbLint.style.display = "none"; return; }
+      const diags = j.diagnostics || [];
+      sbLint.style.display = "inline";
+      sbLint.className = diags.length ? "err" : "ok";
+      sbLint.textContent = diags.length ? ("\u2717 " + diags.length + " ruff") : "\u2713 ruff";
+      lintPane.innerHTML = "";
+      for (const d of diags) {
+        const line = Math.max(0, (d.row || 1) - 1);
+        lintMarks.push(cm.markText({line, ch: 0}, {line, ch: cm.getLine(line)?.length ?? 0},
+          {className: "cm-lint-line", title: d.code + " " + d.message}));
+        const row = document.createElement("div");
+        row.innerHTML = '<span class="lc">' + d.row + '</span>' + d.code + " " + d.message;
+        row.onclick = () => { cm.setCursor({line, ch: 0}); cm.focus(); };
+        lintPane.appendChild(row);
+      }
+      if (!diags.length) lintPane.style.display = "none";
+    } catch {}
+  }
+  sbLint.onclick = () => {
+    lintPane.style.display = lintPane.style.display === "none" ? "block" : "none";
+  };
+  setTimeout(runLint, 800);
+})();
+</script>
+</body>
+</html>
