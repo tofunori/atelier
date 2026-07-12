@@ -21,13 +21,10 @@ fn free_port() -> u16 {
 
 fn http(port: u16, method: &str, path: &str, body: Option<&str>) -> (u16, String) {
     let mut stream = TcpStream::connect(("127.0.0.1", port)).unwrap();
-    stream
-        .set_read_timeout(Some(Duration::from_secs(10)))
-        .ok();
+    stream.set_read_timeout(Some(Duration::from_secs(10))).ok();
     let body_bytes = body.unwrap_or("").as_bytes();
-    let mut req = format!(
-        "{method} {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: close\r\n"
-    );
+    let mut req =
+        format!("{method} {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: close\r\n");
     if body.is_some() {
         req.push_str(&format!(
             "Content-Type: application/json\r\nContent-Length: {}\r\n",
@@ -73,7 +70,11 @@ fn start_server() -> Server {
         Instant::now().elapsed().as_nanos()
     ));
     fs::create_dir_all(&root).unwrap();
-    fs::write(root.join("tiny.png"), [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).unwrap();
+    fs::write(
+        root.join("tiny.png"),
+        [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a],
+    )
+    .unwrap();
     fs::write(root.join("script.py"), b"print('fixture')\n").unwrap();
     fs::write(root.join("notes.md"), b"# notes\n").unwrap();
     // Minimal gallery artefacts
@@ -94,7 +95,10 @@ fn start_server() -> Server {
     let binary = repo
         .join("rust/target/debug/atelier-server")
         .canonicalize()
-        .or_else(|_| repo.join("rust/target/release/atelier-server").canonicalize())
+        .or_else(|_| {
+            repo.join("rust/target/release/atelier-server")
+                .canonicalize()
+        })
         .expect("build atelier-server first");
 
     let port = free_port();
@@ -183,5 +187,8 @@ fn rescan_uses_rust_builder() {
     // Ensure assets available so rebuild succeeds
     let (st, body) = http(srv.port, "POST", "/rescan", Some("{}"));
     assert_eq!(st, 200, "{body}");
-    assert!(body.contains("\"ok\":true") || body.contains("\"ok\": true"), "{body}");
+    assert!(
+        body.contains("\"ok\":true") || body.contains("\"ok\": true"),
+        "{body}"
+    );
 }

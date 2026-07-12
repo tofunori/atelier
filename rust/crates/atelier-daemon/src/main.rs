@@ -74,9 +74,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     if let Some(assets) = args.assets {
         config.assets_dir = Some(assets);
     }
-    config.validate().map_err(|error| -> Box<dyn std::error::Error + Send + Sync> {
-        error.into()
-    })?;
+    config
+        .validate()
+        .map_err(|error| -> Box<dyn std::error::Error + Send + Sync> { error.into() })?;
 
     tracing_subscriber::fmt()
         .with_env_filter(

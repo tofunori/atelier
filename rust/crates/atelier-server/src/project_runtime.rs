@@ -1,11 +1,6 @@
 //! Per-project runtime state shared by legacy mono-server and multi-project daemon.
 
-use crate::{
-    agent::AgentStore,
-    gallery::EventStore,
-    workspace::BoardQueue,
-    zotero::ZoteroCache,
-};
+use crate::{agent::AgentStore, gallery::EventStore, workspace::BoardQueue, zotero::ZoteroCache};
 use atelier_core::{WatcherStatus, artifact_snapshot};
 use std::{
     path::{Path, PathBuf},

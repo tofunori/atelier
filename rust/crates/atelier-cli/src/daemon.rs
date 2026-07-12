@@ -71,7 +71,9 @@ fn which_or_sibling(name: &str) -> Result<PathBuf, String> {
         .output()
         .map_err(|e| e.to_string())?;
     if output.status.success() {
-        return Ok(PathBuf::from(String::from_utf8_lossy(&output.stdout).trim()));
+        return Ok(PathBuf::from(
+            String::from_utf8_lossy(&output.stdout).trim(),
+        ));
     }
     Err(format!("{name} not found"))
 }
@@ -79,7 +81,10 @@ fn which_or_sibling(name: &str) -> Result<PathBuf, String> {
 fn render_plist(bin: &Path, state: &Path, assets: &Path, logs: &Path) -> String {
     let template = include_str!("../../../../packaging/io.atelier.daemon.plist");
     template
-        .replace("__ATELIER_BIN__", bin.parent().unwrap_or(bin).to_string_lossy().as_ref())
+        .replace(
+            "__ATELIER_BIN__",
+            bin.parent().unwrap_or(bin).to_string_lossy().as_ref(),
+        )
         .replace("__ATELIER_STATE__", state.to_string_lossy().as_ref())
         .replace("__ATELIER_ASSETS__", assets.to_string_lossy().as_ref())
         .replace("__ATELIER_LOGS__", logs.to_string_lossy().as_ref())
@@ -178,7 +183,7 @@ pub fn start() -> Result<(), String> {
 
 pub fn stop() -> Result<(), String> {
     // Prefer clean shutdown via control socket (SuccessfulExit=false keeps it down).
-    if let Ok(_) = control_client::call("daemon.shutdown", json!({"reason": "cli-stop"})) {
+    if control_client::call("daemon.shutdown", json!({"reason": "cli-stop"})).is_ok() {
         println!("{}", json!({"ok": true, "stopped": true, "via": "control"}));
         return Ok(());
     }
@@ -209,9 +214,8 @@ pub fn status(as_json: bool) -> Result<(), String> {
         Ok(value) => json!({"ok": true, "running": true, "health": value}),
         Err(error) => json!({"ok": false, "running": false, "error": error}),
     };
-    if as_json || true {
-        println!("{print}");
-    }
+    let _ = as_json;
+    println!("{print}");
     Ok(())
 }
 

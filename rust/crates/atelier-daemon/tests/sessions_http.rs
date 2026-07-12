@@ -33,16 +33,12 @@ fn free_port() -> u16 {
         .port()
 }
 
-
 fn short_state_dir(prefix: &str) -> PathBuf {
     // Unix domain sockets on macOS have a ~104 byte path limit (SUN_LEN).
     use std::sync::atomic::{AtomicU64, Ordering};
     static N: AtomicU64 = AtomicU64::new(0);
     let n = N.fetch_add(1, Ordering::SeqCst);
-    let dir = std::env::temp_dir().join(format!(
-        "{prefix}{}-{n}",
-        std::process::id() % 10_000
-    ));
+    let dir = std::env::temp_dir().join(format!("{prefix}{}-{n}", std::process::id() % 10_000));
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).unwrap();
     dir
@@ -60,7 +56,7 @@ fn start_daemon() -> Daemon {
     let port = free_port();
     let state_dir = short_state_dir("ad");
     fs::create_dir_all(&state_dir).unwrap();
-    let child = Command::new(binary)
+    let mut child = Command::new(binary)
         .args([
             "--host",
             "127.0.0.1",
@@ -95,6 +91,8 @@ fn start_daemon() -> Daemon {
         }
         thread::sleep(Duration::from_millis(40));
     }
+    let _ = child.kill();
+    let _ = child.wait();
     panic!("daemon not ready");
 }
 
@@ -105,9 +103,11 @@ fn http_raw(
     cookie: Option<&str>,
     extra_headers: Option<&str>,
 ) -> Result<String, String> {
-    let mut stream = std::net::TcpStream::connect(("127.0.0.1", port)).map_err(|e| e.to_string())?;
+    let mut stream =
+        std::net::TcpStream::connect(("127.0.0.1", port)).map_err(|e| e.to_string())?;
     stream.set_read_timeout(Some(Duration::from_secs(3))).ok();
-    let mut req = format!("{method} {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: close\r\n");
+    let mut req =
+        format!("{method} {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: close\r\n");
     if let Some(cookie) = cookie {
         req.push_str(&format!("Cookie: {cookie}\r\n"));
     }
@@ -115,7 +115,9 @@ fn http_raw(
         req.push_str(extra);
     }
     req.push_str("\r\n");
-    stream.write_all(req.as_bytes()).map_err(|e| e.to_string())?;
+    stream
+        .write_all(req.as_bytes())
+        .map_err(|e| e.to_string())?;
     let mut out = String::new();
     stream.read_to_string(&mut out).map_err(|e| e.to_string())?;
     Ok(out)
@@ -164,20 +166,38 @@ fn open_ticket_sets_cookie_and_rejects_replay() {
     let ticket = open_url.rsplit('/').next().unwrap();
 
     // Without session: 401
-    let denied = http_raw(daemon.port, "GET", &format!("/p/{key}/notes/load"), None, None).unwrap();
-    assert!(denied.contains("401") || denied.contains("SESSION_INVALID"), "{denied}");
+    let denied = http_raw(
+        daemon.port,
+        "GET",
+        &format!("/p/{key}/notes/load"),
+        None,
+        None,
+    )
+    .unwrap();
+    assert!(
+        denied.contains("401") || denied.contains("SESSION_INVALID"),
+        "{denied}"
+    );
 
     // Consume ticket
     let consumed = http_raw(daemon.port, "GET", &format!("/open/{ticket}"), None, None).unwrap();
     let consumed_l = consumed.to_ascii_lowercase();
     assert!(
-        consumed_l.contains("302") || consumed_l.contains("307") || consumed_l.contains("location:"),
+        consumed_l.contains("302")
+            || consumed_l.contains("307")
+            || consumed_l.contains("location:"),
         "{consumed}"
     );
-    assert!(consumed_l.contains("set-cookie: atelier_session="), "{consumed}");
+    assert!(
+        consumed_l.contains("set-cookie: atelier_session="),
+        "{consumed}"
+    );
     let cookie_line = consumed
         .lines()
-        .find(|l| l.to_ascii_lowercase().starts_with("set-cookie: atelier_session="))
+        .find(|l| {
+            l.to_ascii_lowercase()
+                .starts_with("set-cookie: atelier_session=")
+        })
         .expect("set-cookie header");
     let session = cookie_line
         .split("atelier_session=")
@@ -201,7 +221,10 @@ fn open_ticket_sets_cookie_and_rejects_replay() {
 
     // Replay ticket fails
     let replay = http_raw(daemon.port, "GET", &format!("/open/{ticket}"), None, None).unwrap();
-    assert!(replay.contains("401") || replay.contains("SESSION_INVALID"), "{replay}");
+    assert!(
+        replay.contains("401") || replay.contains("SESSION_INVALID"),
+        "{replay}"
+    );
 
     // Cross-project cookie rejected
     let root_b = std::env::temp_dir().join(format!(
@@ -227,7 +250,10 @@ fn open_ticket_sets_cookie_and_rejects_replay() {
         None,
     )
     .unwrap();
-    assert!(cross.contains("401") || cross.contains("SESSION_INVALID"), "{cross}");
+    assert!(
+        cross.contains("401") || cross.contains("SESSION_INVALID"),
+        "{cross}"
+    );
 
     let _ = fs::remove_dir_all(root);
     let _ = fs::remove_dir_all(root_b);

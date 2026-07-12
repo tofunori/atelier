@@ -42,9 +42,7 @@ pub fn call(method: &str, params: Value) -> Result<Value, String> {
         .to_string();
     let mut stream =
         UnixStream::connect(&sock).map_err(|error| format!("daemon socket: {error}"))?;
-    stream
-        .set_read_timeout(Some(Duration::from_secs(10)))
-        .ok();
+    stream.set_read_timeout(Some(Duration::from_secs(10))).ok();
     let request = json!({
         "id": format!("cli-{}", std::process::id()),
         "protocol": PROTOCOL,

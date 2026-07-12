@@ -417,7 +417,6 @@ fn register(root: &str, label: Option<&str>, automatic: bool) -> Result<Value, S
     )
 }
 
-
 fn consumer_id() -> String {
     env::var("CODEX_THREAD_ID").unwrap_or_else(|_| format!("codex-{}", std::process::id()))
 }
@@ -431,12 +430,15 @@ fn call_daemon(name: &str, root: &str, args: &Value) -> Result<Value, String> {
                 &consumer,
                 args.get("label").and_then(Value::as_str),
             )?;
-            let key = opened.get("key").and_then(Value::as_str).unwrap_or_default();
-            let url = opened.get("url").and_then(Value::as_str).unwrap_or_default();
-            let open_url = opened
-                .get("openUrl")
+            let key = opened
+                .get("key")
                 .and_then(Value::as_str)
-                .unwrap_or(url);
+                .unwrap_or_default();
+            let url = opened
+                .get("url")
+                .and_then(Value::as_str)
+                .unwrap_or_default();
+            let open_url = opened.get("openUrl").and_then(Value::as_str).unwrap_or(url);
             let _ = daemon_client::call(
                 "consumer.register",
                 json!({
@@ -464,7 +466,11 @@ fn call_daemon(name: &str, root: &str, args: &Value) -> Result<Value, String> {
         }
         "atelier_connect" => {
             let consumer = consumer_id();
-            let opened = daemon_client::project_open(root, &consumer, args.get("label").and_then(Value::as_str))?;
+            let opened = daemon_client::project_open(
+                root,
+                &consumer,
+                args.get("label").and_then(Value::as_str),
+            )?;
             let key = opened.get("key").cloned().unwrap_or(json!(null));
             daemon_client::call(
                 "consumer.register",
@@ -534,14 +540,8 @@ fn call_daemon(name: &str, root: &str, args: &Value) -> Result<Value, String> {
                 .and_then(Value::as_str)
                 .unwrap_or_default()
                 .to_string();
-            let limit = args
-                .get("limit")
-                .and_then(Value::as_u64)
-                .unwrap_or(50);
-            daemon_client::call(
-                "annotation.bank",
-                json!({ "key": key, "limit": limit }),
-            )
+            let limit = args.get("limit").and_then(Value::as_u64).unwrap_or(50);
+            daemon_client::call("annotation.bank", json!({ "key": key, "limit": limit }))
         }
         "atelier_set_annotation_status" => {
             let key = daemon_client::call("project.register", json!({"root": root}))?
@@ -550,10 +550,7 @@ fn call_daemon(name: &str, root: &str, args: &Value) -> Result<Value, String> {
                 .unwrap_or_default()
                 .to_string();
             let ids = args.get("ids").cloned().unwrap_or(json!([]));
-            let status = args
-                .get("status")
-                .cloned()
-                .unwrap_or(json!("processing"));
+            let status = args.get("status").cloned().unwrap_or(json!("processing"));
             let result = args.get("result").cloned().unwrap_or(json!(""));
             let error = args.get("error").cloned().unwrap_or(json!(""));
             daemon_client::call(

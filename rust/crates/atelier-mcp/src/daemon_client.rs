@@ -55,12 +55,8 @@ pub fn call(method: &str, params: Value) -> Result<Value, String> {
             sock.display()
         )
     })?;
-    stream
-        .set_read_timeout(Some(Duration::from_secs(10)))
-        .ok();
-    stream
-        .set_write_timeout(Some(Duration::from_secs(10)))
-        .ok();
+    stream.set_read_timeout(Some(Duration::from_secs(10))).ok();
+    stream.set_write_timeout(Some(Duration::from_secs(10))).ok();
     let request = json!({
         "id": format!("mcp-{}", std::process::id()),
         "protocol": PROTOCOL,
@@ -78,8 +74,8 @@ pub fn call(method: &str, params: Value) -> Result<Value, String> {
     reader
         .read_line(&mut response)
         .map_err(|error| error.to_string())?;
-    let value: Value =
-        serde_json::from_str(&response).map_err(|error| format!("invalid control response: {error}"))?;
+    let value: Value = serde_json::from_str(&response)
+        .map_err(|error| format!("invalid control response: {error}"))?;
     if value.get("ok") == Some(&json!(true)) {
         Ok(value.get("result").cloned().unwrap_or(json!({})))
     } else {
@@ -102,10 +98,7 @@ pub fn call(method: &str, params: Value) -> Result<Value, String> {
 }
 
 pub fn project_open(root: &str, consumer: &str, label: Option<&str>) -> Result<Value, String> {
-    let _ = call(
-        "project.register",
-        json!({ "root": root }),
-    )?;
+    let _ = call("project.register", json!({ "root": root }))?;
     let mut params = json!({
         "root": root,
         "consumer": consumer,

@@ -1,11 +1,7 @@
 //! In-memory multi-project runtime host.
 #![allow(dead_code)]
 
-use crate::{
-    events::ProjectEventBus,
-    lifecycle::ProjectLifecycle,
-    registry::ProjectRegistry,
-};
+use crate::{events::ProjectEventBus, lifecycle::ProjectLifecycle, registry::ProjectRegistry};
 use atelier_server::ProjectRuntime;
 use serde_json::{Value, json};
 use std::{

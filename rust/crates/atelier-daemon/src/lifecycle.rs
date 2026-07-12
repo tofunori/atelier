@@ -2,9 +2,10 @@
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub enum ProjectLifecycle {
+    #[default]
     RegisteredIdle,
     Starting,
     Active,
@@ -12,10 +13,4 @@ pub enum ProjectLifecycle {
     Suspended,
     Faulted,
     Removed,
-}
-
-impl Default for ProjectLifecycle {
-    fn default() -> Self {
-        Self::RegisteredIdle
-    }
 }

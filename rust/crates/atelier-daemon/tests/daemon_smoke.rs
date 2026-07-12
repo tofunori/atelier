@@ -32,16 +32,12 @@ fn free_port() -> u16 {
         .port()
 }
 
-
 fn short_state_dir(prefix: &str) -> PathBuf {
     // Unix domain sockets on macOS have a ~104 byte path limit (SUN_LEN).
     use std::sync::atomic::{AtomicU64, Ordering};
     static N: AtomicU64 = AtomicU64::new(0);
     let n = N.fetch_add(1, Ordering::SeqCst);
-    let dir = std::env::temp_dir().join(format!(
-        "{prefix}{}-{n}",
-        std::process::id() % 10_000
-    ));
+    let dir = std::env::temp_dir().join(format!("{prefix}{}-{n}", std::process::id() % 10_000));
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).unwrap();
     dir
@@ -66,7 +62,8 @@ fn start_daemon() -> Daemon {
         .arg(port.to_string())
         .arg("--state-dir")
         .arg(&state_dir)
-        .env("ATELIER_DAEMON_ALLOW_ANON", "1").arg("--log-level")
+        .env("ATELIER_DAEMON_ALLOW_ANON", "1")
+        .arg("--log-level")
         .arg("error")
         .stdout(Stdio::null())
         .stderr(Stdio::null())
@@ -86,16 +83,19 @@ fn start_daemon() -> Daemon {
         }
         thread::sleep(Duration::from_millis(50));
     }
-    panic!("daemon did not become ready on port {}", daemon.port);
+    let port = daemon.port;
+    drop(daemon);
+    panic!("daemon did not become ready on port {port}");
 }
 
 fn http_get(port: u16, path: &str) -> Result<String, String> {
-    let mut stream = std::net::TcpStream::connect(("127.0.0.1", port)).map_err(|e| e.to_string())?;
-    stream
-        .set_read_timeout(Some(Duration::from_secs(2)))
-        .ok();
+    let mut stream =
+        std::net::TcpStream::connect(("127.0.0.1", port)).map_err(|e| e.to_string())?;
+    stream.set_read_timeout(Some(Duration::from_secs(2))).ok();
     let req = format!("GET {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: close\r\n\r\n");
-    stream.write_all(req.as_bytes()).map_err(|e| e.to_string())?;
+    stream
+        .write_all(req.as_bytes())
+        .map_err(|e| e.to_string())?;
     let mut out = String::new();
     use std::io::Read;
     stream.read_to_string(&mut out).map_err(|e| e.to_string())?;
@@ -105,9 +105,7 @@ fn http_get(port: u16, path: &str) -> Result<String, String> {
 fn control_call(state_dir: &std::path::Path, method: &str, token: &str) -> serde_json::Value {
     let sock = state_dir.join("daemon.sock");
     let mut stream = UnixStream::connect(&sock).expect("connect control socket");
-    stream
-        .set_read_timeout(Some(Duration::from_secs(2)))
-        .ok();
+    stream.set_read_timeout(Some(Duration::from_secs(2))).ok();
     let req = serde_json::json!({
         "id": "1",
         "protocol": 1,

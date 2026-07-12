@@ -10,8 +10,7 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::{
-    fs,
-    io,
+    fs, io,
     path::Path,
     sync::{
         Arc,
@@ -263,9 +262,7 @@ async fn dispatch(request: ControlRequest, state: &ControlState) -> ControlRespo
                         .params
                         .get("root")
                         .and_then(Value::as_str)
-                        .and_then(|root| {
-                            atelier_core::project_key(std::path::Path::new(root)).ok()
-                        })
+                        .and_then(|root| atelier_core::project_key(std::path::Path::new(root)).ok())
                 })
             else {
                 return error_response(request.id, "INVALID_PARAMS", "key or root required");
@@ -290,7 +287,11 @@ async fn dispatch(request: ControlRequest, state: &ControlState) -> ControlRespo
                 Some(key) => key,
                 None => {
                     let Some(root) = request.params.get("root").and_then(Value::as_str) else {
-                        return error_response(request.id, "INVALID_PARAMS", "key or root required");
+                        return error_response(
+                            request.id,
+                            "INVALID_PARAMS",
+                            "key or root required",
+                        );
                     };
                     match state.registry.register(std::path::Path::new(root)).await {
                         Ok((key, _)) => key,
@@ -370,9 +371,14 @@ async fn dispatch(request: ControlRequest, state: &ControlState) -> ControlRespo
                 .get("automatic")
                 .and_then(Value::as_bool)
                 .or_else(|| {
-                    request.params.get("mode").and_then(Value::as_str).map(|mode| {
-                        mode.eq_ignore_ascii_case("automatic") || mode.eq_ignore_ascii_case("auto")
-                    })
+                    request
+                        .params
+                        .get("mode")
+                        .and_then(Value::as_str)
+                        .map(|mode| {
+                            mode.eq_ignore_ascii_case("automatic")
+                                || mode.eq_ignore_ascii_case("auto")
+                        })
                 })
                 .unwrap_or(false);
             match state.host.activate(key).await {
@@ -441,7 +447,7 @@ async fn dispatch(request: ControlRequest, state: &ControlState) -> ControlRespo
                                 })),
                                 error: None,
                             }
-                        },
+                        }
                         Err(message) => error_response(request.id, "ANNOTATION_FAILED", message),
                     }
                 }
@@ -513,7 +519,7 @@ async fn dispatch(request: ControlRequest, state: &ControlState) -> ControlRespo
                                 result: Some(json!({ "ok": true, "acked": count, "ids": ids })),
                                 error: None,
                             }
-                        },
+                        }
                         Err(message) => error_response(request.id, "ANNOTATION_FAILED", message),
                     }
                 }
@@ -552,11 +558,7 @@ async fn dispatch(request: ControlRequest, state: &ControlState) -> ControlRespo
                 .and_then(Value::as_str)
                 .unwrap_or("");
             if ids.is_empty() || status.is_empty() {
-                return error_response(
-                    request.id,
-                    "INVALID_PARAMS",
-                    "ids and status are required",
-                );
+                return error_response(request.id, "INVALID_PARAMS", "ids and status are required");
             }
             match state.host.activate(key).await {
                 Ok(runtime) => {
@@ -583,7 +585,7 @@ async fn dispatch(request: ControlRequest, state: &ControlState) -> ControlRespo
                                 })),
                                 error: None,
                             }
-                        },
+                        }
                         Err(message) => error_response(request.id, "ANNOTATION_FAILED", message),
                     }
                 }
@@ -643,7 +645,7 @@ async fn dispatch(request: ControlRequest, state: &ControlState) -> ControlRespo
                                 result: Some(event),
                                 error: None,
                             }
-                        },
+                        }
                         Err(message) => error_response(request.id, "ANNOTATION_FAILED", message),
                     }
                 }

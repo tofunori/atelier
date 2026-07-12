@@ -4,8 +4,7 @@ use atelier_core::{project_display_name, project_key};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
-    fs,
-    io,
+    fs, io,
     path::{Path, PathBuf},
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
@@ -57,10 +56,7 @@ impl ProjectRegistry {
                         file
                     }
                     Err(error) => {
-                        let corrupt = path.with_extension(format!(
-                            "corrupt-{}.json",
-                            now_secs()
-                        ));
+                        let corrupt = path.with_extension(format!("corrupt-{}.json", now_secs()));
                         let _ = fs::rename(&path, &corrupt);
                         tracing::error!(
                             error = %error,

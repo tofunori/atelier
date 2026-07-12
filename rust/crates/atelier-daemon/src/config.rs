@@ -117,10 +117,12 @@ impl DaemonConfig {
         self.state_dir.join("sessions.json")
     }
 
+    #[allow(dead_code)]
     pub fn daemon_json_path(&self) -> PathBuf {
         self.state_dir.join("daemon.json")
     }
 
+    #[allow(dead_code)]
     pub fn logs_dir(&self) -> PathBuf {
         self.state_dir.join("logs")
     }
@@ -252,8 +254,10 @@ mod tests {
 
     #[test]
     fn rejects_non_loopback_host() {
-        let mut cfg = DaemonConfig::default();
-        cfg.host = "0.0.0.0".into();
+        let cfg = DaemonConfig {
+            host: "0.0.0.0".into(),
+            ..Default::default()
+        };
         assert!(cfg.validate().unwrap_err().contains("loopback"));
     }
 

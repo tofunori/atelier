@@ -362,7 +362,10 @@ pub async fn get_quote() -> impl IntoResponse {
     (StatusCode::OK, Json(json!({"pending": pending}))).into_response()
 }
 
-pub async fn clear_quote(State(state): State<ProjectRuntime>, headers: HeaderMap) -> impl IntoResponse {
+pub async fn clear_quote(
+    State(state): State<ProjectRuntime>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
     if !request_allowed(&headers, &state) {
         return json_error(StatusCode::FORBIDDEN, "cross-origin blocked");
     }

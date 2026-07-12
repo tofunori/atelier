@@ -152,7 +152,10 @@ fn first_element_name(s: &str) -> Option<&str> {
 // ---------------------------------------------------------------------------
 
 /// `GET /ls?dir=` — listing non-dot entries, case-insensitive sort.
-pub async fn ls(State(state): State<ProjectRuntime>, Query(query): Query<LsQuery>) -> impl IntoResponse {
+pub async fn ls(
+    State(state): State<ProjectRuntime>,
+    Query(query): Query<LsQuery>,
+) -> impl IntoResponse {
     let requested = query.dir.as_deref().unwrap_or("");
     let dir = match safe_project_path(&state.root, requested) {
         Ok(path) => path,

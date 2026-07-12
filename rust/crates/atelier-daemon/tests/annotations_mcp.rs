@@ -38,10 +38,7 @@ fn free_port() -> u16 {
 fn short_state_dir(prefix: &str) -> PathBuf {
     static N: AtomicU64 = AtomicU64::new(0);
     let n = N.fetch_add(1, Ordering::SeqCst);
-    let dir = std::env::temp_dir().join(format!(
-        "{prefix}{}-{n}",
-        std::process::id() % 10_000
-    ));
+    let dir = std::env::temp_dir().join(format!("{prefix}{}-{n}", std::process::id() % 10_000));
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).unwrap();
     dir
@@ -58,7 +55,7 @@ fn start_daemon() -> Daemon {
         .unwrap();
     let port = free_port();
     let state_dir = short_state_dir("ann");
-    let child = Command::new(binary)
+    let mut child = Command::new(binary)
         .args([
             "--host",
             "127.0.0.1",
@@ -91,6 +88,8 @@ fn start_daemon() -> Daemon {
         }
         thread::sleep(Duration::from_millis(40));
     }
+    let _ = child.kill();
+    let _ = child.wait();
     panic!("daemon not ready");
 }
 
@@ -116,11 +115,7 @@ fn control(daemon: &Daemon, method: &str, params: serde_json::Value) -> serde_js
 fn make_project() -> PathBuf {
     static N: AtomicU64 = AtomicU64::new(0);
     let n = N.fetch_add(1, Ordering::SeqCst);
-    let root = std::env::temp_dir().join(format!(
-        "ann-proj-{}-{}",
-        std::process::id() % 10_000,
-        n
-    ));
+    let root = std::env::temp_dir().join(format!("ann-proj-{}-{}", std::process::id() % 10_000, n));
     fs::create_dir_all(&root).unwrap();
     fs::write(root.join("notes.md"), b"# notes\n").unwrap();
     fs::write(root.join("figures_index.html"), b"<html>x</html>\n").unwrap();
@@ -194,7 +189,9 @@ fn claim_ack_list_and_status_mutations() {
     assert_eq!(bank["ok"], true, "{bank}");
     let pending = bank["result"]["pending"].as_array().unwrap();
     assert!(
-        pending.iter().any(|item| item.get("id").and_then(|v| v.as_str()) == Some(id.as_str())),
+        pending
+            .iter()
+            .any(|item| item.get("id").and_then(|v| v.as_str()) == Some(id.as_str())),
         "pending missing {id}: {bank}"
     );
 

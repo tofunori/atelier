@@ -36,16 +36,12 @@ fn free_port() -> u16 {
         .port()
 }
 
-
 fn short_state_dir(prefix: &str) -> PathBuf {
     // Unix domain sockets on macOS have a ~104 byte path limit (SUN_LEN).
     use std::sync::atomic::{AtomicU64, Ordering};
     static N: AtomicU64 = AtomicU64::new(0);
     let n = N.fetch_add(1, Ordering::SeqCst);
-    let dir = std::env::temp_dir().join(format!(
-        "{prefix}{}-{n}",
-        std::process::id() % 10_000
-    ));
+    let dir = std::env::temp_dir().join(format!("{prefix}{}-{n}", std::process::id() % 10_000));
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).unwrap();
     dir
@@ -66,7 +62,7 @@ fn start_daemon() -> Daemon {
     let port = free_port();
     let state_dir = short_state_dir("ad");
     fs::create_dir_all(&state_dir).unwrap();
-    let child = Command::new(binary)
+    let mut child = Command::new(binary)
         .args([
             "--host",
             "127.0.0.1",
@@ -86,8 +82,9 @@ fn start_daemon() -> Daemon {
     while Instant::now() < deadline {
         let sock_ready = state_dir.join("daemon.sock").exists()
             && UnixStream::connect(state_dir.join("daemon.sock")).is_ok();
-        let http_ready =
-            http_get(port, "/healthz").map(|b| b.contains("\"ok\":true")).unwrap_or(false);
+        let http_ready = http_get(port, "/healthz")
+            .map(|b| b.contains("\"ok\":true"))
+            .unwrap_or(false);
         if sock_ready && http_ready {
             let token = fs::read_to_string(state_dir.join("daemon.token"))
                 .unwrap()
@@ -103,16 +100,19 @@ fn start_daemon() -> Daemon {
         }
         thread::sleep(Duration::from_millis(40));
     }
+    let _ = child.kill();
+    let _ = child.wait();
     panic!("daemon not ready");
 }
 
 fn http_get(port: u16, path: &str) -> Result<String, String> {
-    let mut stream = std::net::TcpStream::connect(("127.0.0.1", port)).map_err(|e| e.to_string())?;
+    let mut stream =
+        std::net::TcpStream::connect(("127.0.0.1", port)).map_err(|e| e.to_string())?;
     stream.set_read_timeout(Some(Duration::from_secs(3))).ok();
-    let req = format!(
-        "GET {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: close\r\n\r\n"
-    );
-    stream.write_all(req.as_bytes()).map_err(|e| e.to_string())?;
+    let req = format!("GET {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: close\r\n\r\n");
+    stream
+        .write_all(req.as_bytes())
+        .map_err(|e| e.to_string())?;
     let mut out = String::new();
     stream.read_to_string(&mut out).map_err(|e| e.to_string())?;
     Ok(out)
@@ -235,7 +235,10 @@ fn two_projects_are_isolated_on_same_port() {
     let deadline = Instant::now() + Duration::from_secs(5);
     let mut ready = false;
     while Instant::now() < deadline {
-        if http_get(port, "/healthz").map(|b| b.contains("\"ok\":true")).unwrap_or(false) {
+        if http_get(port, "/healthz")
+            .map(|b| b.contains("\"ok\":true"))
+            .unwrap_or(false)
+        {
             ready = true;
             break;
         }
@@ -282,7 +285,10 @@ fn two_projects_are_isolated_on_same_port() {
 fn unknown_project_key_is_404() {
     let daemon = start_daemon();
     let body = http_get(daemon.port, "/p/0123456789abcdef01234567/ping").unwrap();
-    assert!(body.contains("404") || body.contains("PROJECT_NOT_FOUND"), "{body}");
+    assert!(
+        body.contains("404") || body.contains("PROJECT_NOT_FOUND"),
+        "{body}"
+    );
 }
 
 #[allow(dead_code)]

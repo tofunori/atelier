@@ -76,10 +76,7 @@ async fn version(State(state): State<DaemonHttpState>) -> Json<Value> {
     }))
 }
 
-async fn open_ticket(
-    State(state): State<DaemonHttpState>,
-    Path(ticket): Path<String>,
-) -> Response {
+async fn open_ticket(State(state): State<DaemonHttpState>, Path(ticket): Path<String>) -> Response {
     match state.sessions.consume_ticket(&ticket).await {
         Ok((session, project_key, theme, native_fs)) => {
             let mut location = format!(
@@ -111,18 +108,15 @@ async fn open_ticket(
     }
 }
 
-async fn shared_asset(
-    State(state): State<DaemonHttpState>,
-    Path(path): Path<String>,
-) -> Response {
+async fn shared_asset(State(state): State<DaemonHttpState>, Path(path): Path<String>) -> Response {
     let Some(assets_dir) = state.config.assets_dir.as_ref() else {
         // Fallback: serve from ATELIER_ASSETS_DIR or sibling assets.
         let fallback = std::env::var_os("ATELIER_ASSETS_DIR")
             .map(std::path::PathBuf::from)
             .or_else(|| {
-                std::env::current_exe().ok().and_then(|exe| {
-                    exe.parent().map(|p| p.join("../share/atelier/assets"))
-                })
+                std::env::current_exe()
+                    .ok()
+                    .and_then(|exe| exe.parent().map(|p| p.join("../share/atelier/assets")))
             });
         let Some(root) = fallback else {
             return (StatusCode::NOT_FOUND, "assets not configured").into_response();
@@ -242,11 +236,10 @@ async fn inject_bootstrap_if_html(
         return Response::from_parts(parts, Body::empty());
     };
 
-    let looks_like_html = content_type.contains("text/html")
-        || {
-            let head = String::from_utf8_lossy(&bytes[..bytes.len().min(256)]).to_ascii_lowercase();
-            head.contains("<!doctype html") || head.contains("<html")
-        };
+    let looks_like_html = content_type.contains("text/html") || {
+        let head = String::from_utf8_lossy(&bytes[..bytes.len().min(256)]).to_ascii_lowercase();
+        head.contains("<!doctype html") || head.contains("<html")
+    };
 
     if !looks_like_html {
         return Response::from_parts(parts, Body::from(bytes));
@@ -309,15 +302,15 @@ fn inject_before_head_close(html: &str, injection: &str) -> String {
         out.push_str(&html[idx..]);
         return out;
     }
-    if let Some(idx) = lower.find("<body") {
-        if let Some(end) = lower[idx..].find('>') {
-            let insert_at = idx + end + 1;
-            let mut out = String::with_capacity(html.len() + injection.len());
-            out.push_str(&html[..insert_at]);
-            out.push_str(injection);
-            out.push_str(&html[insert_at..]);
-            return out;
-        }
+    if let Some(idx) = lower.find("<body")
+        && let Some(end) = lower[idx..].find('>')
+    {
+        let insert_at = idx + end + 1;
+        let mut out = String::with_capacity(html.len() + injection.len());
+        out.push_str(&html[..insert_at]);
+        out.push_str(injection);
+        out.push_str(&html[insert_at..]);
+        return out;
     }
     // No head/body markers: prepend so the page content is never lost.
     let mut out = String::with_capacity(html.len() + injection.len());
@@ -337,11 +330,7 @@ fn cookie_value(headers: &HeaderMap, name: &str) -> Option<String> {
     None
 }
 
-
-async fn project_events_sse(
-    State(state): State<DaemonHttpState>,
-    req: Request,
-) -> Response {
+async fn project_events_sse(State(state): State<DaemonHttpState>, req: Request) -> Response {
     use axum::response::sse::{Event, KeepAlive, Sse};
     use futures_util::stream::{self, StreamExt};
     use std::convert::Infallible;
@@ -458,7 +447,8 @@ fn rewrite_uri(original: &Uri, new_path: &str) -> Uri {
 }
 
 fn host_error(error: HostError) -> Response {
-    let status = StatusCode::from_u16(error.http_status()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+    let status =
+        StatusCode::from_u16(error.http_status()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
     (
         status,
         Json(json!({

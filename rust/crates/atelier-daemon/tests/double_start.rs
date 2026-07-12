@@ -3,7 +3,7 @@
 use std::{
     fs,
     io::{Read, Write},
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::{Child, Command, Stdio},
     sync::atomic::{AtomicU64, Ordering},
     thread,
@@ -21,10 +21,7 @@ fn free_port() -> u16 {
 fn short_state_dir(prefix: &str) -> PathBuf {
     static N: AtomicU64 = AtomicU64::new(0);
     let n = N.fetch_add(1, Ordering::SeqCst);
-    let dir = std::env::temp_dir().join(format!(
-        "{prefix}{}-{n}",
-        std::process::id() % 10_000
-    ));
+    let dir = std::env::temp_dir().join(format!("{prefix}{}-{n}", std::process::id() % 10_000));
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).unwrap();
     dir
@@ -37,7 +34,7 @@ fn binary() -> PathBuf {
         .unwrap()
 }
 
-fn start_daemon(port: u16, state_dir: &PathBuf) -> Child {
+fn start_daemon(port: u16, state_dir: &Path) -> Child {
     Command::new(binary())
         .args([
             "--host",
@@ -55,7 +52,7 @@ fn start_daemon(port: u16, state_dir: &PathBuf) -> Child {
         .unwrap()
 }
 
-fn wait_ready(port: u16, state_dir: &PathBuf) -> bool {
+fn wait_ready(port: u16, state_dir: &Path) -> bool {
     let deadline = Instant::now() + Duration::from_secs(5);
     while Instant::now() < deadline {
         if state_dir.join("daemon.sock").exists() && http_health(port) {
@@ -71,9 +68,8 @@ fn http_health(port: u16) -> bool {
         return false;
     };
     stream.set_read_timeout(Some(Duration::from_secs(1))).ok();
-    let req = format!(
-        "GET /healthz HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: close\r\n\r\n"
-    );
+    let req =
+        format!("GET /healthz HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: close\r\n\r\n");
     if stream.write_all(req.as_bytes()).is_err() {
         return false;
     }
@@ -82,7 +78,7 @@ fn http_health(port: u16) -> bool {
     out.contains("\"ok\":true")
 }
 
-fn control_health(state_dir: &PathBuf) -> bool {
+fn control_health(state_dir: &Path) -> bool {
     use std::io::{BufRead, BufReader};
     use std::os::unix::net::UnixStream;
     let token = match fs::read_to_string(state_dir.join("daemon.token")) {
@@ -126,9 +122,7 @@ fn second_start_does_not_break_first_control_socket() {
 
     // Second process: same state dir + same port must fail without damaging the first.
     let mut second = start_daemon(port, &state_dir);
-    let status = second
-        .wait_timeout()
-        .expect("second process should exit");
+    let status = second.wait_timeout().expect("second process should exit");
     assert!(
         !status.success(),
         "second daemon must fail when instance is live"

@@ -5,8 +5,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
     collections::BTreeMap,
-    fs,
-    io,
+    fs, io,
     path::{Path, PathBuf},
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
@@ -183,9 +182,7 @@ impl SessionStore {
         let hash = hash_token(raw_cookie);
         let sessions = self.sessions.read().await;
         match sessions.sessions.get(&hash) {
-            Some(record) => {
-                record.project_key == project_key && record.expires_at >= now_secs()
-            }
+            Some(record) => record.project_key == project_key && record.expires_at >= now_secs(),
             None => false,
         }
     }
@@ -200,7 +197,10 @@ impl SessionStore {
 
     async fn purge_expired(&self) {
         let now = now_secs();
-        self.tickets.write().await.retain(|_, t| !t.used && t.expires_at >= now);
+        self.tickets
+            .write()
+            .await
+            .retain(|_, t| !t.used && t.expires_at >= now);
         let mut sessions = self.sessions.write().await;
         let before = sessions.sessions.len();
         sessions.sessions.retain(|_, s| s.expires_at >= now);
@@ -300,6 +300,10 @@ mod tests {
         assert!(!session.is_empty());
         assert!(store.consume_ticket(&ticket).await.is_err());
         assert!(store.validate_session(&session, &key).await);
-        assert!(!store.validate_session(&session, "bbbbbbbbbbbbbbbbbbbbbbbb").await);
+        assert!(
+            !store
+                .validate_session(&session, "bbbbbbbbbbbbbbbbbbbbbbbb")
+                .await
+        );
     }
 }

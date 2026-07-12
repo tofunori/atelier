@@ -155,7 +155,6 @@ enum SvgCommand {
     },
 }
 
-
 fn open_via_daemon(root: &Path, no_open: bool) -> Result<(), String> {
     let root = project_root(root)?;
     let result = control_client::call(
@@ -171,13 +170,16 @@ fn open_via_daemon(root: &Path, no_open: bool) -> Result<(), String> {
         .get("openUrl")
         .and_then(|v| v.as_str())
         .unwrap_or(url);
-    println!("{}", serde_json::json!({
-        "ok": true,
-        "runtime": "daemon",
-        "project": root,
-        "url": url,
-        "openUrl": open_url,
-    }));
+    println!(
+        "{}",
+        serde_json::json!({
+            "ok": true,
+            "runtime": "daemon",
+            "project": root,
+            "url": url,
+            "openUrl": open_url,
+        })
+    );
     if !no_open && !open_url.is_empty() {
         let _ = Command::new("open").arg(open_url).status();
     }
@@ -508,7 +510,10 @@ fn svg_reapply(
         };
         let edits_file = edits.unwrap_or(stem_edits);
         if !edits_file.is_file() {
-            eprintln!("no edits file ({}) — nothing to re-apply", edits_file.display());
+            eprintln!(
+                "no edits file ({}) — nothing to re-apply",
+                edits_file.display()
+            );
             print!("{}", fs::read_to_string(&svg).map_err(|e| e.to_string())?);
             return Ok(());
         }
@@ -557,12 +562,13 @@ fn main() -> Result<(), String> {
     match Cli::parse().command {
         CommandKind::Build { root } => build_gallery(&project_root(&root)?),
         CommandKind::Svg {
-            command: SvgCommand::Reapply {
-                svg,
-                edits,
-                output,
-                stdout,
-            },
+            command:
+                SvgCommand::Reapply {
+                    svg,
+                    edits,
+                    output,
+                    stdout,
+                },
         } => svg_reapply(svg, edits, output, stdout),
         CommandKind::Serve {
             root,

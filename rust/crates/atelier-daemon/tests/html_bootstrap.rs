@@ -34,16 +34,12 @@ fn free_port() -> u16 {
         .port()
 }
 
-
 fn short_state_dir(prefix: &str) -> PathBuf {
     // Unix domain sockets on macOS have a ~104 byte path limit (SUN_LEN).
     use std::sync::atomic::{AtomicU64, Ordering};
     static N: AtomicU64 = AtomicU64::new(0);
     let n = N.fetch_add(1, Ordering::SeqCst);
-    let dir = std::env::temp_dir().join(format!(
-        "{prefix}{}-{n}",
-        std::process::id() % 10_000
-    ));
+    let dir = std::env::temp_dir().join(format!("{prefix}{}-{n}", std::process::id() % 10_000));
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).unwrap();
     dir
@@ -65,7 +61,7 @@ fn start_daemon() -> Daemon {
     let state_dir = short_state_dir("ad");
     fs::create_dir_all(&state_dir).unwrap();
     let assets = repo_root().join("assets");
-    let child = Command::new(binary)
+    let mut child = Command::new(binary)
         .args([
             "--host",
             "127.0.0.1",
@@ -103,18 +99,19 @@ fn start_daemon() -> Daemon {
         }
         thread::sleep(Duration::from_millis(40));
     }
+    let _ = child.kill();
+    let _ = child.wait();
     panic!("daemon not ready");
 }
 
 fn http_get(port: u16, path: &str) -> Result<String, String> {
-    let mut stream = std::net::TcpStream::connect(("127.0.0.1", port)).map_err(|e| e.to_string())?;
+    let mut stream =
+        std::net::TcpStream::connect(("127.0.0.1", port)).map_err(|e| e.to_string())?;
+    stream.set_read_timeout(Some(Duration::from_secs(3))).ok();
+    let req = format!("GET {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: close\r\n\r\n");
     stream
-        .set_read_timeout(Some(Duration::from_secs(3)))
-        .ok();
-    let req = format!(
-        "GET {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: close\r\n\r\n"
-    );
-    stream.write_all(req.as_bytes()).map_err(|e| e.to_string())?;
+        .write_all(req.as_bytes())
+        .map_err(|e| e.to_string())?;
     let mut out = String::new();
     stream.read_to_string(&mut out).map_err(|e| e.to_string())?;
     Ok(out)

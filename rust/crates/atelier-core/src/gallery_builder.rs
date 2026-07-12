@@ -524,9 +524,13 @@ mod tests {
     use super::*;
 
     fn fixture() -> PathBuf {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static N: AtomicU64 = AtomicU64::new(0);
+        let n = N.fetch_add(1, Ordering::SeqCst);
         let root = env::temp_dir().join(format!(
-            "atelier-rust-builder-{}-{}",
+            "atelier-rb-{}-{}-{}",
             std::process::id(),
+            n,
             std::time::SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()

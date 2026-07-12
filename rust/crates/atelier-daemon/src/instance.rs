@@ -80,8 +80,12 @@ pub fn probe_live_control(socket_path: &Path, token: &str) -> Option<Value> {
     #[cfg(unix)]
     {
         let mut stream = UnixStream::connect(socket_path).ok()?;
-        stream.set_read_timeout(Some(Duration::from_millis(400))).ok()?;
-        stream.set_write_timeout(Some(Duration::from_millis(400))).ok()?;
+        stream
+            .set_read_timeout(Some(Duration::from_millis(400)))
+            .ok()?;
+        stream
+            .set_write_timeout(Some(Duration::from_millis(400)))
+            .ok()?;
         let req = json!({
             "id": "probe",
             "protocol": PROTOCOL_VERSION,
@@ -114,7 +118,9 @@ pub fn probe_http_health(host: &str, port: u16) -> bool {
     let Ok(mut stream) = TcpStream::connect((host, port)) else {
         return false;
     };
-    stream.set_read_timeout(Some(Duration::from_millis(400))).ok();
+    stream
+        .set_read_timeout(Some(Duration::from_millis(400)))
+        .ok();
     let req = format!("GET /healthz HTTP/1.1\r\nHost: {host}:{port}\r\nConnection: close\r\n\r\n");
     if stream.write_all(req.as_bytes()).is_err() {
         return false;
@@ -128,10 +134,7 @@ pub fn probe_http_health(host: &str, port: u16) -> bool {
 /// 1. if a live peer answers on the socket, refuse;
 /// 2. remove only a dead/stale socket path;
 /// 3. bind our listener.
-pub fn bind_control_socket(
-    socket_path: &Path,
-    token: &str,
-) -> Result<UnixListener, InstanceError> {
+pub fn bind_control_socket(socket_path: &Path, token: &str) -> Result<UnixListener, InstanceError> {
     if socket_path.exists() {
         if let Some(health) = probe_live_control(socket_path, token) {
             let pid = health
@@ -175,9 +178,11 @@ pub fn ensure_http_port_free(host: &str, port: u16) -> Result<(), InstanceError>
             drop(listener);
             Ok(())
         }
-        Err(error) if error.kind() == io::ErrorKind::AddrInUse => Err(InstanceError::AlreadyRunning {
-            reason: format!("port {port} already in use on {host}"),
-        }),
+        Err(error) if error.kind() == io::ErrorKind::AddrInUse => {
+            Err(InstanceError::AlreadyRunning {
+                reason: format!("port {port} already in use on {host}"),
+            })
+        }
         Err(error) => Err(InstanceError::Io(error)),
     }
 }

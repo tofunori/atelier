@@ -1701,7 +1701,10 @@ pub fn legacy_project_router(state: ProjectRuntime) -> Router {
         .route("/gitshow", get(crate::git::gitshow))
         .route("/commitmsg", post(crate::git::commitmsg))
         .route("/gitcommit", post(crate::git::gitcommit))
-        .route("/versions", get(crate::git::get_versions).post(crate::git::post_versions))
+        .route(
+            "/versions",
+            get(crate::git::get_versions).post(crate::git::post_versions),
+        )
         // Phase 4 — LaTeX / PDF / export PNG
         .route("/compile", post(crate::documents::compile))
         .route("/synctex", post(crate::documents::synctex))
@@ -1722,12 +1725,18 @@ pub fn legacy_project_router(state: ProjectRuntime) -> Router {
         .route("/board/open-surface", post(crate::workspace::open_surface))
         // Phase 6 — Zotero
         .route("/zotero-items", get(crate::zotero::zotero_items))
-        .route("/zotero-collections", get(crate::zotero::zotero_collections))
+        .route(
+            "/zotero-collections",
+            get(crate::zotero::zotero_collections),
+        )
         .route("/zotero-fav", post(crate::zotero::zotero_fav))
         .route("/zotero-add", post(crate::zotero::zotero_add))
         .route("/zotero/{key}/{fname}", get(crate::zotero::zotero_pdf))
         // Phase 7 — hôte macOS
-        .route("/orca-fullscreen-exit", post(crate::host::orca_fullscreen_exit))
+        .route(
+            "/orca-fullscreen-exit",
+            post(crate::host::orca_fullscreen_exit),
+        )
         .route(
             "/orca-native-fullscreen",
             post(crate::host::orca_native_fullscreen),
@@ -1760,7 +1769,9 @@ pub fn legacy_project_router(state: ProjectRuntime) -> Router {
 }
 
 /// Run the historical mono-project HTTP server.
-pub async fn run_legacy_server(config: LegacyServerConfig) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+pub async fn run_legacy_server(
+    config: LegacyServerConfig,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let root = std::fs::canonicalize(&config.root)?;
     let remote = !matches!(
         config.host.as_str(),
@@ -1773,13 +1784,7 @@ pub async fn run_legacy_server(config: LegacyServerConfig) -> Result<(), Box<dyn
     if remote && agent_token.is_empty() {
         return Err("remote bind requires ATELIER_AGENT_TOKEN".into());
     }
-    let state = ProjectRuntime::new_legacy(
-        root,
-        config.port,
-        agent_token,
-        remote,
-        config.watch,
-    );
+    let state = ProjectRuntime::new_legacy(root, config.port, agent_token, remote, config.watch);
     if config.watch {
         let watcher_state = state.clone();
         tokio::spawn(async move {
