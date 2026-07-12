@@ -19,7 +19,6 @@ import net from "node:net";
 import { fileURLToPath } from "node:url";
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-const RUST_MANIFEST = path.join(REPO, "rust", "Cargo.toml");
 const ATELIER_CLI = path.join(REPO, "rust", "target", "debug", "atelier-cli");
 const ATELIER_SERVER = path.join(REPO, "rust", "target", "debug", "atelier-server");
 const FIX = path.join(REPO, "tests", "fixtures", "editor", "latex");
@@ -71,10 +70,6 @@ async function withLatexProject(run) {
     }
     // minimal gallery so CLI build succeeds
     writeFileSync(path.join(root, "preview.png"), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
-    execFileSync("cargo", ["build", "--manifest-path", RUST_MANIFEST, "-p", "atelier-cli", "-p", "atelier-server"], {
-      cwd: REPO,
-      stdio: "pipe",
-    });
     execFileSync(ATELIER_CLI, ["build", "--root", root], {
       cwd: root,
       env: { ...process.env, ATELIER_ASSETS_DIR: path.join(REPO, "assets") },
@@ -721,10 +716,6 @@ test.describe("Gate C — agent bank not hidden at top-level", () => {
         path.join(root, "preview.png"),
         Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
       );
-      execFileSync("cargo", ["build", "--manifest-path", RUST_MANIFEST, "-p", "atelier-cli", "-p", "atelier-server"], {
-        cwd: REPO,
-        stdio: "pipe",
-      });
       execFileSync(ATELIER_CLI, ["build", "--root", root], {
         cwd: root,
         env: { ...process.env, ATELIER_ASSETS_DIR: path.join(REPO, "assets") },

@@ -19,25 +19,8 @@ import net from 'node:net';
 import { fileURLToPath } from 'node:url';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const RUST_MANIFEST = path.join(REPO, 'rust', 'Cargo.toml');
 const DAEMON_BIN = path.join(REPO, 'rust', 'target', 'debug', 'atelier-daemon');
 const ASSETS = path.join(REPO, 'assets');
-
-test.beforeAll(() => {
-  execFileSync(
-    'cargo',
-    [
-      'build',
-      '--manifest-path',
-      RUST_MANIFEST,
-      '-p',
-      'atelier-daemon',
-      '-p',
-      'atelier-cli',
-    ],
-    { cwd: REPO, stdio: 'pipe' }
-  );
-});
 
 function freePort() {
   return new Promise((resolve, reject) => {

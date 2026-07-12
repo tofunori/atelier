@@ -7,16 +7,8 @@ import net from 'node:net';
 import zlib from 'node:zlib';
 
 const REPO = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..', '..');
-const RUST_MANIFEST = path.join(REPO, 'rust', 'Cargo.toml');
 const ATELIER_CLI = path.join(REPO, 'rust', 'target', 'debug', 'atelier-cli');
 const ATELIER_SERVER = path.join(REPO, 'rust', 'target', 'debug', 'atelier-server');
-
-test.beforeAll(() => {
-  execFileSync('cargo', ['build', '--manifest-path', RUST_MANIFEST, '-p', 'atelier-cli', '-p', 'atelier-server'], {
-    cwd: REPO,
-    stdio: 'pipe',
-  });
-});
 
 function freePort() {
   return new Promise((resolve, reject) => {

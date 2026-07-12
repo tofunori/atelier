@@ -2,7 +2,7 @@
  * Real JSON-RPC e2e against the atelier-mcp binary in daemon mode.
  */
 import { test, expect } from '@playwright/test';
-import { spawn, execFileSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import {
   mkdtempSync,
   writeFileSync,
@@ -17,26 +17,9 @@ import { fileURLToPath } from 'node:url';
 import { createInterface } from 'node:readline';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const RUST_MANIFEST = path.join(REPO, 'rust', 'Cargo.toml');
 const DAEMON_BIN = path.join(REPO, 'rust', 'target', 'debug', 'atelier-daemon');
 const MCP_BIN = path.join(REPO, 'rust', 'target', 'debug', 'atelier-mcp');
 const ASSETS = path.join(REPO, 'assets');
-
-test.beforeAll(() => {
-  execFileSync(
-    'cargo',
-    [
-      'build',
-      '--manifest-path',
-      RUST_MANIFEST,
-      '-p',
-      'atelier-daemon',
-      '-p',
-      'atelier-mcp',
-    ],
-    { cwd: REPO, stdio: 'pipe' }
-  );
-});
 
 function freePort() {
   return new Promise((resolve, reject) => {
