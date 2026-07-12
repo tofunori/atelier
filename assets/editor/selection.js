@@ -100,7 +100,7 @@
       button.classList.remove("sent", "failed");
       button.classList.add("sending");
       button.textContent = "…";
-      fetch("/quote", {
+      fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/quote"):"/quote", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -184,7 +184,7 @@
         if (!(pill && document.activeElement === textarea && textarea.value)) {
           placeComposer(t);
         }
-        fetch("/selinfo", {
+        fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/selinfo"):"/selinfo", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -224,7 +224,7 @@
       lastSel = null;
       if (textarea) textarea.value = "";
       hideComposer();
-      fetch("/selinfo", {
+      fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/selinfo"):"/selinfo", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ lines: 0, words: 0 }),

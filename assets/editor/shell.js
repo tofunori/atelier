@@ -124,7 +124,7 @@
         },
         restoreText: async function (text) {
           if (!persistence) return false;
-          var r = await fetch("/codesave", {
+          var r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/codesave"):"/codesave", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({

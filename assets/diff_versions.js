@@ -296,7 +296,7 @@ window.DiffVersions = function(opts){
       }
       if(!ops.length) ops.push({type: "set-current", current: snapshot.current,
         texts: {[snapshot.current.hash]: snapshot.texts[snapshot.current.hash]}});
-      const response = await fetch("/versions", {method: "POST", headers: {"Content-Type": "application/json"},
+      const response = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/versions"):"/versions", {method: "POST", headers: {"Content-Type": "application/json"},
         body: JSON.stringify({path, expectedRevision: serverRevision, ops})});
       const body = await response.json();
       if(response.status === 409 || body?.error === "revision-conflict"){
@@ -798,7 +798,7 @@ window.DiffVersions = function(opts){
       closePop();
       notify("commit en cours…");
       try{
-        const r = await fetch("/gitcommit", {method: "POST", headers: {"Content-Type": "application/json"},
+        const r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/gitcommit"):"/gitcommit", {method: "POST", headers: {"Content-Type": "application/json"},
           body: JSON.stringify({path, message})});
         const j = await r.json();
         if(j && j.ok){
@@ -819,7 +819,7 @@ window.DiffVersions = function(opts){
       ta.focus(); ta.select();
       // message Haiku en arrière-plan : ne remplace que si l'utilisateur n'a pas touché
       const seq = ++aiSeq;
-      fetch("/commitmsg", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ path }) })
+      fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/commitmsg"):"/commitmsg", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ path }) })
         .then(r => r.json())
         .then(j => {
           if(seq !== aiSeq || commitPop.style.display === "none") return;
@@ -832,7 +832,7 @@ window.DiffVersions = function(opts){
     aiBtn.onclick = async () => {
       aiBtn.disabled = true; aiBtn.textContent = "…";
       try{
-        const r = await fetch("/commitmsg", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ path }) });
+        const r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/commitmsg"):"/commitmsg", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ path }) });
         const j = await r.json();
         if(j && j.ok && j.msg){ ta.value = j.msg; ta.focus(); ta.select(); }
         else notify("pas de proposition (fichier sans diff ?)");
@@ -977,13 +977,13 @@ window.DiffVersions = function(opts){
       }
       let items = [];
       try{
-        const r = await fetch("/gitlog?path=" + encodeURIComponent(path));
+        const r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/gitlog?path="):"/gitlog?path=" + encodeURIComponent(path));
         const j = await r.json();
         if(j && j.ok) items = j.items || [];
       }catch(e){}
       for(const it of items){
         rows.push({label: it.sha, msg: it.msg, sha: it.sha, ts: it.ts, text: async () => {
-          const r = await fetch("/gitshow?path=" + encodeURIComponent(path) + "&sha=" + it.sha);
+          const r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/gitshow?path="):"/gitshow?path=" + encodeURIComponent(path) + "&sha=" + it.sha);
           const j = await r.json();
           return (j && j.ok) ? j.text : null;
         }});
@@ -1172,7 +1172,7 @@ window.DiffVersions = function(opts){
   }
   async function fetchHead(){
     try{
-      const r = await fetch("/githead?path=" + encodeURIComponent(path));
+      const r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/githead?path="):"/githead?path=" + encodeURIComponent(path));
       const j = await r.json();
       if(!j || !j.ok || typeof j.text !== "string"){ return; }
       const changed = headText !== j.text;
@@ -1385,7 +1385,7 @@ window.DiffVersions = function(opts){
     if(hasLocalV2){ loadData(localData); acknowledgedIds.clear(); }
     let serverData = null;
     try{
-      const r = await fetch("/versions?path=" + encodeURIComponent(path));
+      const r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/versions?path="):"/versions?path=" + encodeURIComponent(path));
       const j = await r.json();
       if(j && j.ok) serverData = j;
     }catch(e){}

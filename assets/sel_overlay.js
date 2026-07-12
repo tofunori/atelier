@@ -81,7 +81,7 @@ function __ct(){try{return JSON.parse(localStorage.getItem('claudeTargetV1')||'n
 
   function pushSel(text){
     try{
-      fetch('/selinfo', {method:'POST', headers:{'Content-Type':'application/json'},
+      fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api('/selinfo'):'/selinfo', {method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify(text
           ? {text: text.slice(0, 4000), rel: REL, name: NAME, page: 'html',
              lines: 1, words: text.split(/\s+/).length}
@@ -123,7 +123,7 @@ function __ct(){try{return JSON.parse(localStorage.getItem('claudeTargetV1')||'n
     var go = pill.querySelector('.go');
     var comment = pillTa.value.trim();
     go.textContent = '⏳';
-    fetch('/quote', {method:'POST', headers:{'Content-Type':'application/json'},
+    fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api('/quote'):'/quote', {method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({rel: REL, page: '', text: selText, comment: comment || '', direct: true, target: __ct(), embed: EMBEDDED})})
       .then(function(r){ return r.json(); })
       .then(function(j){ if (EMBEDDED && j && j.message) __atelierPost({type: 'atelier-add-to-chat', text: j.message});
@@ -168,7 +168,7 @@ function __ct(){try{return JSON.parse(localStorage.getItem('claudeTargetV1')||'n
       var html = '<div class="hd">Envoyer vers</div>'
         + '<div class="it' + (cur ? '' : ' on') + '" data-i="-1"><span class="app">auto</span>'
         + '<span class="t">Session du projet (auto)</span></div>';
-      fetch('/claude-targets').then(function(r){ return r.json(); }).then(function(j){
+      fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api('/claude-targets'):'/claude-targets').then(function(r){ return r.json(); }).then(function(j){
         (j.targets || []).forEach(function(t, i){
           var on = cur && cur.app === t.app && cur.id === t.id;
           html += '<div class="it' + (on ? ' on' : '') + '" data-i="' + i + '"><span class="app">'
@@ -238,7 +238,7 @@ function __ct(){try{return JSON.parse(localStorage.getItem('claudeTargetV1')||'n
       name: function(){ return NAME + '-annot'; },
       exportBase: function(){
         var d = docSize();
-        return fetch('/rasterize?path=' + encodeURIComponent(REL) + '&w=' + d.w + '&h=' + d.h)
+        return fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api('/rasterize?path='):'/rasterize?path=' + encodeURIComponent(REL) + '&w=' + d.w + '&h=' + d.h)
           .then(function(r){ if (!r.ok) throw new Error('rasterize ' + r.status); return r.blob(); })
           .then(function(blob){ return new Promise(function(res, rej){
             var img = new Image();

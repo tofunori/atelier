@@ -421,16 +421,26 @@ async fn dispatch(request: ControlRequest, state: &ControlState) -> ControlRespo
                     let agent_store = runtime.agent();
                     let mut agent = agent_store.lock().await;
                     match agent.claim(consumer, &destination) {
-                        Ok(items) => ControlResponse {
-                            id: request.id,
-                            ok: true,
-                            result: Some(json!({
-                                "ok": true,
-                                "items": items,
-                                "consumer": consumer,
-                                "destination": destination,
-                            })),
-                            error: None,
+                        Ok(items) => {
+                            let _ = state
+                                .host
+                                .publish(
+                                    key,
+                                    "annotation.changed",
+                                    json!({"pending": items.len(), "op": "claim"}),
+                                )
+                                .await;
+                            ControlResponse {
+                                id: request.id,
+                                ok: true,
+                                result: Some(json!({
+                                    "ok": true,
+                                    "items": items,
+                                    "consumer": consumer,
+                                    "destination": destination,
+                                })),
+                                error: None,
+                            }
                         },
                         Err(message) => error_response(request.id, "ANNOTATION_FAILED", message),
                     }
@@ -488,11 +498,21 @@ async fn dispatch(request: ControlRequest, state: &ControlState) -> ControlRespo
                     let agent_store = runtime.agent();
                     let mut agent = agent_store.lock().await;
                     match agent.acknowledge(&ids, consumer) {
-                        Ok(count) => ControlResponse {
-                            id: request.id,
-                            ok: true,
-                            result: Some(json!({ "ok": true, "acked": count, "ids": ids })),
-                            error: None,
+                        Ok(count) => {
+                            let _ = state
+                                .host
+                                .publish(
+                                    key,
+                                    "annotation.changed",
+                                    json!({"acked": count, "op": "ack"}),
+                                )
+                                .await;
+                            ControlResponse {
+                                id: request.id,
+                                ok: true,
+                                result: Some(json!({ "ok": true, "acked": count, "ids": ids })),
+                                error: None,
+                            }
                         },
                         Err(message) => error_response(request.id, "ANNOTATION_FAILED", message),
                     }
@@ -543,16 +563,26 @@ async fn dispatch(request: ControlRequest, state: &ControlState) -> ControlRespo
                     let agent_store = runtime.agent();
                     let mut agent = agent_store.lock().await;
                     match agent.update_status(&ids, status, result, error) {
-                        Ok(changed) => ControlResponse {
-                            id: request.id,
-                            ok: true,
-                            result: Some(json!({
-                                "ok": true,
-                                "updated": changed,
-                                "ids": ids,
-                                "status": status,
-                            })),
-                            error: None,
+                        Ok(changed) => {
+                            let _ = state
+                                .host
+                                .publish(
+                                    key,
+                                    "annotation.changed",
+                                    json!({"updated": changed, "status": status, "op": "status"}),
+                                )
+                                .await;
+                            ControlResponse {
+                                id: request.id,
+                                ok: true,
+                                result: Some(json!({
+                                    "ok": true,
+                                    "updated": changed,
+                                    "ids": ids,
+                                    "status": status,
+                                })),
+                                error: None,
+                            }
                         },
                         Err(message) => error_response(request.id, "ANNOTATION_FAILED", message),
                     }
@@ -598,11 +628,21 @@ async fn dispatch(request: ControlRequest, state: &ControlState) -> ControlRespo
                         payload.insert("held".into(), held.clone());
                     }
                     match agent.enqueue_event(payload) {
-                        Ok(event) => ControlResponse {
-                            id: request.id,
-                            ok: true,
-                            result: Some(event),
-                            error: None,
+                        Ok(event) => {
+                            let _ = state
+                                .host
+                                .publish(
+                                    key,
+                                    "annotation.changed",
+                                    json!({"op": "enqueue", "id": event.get("id")}),
+                                )
+                                .await;
+                            ControlResponse {
+                                id: request.id,
+                                ok: true,
+                                result: Some(event),
+                                error: None,
+                            }
                         },
                         Err(message) => error_response(request.id, "ANNOTATION_FAILED", message),
                     }

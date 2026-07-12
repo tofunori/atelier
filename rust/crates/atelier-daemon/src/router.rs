@@ -343,8 +343,9 @@ async fn project_events_sse(
     req: Request,
 ) -> Response {
     use axum::response::sse::{Event, KeepAlive, Sse};
-    use futures_util::stream;
+    use futures_util::stream::{self, StreamExt};
     use std::convert::Infallible;
+    use tokio_stream::wrappers::BroadcastStream;
 
     let path = req.uri().path().to_string();
     let Some((project_key, _)) = split_project_path(&path) else {
@@ -353,7 +354,9 @@ async fn project_events_sse(
     let cookie = cookie_value(req.headers(), "atelier_session");
     let authorized = match cookie.as_deref() {
         Some(raw) => state.sessions.validate_session(raw, &project_key).await,
-        None => std::env::var("ATELIER_DAEMON_ALLOW_ANON").map(|v| v == "1").unwrap_or(false),
+        None => std::env::var("ATELIER_DAEMON_ALLOW_ANON")
+            .map(|v| v == "1")
+            .unwrap_or(false),
     };
     if !authorized {
         return (
@@ -362,30 +365,67 @@ async fn project_events_sse(
         )
             .into_response();
     }
-    let runtime = match state.host.activate(&project_key).await {
-        Ok(r) => r,
-        Err(error) => return host_error(error),
+    // Activate so the event bus exists, then subscribe.
+    if let Err(error) = state.host.activate(&project_key).await {
+        return host_error(error);
+    }
+    let Some(bus) = state.host.event_bus(&project_key).await else {
+        return (StatusCode::SERVICE_UNAVAILABLE, "no event bus").into_response();
     };
-    let revision = *runtime.revision().read().await;
-    let instance = state.build.daemon_instance.clone();
-    let key = project_key.clone();
-    let stream = stream::iter([Ok::<_, Infallible>(
-        Event::default().event("message").data(
-            json!({
-                "id": uuid::Uuid::new_v4().to_string(),
-                "projectKey": key,
-                "daemonInstance": instance,
-                "revision": revision,
-                "type": "daemon.ready",
-                "timestamp": std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .map(|d| d.as_secs())
-                    .unwrap_or(0),
-                "payload": {}
+
+    let last_event_id = req
+        .headers()
+        .get("last-event-id")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.parse::<u64>().ok())
+        .unwrap_or(0);
+
+    let revision = state
+        .host
+        .activate(&project_key)
+        .await
+        .map(|r| r.revision())
+        .ok();
+    let rev = if let Some(r) = revision {
+        *r.read().await
+    } else {
+        0
+    };
+
+    let ready = bus.ready_event(rev);
+    let mut backlog = bus.since(last_event_id);
+    if last_event_id == 0 {
+        backlog.insert(0, ready);
+    }
+    let rx = bus.subscribe();
+
+    let initial = stream::iter(
+        backlog
+            .into_iter()
+            .map(|event| {
+                Ok::<_, Infallible>(
+                    Event::default()
+                        .id(event.seq.to_string())
+                        .event("message")
+                        .data(serde_json::to_string(&event).unwrap_or_else(|_| "{}".into())),
+                )
             })
-            .to_string(),
-        ),
-    )]);
+            .collect::<Vec<_>>(),
+    );
+
+    let live = BroadcastStream::new(rx).filter_map(|item| async move {
+        match item {
+            Ok(event) => Some(Ok::<_, Infallible>(
+                Event::default()
+                    .id(event.seq.to_string())
+                    .event("message")
+                    .data(serde_json::to_string(&event).unwrap_or_else(|_| "{}".into())),
+            )),
+            Err(_) => None, // lag — client should reconnect with Last-Event-ID
+        }
+    });
+
+    let stream = initial.chain(live);
     Sse::new(stream)
         .keep_alive(KeepAlive::default())
         .into_response()

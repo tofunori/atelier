@@ -104,6 +104,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         registry.clone(),
         config.idle_grace_seconds,
         config.suspend_after_seconds,
+        build.daemon_instance.clone(),
     );
     let sessions = SessionStore::load(
         config.sessions_path(),

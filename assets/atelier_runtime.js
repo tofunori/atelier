@@ -163,6 +163,28 @@
     return "code";
   }
 
+  // Patch fetch so legacy absolute project API paths resolve under /p/{key}/…
+  // when the daemon bootstrap is present. Assets and daemon global routes stay absolute.
+  if (!boot.legacy && typeof global.fetch === "function") {
+    var originalFetch = global.fetch.bind(global);
+    global.fetch = function (input, init) {
+      if (typeof input === "string") {
+        if (
+          input.charAt(0) === "/" &&
+          input.indexOf("//") !== 0 &&
+          input.indexOf(boot.basePath) !== 0 &&
+          input.indexOf("/assets") !== 0 &&
+          input.indexOf("/open/") !== 0 &&
+          input.indexOf("/healthz") !== 0 &&
+          input.indexOf("/version") !== 0
+        ) {
+          input = api(input);
+        }
+      }
+      return originalFetch(input, init);
+    };
+  }
+
   global.AtelierRuntime = {
     ready: true,
     legacy: !!boot.legacy,

@@ -147,13 +147,13 @@ function creatorLine(it){ return [it.creators||'Auteur inconnu', it.year].filter
 function fetchItems(){
   const p=new URLSearchParams(); if(query)p.set('q',query);
   if(filter==='collection'&&collectionId)p.set('collection',collectionId);
-  fetch('/zotero-items?'+p).then(r=>r.json()).then(j=>{
+  fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api('/zotero-items?'):'/zotero-items?'+p).then(r=>r.json()).then(j=>{
     if(j.error){ $('list').innerHTML='<div class="empty">'+j.error+'</div>'; items=[]; return; }
     items=j.items||[]; render();
   }).catch(()=>{ $('list').innerHTML='<div class="empty">Serveur injoignable</div>'; });
 }
 function fetchCollections(){
-  fetch('/zotero-collections').then(r=>r.json()).then(j=>{
+  fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api('/zotero-collections'):'/zotero-collections').then(r=>r.json()).then(j=>{
     collections=j.collections||[];
     const sel=$('fColl'); sel.innerHTML='<option value="">Collection</option>'+
       collections.map(c=>'<option value="'+c.id+'">'+esc(c.name)+'</option>').join('');
@@ -194,7 +194,7 @@ $('list').addEventListener('click',e=>{
   const it=items.find(i=>i.key===key); if(!it)return;
   if(e.target.closest('.star')){
     it.fav=!it.fav;
-    fetch('/zotero-fav',{method:'POST',headers:{'Content-Type':'application/json'},
+    fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api('/zotero-fav'):'/zotero-fav',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({key,on:it.fav})}).catch(()=>{});
     render(); return;
   }
@@ -265,7 +265,7 @@ $('addInput').onchange=async e=>{
   const results=[];
   for(const f of files){
     try{
-      const r=await fetch('/zotero-add?name='+encodeURIComponent(f.name),
+      const r=await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api('/zotero-add?name='):'/zotero-add?name='+encodeURIComponent(f.name),
         {method:'POST',headers:{'Content-Type':'application/pdf'},body:f});
       results.push(await r.json());
     }catch(err){ results.push({name:f.name,ok:false,error:String(err)}); }

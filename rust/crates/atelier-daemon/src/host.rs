@@ -1,7 +1,11 @@
 //! In-memory multi-project runtime host.
 #![allow(dead_code)]
 
-use crate::{lifecycle::ProjectLifecycle, registry::ProjectRegistry};
+use crate::{
+    events::ProjectEventBus,
+    lifecycle::ProjectLifecycle,
+    registry::ProjectRegistry,
+};
 use atelier_server::ProjectRuntime;
 use serde_json::{Value, json};
 use std::{
@@ -19,6 +23,7 @@ pub struct LiveProject {
     pub lifecycle: ProjectLifecycle,
     pub last_activity: Instant,
     pub fault: Option<String>,
+    pub events: ProjectEventBus,
 }
 
 #[derive(Clone)]
@@ -27,16 +32,39 @@ pub struct ProjectHost {
     live: Arc<RwLock<HashMap<String, LiveProject>>>,
     idle_grace: Duration,
     suspend_after: Duration,
+    daemon_instance: String,
 }
 
 impl ProjectHost {
-    pub fn new(registry: ProjectRegistry, idle_grace_secs: u64, suspend_after_secs: u64) -> Self {
+    pub fn new(
+        registry: ProjectRegistry,
+        idle_grace_secs: u64,
+        suspend_after_secs: u64,
+        daemon_instance: impl Into<String>,
+    ) -> Self {
         Self {
             registry,
             live: Arc::new(RwLock::new(HashMap::new())),
             idle_grace: Duration::from_secs(idle_grace_secs),
             suspend_after: Duration::from_secs(suspend_after_secs),
+            daemon_instance: daemon_instance.into(),
         }
+    }
+
+    pub async fn event_bus(&self, key: &str) -> Option<ProjectEventBus> {
+        self.live.read().await.get(key).map(|e| e.events.clone())
+    }
+
+    pub async fn publish(
+        &self,
+        key: &str,
+        event_type: &str,
+        payload: Value,
+    ) -> Option<crate::events::ProjectEvent> {
+        let live = self.live.read().await;
+        let entry = live.get(key)?;
+        let revision = *entry.runtime.revision().read().await;
+        Some(entry.events.publish(event_type, revision, payload))
     }
 
     pub async fn activate(&self, key: &str) -> Result<ProjectRuntime, HostError> {
@@ -86,6 +114,7 @@ impl ProjectHost {
                     lifecycle: ProjectLifecycle::Faulted,
                     last_activity: Instant::now(),
                     fault: Some(format!("root missing: {}", root.display())),
+                    events: ProjectEventBus::new(key, &self.daemon_instance),
                 },
             );
             return Err(HostError::RootMissing(root.display().to_string()));
@@ -101,6 +130,7 @@ impl ProjectHost {
                 lifecycle: ProjectLifecycle::Active,
                 last_activity: Instant::now(),
                 fault: None,
+                events: ProjectEventBus::new(key, &self.daemon_instance),
             },
         );
         self.registry.touch_activity(key).await;

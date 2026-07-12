@@ -166,8 +166,7 @@
     async function loadAnnots() {
       if (!ctx.path) return;
       try {
-        var r = await fetch(
-          "/pdfannot?rel=" + encodeURIComponent(annotRel())
+        var r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/pdfannot?rel="):"/pdfannot?rel=" + encodeURIComponent(annotRel())
         );
         var j = await r.json();
         annots = Array.isArray(j.annots) ? j.annots : [];
@@ -180,7 +179,7 @@
 
     function saveAnnots() {
       if (!ctx.path) return;
-      fetch("/pdfannot", {
+      fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/pdfannot"):"/pdfannot", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rel: annotRel(), annots: annots }),

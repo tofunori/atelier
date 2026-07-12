@@ -67,7 +67,7 @@ let diskMtime = 0, dirty = false, editor = null, loading = true;
 
 function setState(cls, txt){ stateEl.className = cls; stateEl.textContent = txt; }
 
-fetch("/code?path=" + encodeURIComponent(path)).then(r => r.json()).then(j => {
+fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/code?path="):"/code?path=" + encodeURIComponent(path)).then(r => r.json()).then(j => {
   diskMtime = j.mtime;
   editor = new toastui.Editor({
     el: document.getElementById("ed"),
@@ -95,7 +95,7 @@ fetch("/code?path=" + encodeURIComponent(path)).then(r => r.json()).then(j => {
 
 async function save(){
   if(!editor) return;
-  const r = await fetch("/codesave", {method:"POST", headers:{"Content-Type":"application/json"},
+  const r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/codesave"):"/codesave", {method:"POST", headers:{"Content-Type":"application/json"},
     body: JSON.stringify({path, text: editor.getMarkdown(), mtime: diskMtime})});
   const j = await r.json();
   if(j.error === "conflit"){ setState("dirty", "conflit disque — re-⌘S pour écraser"); diskMtime = j.mtime; return; }
@@ -109,10 +109,10 @@ document.addEventListener("keydown", (e) => {
 // reload auto si Claude modifie le fichier sur disque (buffer propre seulement)
 setInterval(async () => {
   try{
-    const j = await (await fetch("/code?path=" + encodeURIComponent(path) + "&statonly=1")).json();
+    const j = await (await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/code?path="):"/code?path=" + encodeURIComponent(path) + "&statonly=1")).json();
     if(j.mtime && Math.abs(j.mtime - diskMtime) > 0.001){
       if(dirty){ setState("dirty", "le fichier a changé sur disque (Claude ?)"); return; }
-      const full = await (await fetch("/code?path=" + encodeURIComponent(path))).json();
+      const full = await (await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/code?path="):"/code?path=" + encodeURIComponent(path))).json();
       loading = true;
       diskMtime = full.mtime;
       editor.setMarkdown(full.text, false);
@@ -156,7 +156,7 @@ if(window.self !== window.top){
         page = "L" + a + (b > a ? "-" + b : "");
       }
     }catch(err){}
-    fetch("/quote", {method:"POST", headers:{"Content-Type":"application/json"},
+    fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/quote"):"/quote", {method:"POST", headers:{"Content-Type":"application/json"},
       body: JSON.stringify({rel: path, page, text: selTxt, comment: "", direct: true, embed: true})})
       .then(r => r.json())
       .then(j => { if(j && j.message) __atelierPost({type:"atelier-add-to-chat", text:j.message}); })

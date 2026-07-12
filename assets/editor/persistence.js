@@ -34,7 +34,7 @@
 
     async function load() {
       if (!path) return null;
-      var r = await fetch("/code?path=" + encodeURIComponent(path));
+      var r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/code?path="):"/code?path=" + encodeURIComponent(path));
       var j = await r.json();
       if (j.error) {
         if (status()) status().set("conflict", j.error);
@@ -54,7 +54,7 @@
       if (opts.beforeSave) opts.beforeSave();
       if (status()) status().set("saved", "saving");
       var text = cm.getValue();
-      var r = await fetch("/codesave", {
+      var r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/codesave"):"/codesave", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ path: path, text: text, mtime: diskMtime }),
@@ -102,7 +102,7 @@
       if (!cm) return;
       if (opts.diffVersions && opts.diffVersions.isBusy && opts.diffVersions.isBusy()) return;
       try {
-        var r = await fetch("/code?path=" + encodeURIComponent(path));
+        var r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/code?path="):"/code?path=" + encodeURIComponent(path));
         var j = await r.json();
         if (!(j.mtime && Math.abs(j.mtime - diskMtime) > 0.001)) return;
         var diskText = j.text;

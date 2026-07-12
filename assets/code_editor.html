@@ -209,7 +209,7 @@ function openTarget(target) {
 }
 
 async function renderBrowser(dir) {
-  const r = await fetch("/ls?dir=" + encodeURIComponent(dir || ""));
+  const r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/ls?dir="):"/ls?dir=" + encodeURIComponent(dir || ""));
   const j = await r.json();
   if (j.error) return;
   const b = document.getElementById("browser");
@@ -237,7 +237,7 @@ async function renderBrowser(dir) {
 }
 
 async function pickerShow(dir) {
-  const r = await fetch("/ls?dir=" + encodeURIComponent(dir || (path ? path.replace(/\/[^/]*$/, "") : "")));
+  const r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/ls?dir="):"/ls?dir=" + encodeURIComponent(dir || (path ? path.replace(/\/[^/]*$/, "") : "")));
   const j = await r.json();
   if (j.error) return;
   document.getElementById("picker").classList.add("show");

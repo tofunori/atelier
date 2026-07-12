@@ -1,16 +1,27 @@
 (function(){
   'use strict';
   var nativeFetch = window.fetch.bind(window);
-  var state = {enabled:false, open:false, data:null, destination:'', clearArmed:false, showHistory:false, timer:null};
+  var state = {enabled:false, open:false, data:null, destination:'', clearArmed:false, showHistory:false, timer:null, sseBound:false};
   try{localStorage.removeItem('atelierAgentBatchV2');}catch(e){}
 
+  function projectUrl(path){
+    if(window.AtelierRuntime&&AtelierRuntime.api&&typeof path==='string'&&path.charAt(0)==='/'&&path.indexOf('/p/')!==0&&path.indexOf('/assets')!==0){
+      return AtelierRuntime.api(path);
+    }
+    return path;
+  }
   function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
   function shortPath(s){ s=String(s||''); var p=s.split('/'); return p.length>2?'…/'+p.slice(-2).join('/'):s; }
   function sameOriginPath(input){
     try{
       var raw=typeof input==='string'?input:(input&&input.url)||'';
       var u=new URL(raw,location.href);
-      return u.origin===location.origin?u.pathname:'';
+      var path=u.origin===location.origin?u.pathname:'';
+      // Normalize project-prefixed paths for tracked route matching.
+      if(window.AtelierRuntime&&AtelierRuntime.basePath&&path.indexOf(AtelierRuntime.basePath)===0){
+        path=path.slice(AtelierRuntime.basePath.length)||'/';
+      }
+      return path;
     }catch(e){ return ''; }
   }
   function enrich(options){
@@ -31,6 +42,7 @@
     return options;
   }
   window.fetch=function(input,options){
+    if(typeof input==='string'){ input=projectUrl(input); }
     var path=sameOriginPath(input);
     var tracked=state.enabled && ['/quote','/save','/agent-selection'].indexOf(path)>=0 &&
       String((options&&options.method)||'GET').toUpperCase()==='POST';
@@ -138,7 +150,7 @@
   });
   function mutate(path,ids,destination){
     var body={ids:ids};if(destination)body.destination=destination;
-    return nativeFetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+    return nativeFetch(projectUrl(path),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
       .then(function(r){return r.json().then(function(j){if(!r.ok||j.error)throw new Error(j.error||('HTTP '+r.status));return j;});})
       .then(function(j){refreshSoon();return j;});
   }
@@ -203,7 +215,7 @@
     hub.querySelector('.aacount').textContent=bank.length?String(bank.length):'';
   }
   function refresh(){
-    nativeFetch('/agent-status?limit=40').then(function(r){return r.json();}).then(function(j){
+    nativeFetch(projectUrl('/agent-status?limit=40')).then(function(r){return r.json();}).then(function(j){
       // The movable bank belongs to the editor surface and remains available
       // even before a chat connects. Keep the top-level gallery clean unless a
       // live Codex host explicitly enables its bank there.
@@ -216,5 +228,25 @@
   function refreshSoon(){setTimeout(refresh,120);setTimeout(refresh,900);}
   var toastTimer=null;function toast(text){var el=hub.querySelector('.aatoast');el.textContent=text;el.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(function(){el.classList.remove('show');},2200);}
   window.AtelierAgentContext={enrich:function(payload){payload=Object.assign({},payload||{});delete payload.destination;delete payload.batchId;payload.action='ask';payload.held=true;return payload;},refresh:refresh,getState:function(){return state;}};
-  hub.style.display='none';refresh();state.timer=setInterval(refresh,1800);
+  hub.style.display='none';refresh();
+  // Prefer SSE / BroadcastChannel; fall back to 10s poll only when SSE is unavailable.
+  function bindEvents(){
+    if(state.sseBound) return;
+    if(window.AtelierEvents&&typeof AtelierEvents.on==='function'){
+      state.sseBound=true;
+      AtelierEvents.on(function(ev){
+        var t=ev&&ev.type||'';
+        if(t==='daemon.ready'||t==='annotation.changed'||t==='consumer.changed'||t==='gallery.revision'||t==='poll.tick'){
+          refresh();
+        }
+      });
+      return;
+    }
+    // Slow fallback (never 1.8s when we can use events).
+    if(!state.timer){ state.timer=setInterval(refresh,10000); }
+  }
+  bindEvents();
+  // Runtime/events scripts may load just after this file.
+  setTimeout(bindEvents, 0);
+  setTimeout(bindEvents, 250);
 })();

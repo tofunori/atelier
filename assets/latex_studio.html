@@ -458,7 +458,7 @@ const __CM_MODE = ({tex:"stex", py:"python", r:"r", md:"markdown", jl:"julia",
 let pdfPath = path ? path.replace(/\.tex$/, ".pdf") : null;
 // single initial-load trigger: resolve the real PDF path first, THEN load once
 // (two concurrent getDocument() calls can deadlock pdf.js worker startup)
-if(path) fetch("/texroot?path=" + encodeURIComponent(path)).then(r=>r.json()).then(j=>{
+if(path) fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/texroot?path="):"/texroot?path=" + encodeURIComponent(path)).then(r=>r.json()).then(j=>{
   if(j.pdf) pdfPath = j.pdf;
   if(IS_TEX) loadPdf();
 }).catch(()=>{ if(IS_TEX) loadPdf(); });
@@ -550,7 +550,7 @@ if(!IS_TEX){
               page = "L" + a + (b > a ? "-" + b : "");
             }
           }catch(err){}
-          fetch("/quote", {method:"POST", headers:{"Content-Type":"application/json"},
+          fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/quote"):"/quote", {method:"POST", headers:{"Content-Type":"application/json"},
             body: JSON.stringify({rel: path, page: page, text: selTxt, comment: "", direct: true, embed: true})})
             .then(r => r.json())
             .then(j => { if(j && j.message) __atelierPost({type:"atelier-add-to-chat", text:j.message}); })
@@ -876,7 +876,7 @@ function ghostInstall(){
 
 async function load(){
   await AtelierEditor.ready;
-  const r = await fetch("/code?path=" + encodeURIComponent(path));
+  const r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/code?path="):"/code?path=" + encodeURIComponent(path));
   const j = await r.json();
   if(j.error) return setState("err", j.error);
   recentsAdd(path);
@@ -939,7 +939,7 @@ async function load(){
       if(sel && sel.trim()){
         if(window._clMark) window._clMark.clear();
         window._clMark = cm.markText(f, t, {className: "cm-clsel"});
-        fetch("/selinfo", {method:"POST", headers:{"Content-Type":"application/json"},
+        fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/selinfo"):"/selinfo", {method:"POST", headers:{"Content-Type":"application/json"},
           body: JSON.stringify({
             lines: t.line - f.line + 1, words: sel.trim().split(/\s+/).length,
             text: sel, rel: path, name: path.split("/").pop(),
@@ -1044,7 +1044,7 @@ async function load(){
 }
 
 async function save(){
-  const r = await fetch("/codesave", {method:"POST", headers:{"Content-Type":"application/json"},
+  const r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/codesave"):"/codesave", {method:"POST", headers:{"Content-Type":"application/json"},
     body: JSON.stringify({path, text: cm.getValue(), mtime: diskMtime})});
   const j = await r.json();
   if(j.error === "conflit"){ setState("err", "disk conflict — re-⌘S to overwrite"); diskMtime = j.mtime; return false; }
@@ -1064,7 +1064,7 @@ async function compile(){
   if (window.AtelierLatexCompile) {
     j = await AtelierLatexCompile.compile(path);
   } else {
-    const r = await fetch("/compile", {method:"POST", headers:{"Content-Type":"application/json"},
+    const r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/compile"):"/compile", {method:"POST", headers:{"Content-Type":"application/json"},
       body: JSON.stringify({path})});
     j = await r.json();
   }
@@ -1116,14 +1116,14 @@ let texcCur = null;      // id en cours d'édition (ou objet neuf)
 const texcRel = () => "tex-comments:" + path;
 async function texcLoad(){
   try {
-    const r = await fetch("/pdfannot?rel=" + encodeURIComponent(texcRel()));
+    const r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/pdfannot?rel="):"/pdfannot?rel=" + encodeURIComponent(texcRel()));
     const j = await r.json();
     texcAll = Array.isArray(j.annots) ? j.annots : [];
     texcAll.forEach(texcMark);
   } catch(e){}
 }
 function texcSave(){
-  fetch("/pdfannot", {method:"POST", headers:{"Content-Type":"application/json"},
+  fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/pdfannot"):"/pdfannot", {method:"POST", headers:{"Content-Type":"application/json"},
     body: JSON.stringify({rel: texcRel(), annots: texcAll})}).catch(()=>{});
 }
 function texcMark(c){
@@ -1325,7 +1325,7 @@ async function synctexView(){
   if (window.AtelierLatexSynctex) {
     j = await AtelierLatexSynctex.view({ tex: path, pdf: pdfPath, line });
   } else {
-    const r = await fetch("/synctex", {method:"POST", headers:{"Content-Type":"application/json"},
+    const r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/synctex"):"/synctex", {method:"POST", headers:{"Content-Type":"application/json"},
       body: JSON.stringify({dir:"view", tex: path, pdf: pdfPath, line})});
     j = await r.json();
   }
@@ -1350,7 +1350,7 @@ async function synctexEdit(page, x, y){
   if (window.AtelierLatexSynctex) {
     j = await AtelierLatexSynctex.edit({ tex: path, pdf: pdfPath, page, x, y });
   } else {
-    const r = await fetch("/synctex", {method:"POST", headers:{"Content-Type":"application/json"},
+    const r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/synctex"):"/synctex", {method:"POST", headers:{"Content-Type":"application/json"},
       body: JSON.stringify({dir:"edit", tex: path, pdf: pdfPath, page, x, y})});
     j = await r.json();
   }
@@ -1411,7 +1411,7 @@ function selCancel(){
   selHide(); lastSel = null; selTa.value = "";
   if(cm) cm.setCursor(cm.getCursor());
   if(window._clMark){ window._clMark.clear(); window._clMark = null; }
-  fetch("/selinfo", {method:"POST", headers:{"Content-Type":"application/json"},
+  fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/selinfo"):"/selinfo", {method:"POST", headers:{"Content-Type":"application/json"},
     body: JSON.stringify({lines:0, words:0})}).catch(()=>{});
 }
 const __EMB=(function(){try{return window.self!==window.top;}catch(e){return true;}})();
@@ -1437,7 +1437,7 @@ function selSend(delivery, actionBtn){
   btn.classList.remove('sent','failed');
   btn.classList.add('sending');
   btn.textContent = "⏳";
-  fetch("/quote", {method:"POST", headers:{"Content-Type":"application/json"},
+  fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/quote"):"/quote", {method:"POST", headers:{"Content-Type":"application/json"},
     body: JSON.stringify({rel: path, page: lastSel.page, text: lastSel.text, comment: comment || "",
       direct: sendNow, action: sendNow ? 'apply' : 'ask', held: !sendNow, deliveryMode: delivery,
       target: __ct(), embed: __EMB})})
@@ -1476,7 +1476,7 @@ selPill.querySelector(".del").onclick = e => { e.stopPropagation(); selCancel();
       + '<div class="it' + (cur ? '' : ' on') + '" data-i="-1"><span class="app">auto</span>'
       + '<span class="t">Session du projet (auto)</span></div>';
     try{
-      const j = await (await fetch("/claude-targets")).json();
+      const j = await (await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/claude-targets"):"/claude-targets")).json();
       (j.targets || []).forEach((t, i) => {
         const on = cur && cur.app === t.app && cur.id === t.id;
         html += '<div class="it' + (on ? ' on' : '') + '" data-i="' + i + '"><span class="app">'
@@ -1833,7 +1833,7 @@ setInterval(async () => {
   // vrai — ne jamais recharger le disque par-dessus (restauré à la sortie)
   if(__dv && __dv.isBusy && __dv.isBusy()) return;
   try{
-    const r = await fetch("/code?path=" + encodeURIComponent(path));
+    const r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/code?path="):"/code?path=" + encodeURIComponent(path));
     const j = await r.json();
     if(!(j.mtime && Math.abs(j.mtime - diskMtime) > 0.001)) return;
     const diskText = j.text;
@@ -1897,7 +1897,7 @@ function openTarget(target){
 const EDITABLE = /\.(tex|sty|bib|py|r|R|md|jl|sh|bash|txt|csv|json|yaml|yml|toml)$/;
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 async function pickerShow(dir){
-  const r = await fetch("/ls?dir=" + encodeURIComponent(dir || (path ? path.replace(/\/[^/]*$/, "") : "")));
+  const r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/ls?dir="):"/ls?dir=" + encodeURIComponent(dir || (path ? path.replace(/\/[^/]*$/, "") : "")));
   const j = await r.json();
   if(j.error) return;
   document.getElementById("picker").classList.add("show");
@@ -1946,7 +1946,7 @@ const __dv = DiffVersions({
     restore: document.getElementById("diffRestore"),
   },
   restoreText: async (text) => {
-    const r = await fetch("/codesave", {method:"POST", headers:{"Content-Type":"application/json"},
+    const r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/codesave"):"/codesave", {method:"POST", headers:{"Content-Type":"application/json"},
       body: JSON.stringify({path, text, mtime: diskMtime})});
     const j = await r.json();
     if(j.error) return false;
@@ -1969,7 +1969,7 @@ if(window.self !== window.top){
   dPill.addEventListener("mousedown", (e) => {
     e.preventDefault(); e.stopPropagation();
     if(!dSel) return;
-    fetch("/quote", {method:"POST", headers:{"Content-Type":"application/json"},
+    fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/quote"):"/quote", {method:"POST", headers:{"Content-Type":"application/json"},
       body: JSON.stringify({rel: path, page: "", text: dSel, comment: "", direct: true, embed: true})})
       .then(r => r.json())
       .then(j => { if(j && j.message) __atelierPost({type:"atelier-add-to-chat", text:j.message}); })
@@ -2083,7 +2083,7 @@ if(window.self !== window.top){
   async function runLint(){
     if (__EXT !== "py" || !window.cm) return;
     try {
-      const r = await fetch("/lint?path=" + encodeURIComponent(path));
+      const r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/lint?path="):"/lint?path=" + encodeURIComponent(path));
       const j = await r.json();
       lintMarks.forEach((m) => m.clear && m.clear());
       lintMarks = [];

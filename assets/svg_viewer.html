@@ -530,7 +530,7 @@ function collectEdits(){                                  // per moved/resized e
 function saveSVG(){
   if(!svg) return;
   const b = document.getElementById("savesvg");
-  fetch("/save-svg", { method: "POST", headers: { "Content-Type": "application/json" },
+  fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/save-svg"):"/save-svg", { method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ rel: file, name: file.split("/").pop(), svg: currentSVGText(), edits: collectEdits() }) })
     .then(r => r.json()).then(j => { if(j && j.ok) dirty = false; flash(b, (j && j.ok) ? "Saved ✓" : "Error", "💾"); })
     .catch(() => flash(b, "Error", "💾"));
@@ -540,7 +540,7 @@ function exportPNG(){
   const b = document.getElementById("exportpng");
   const dpi = parseInt(document.getElementById("dpi").value, 10) || 300;
   b.textContent = "rendering…";
-  fetch("/export-png", { method: "POST", headers: { "Content-Type": "application/json" },
+  fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/export-png"):"/export-png", { method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ rel: file, name: file.split("/").pop(), svg: currentSVGText(), dpi: dpi }) })
     .then(r => r.json()).then(j => flash(b, (j && j.ok) ? ("PNG ✓ " + j.dpi + "dpi") : ("Error: " + ((j && j.error) || "")).slice(0, 22), "🖼", 2200))
     .catch(() => flash(b, "Error", "🖼"));
@@ -560,7 +560,7 @@ document.addEventListener("webkitfullscreenchange", onFullscreenChange);
 async function load(){
   try{
     const ver = new URLSearchParams(location.search).get("v") || "";
-    const r = await fetch("/" + file.split("/").map(encodeURIComponent).join("/") + (ver ? "?v=" + ver : ""));
+    const r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/"):"/" + file.split("/").map(encodeURIComponent).join("/") + (ver ? "?v=" + ver : ""));
     if(!r.ok) throw new Error(r.status);
     const txt = await r.text();
     // DOMParser handles the <?xml?> + <!DOCTYPE> prefix that innerHTML mangles; CSS sizes it via viewBox

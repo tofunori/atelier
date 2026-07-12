@@ -9,7 +9,7 @@
    * @returns {Promise<{ok:boolean, pdf?:string|null, root?:string, error?:string, log?:string}>}
    */
   async function compile(path) {
-    var r = await fetch("/compile", {
+    var r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api("/compile"):"/compile", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ path: path }),

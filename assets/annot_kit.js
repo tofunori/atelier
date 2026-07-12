@@ -269,7 +269,7 @@
         + '<div class="it' + (cur ? '' : ' on') + '" data-i="-1"><span class="app">auto</span>'
         + '<span class="t">Session du projet (auto)</span></div>';
       try{
-        var j = await (await fetch('/claude-targets')).json();
+        var j = await (await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api('/claude-targets'):'/claude-targets')).json();
         (j.targets || []).forEach(function(t, i){
           var on = cur && cur.app === t.app && cur.id === t.id;
           items += '<div class="it' + (on ? ' on' : '') + '" data-i="' + i + '">'
@@ -303,7 +303,7 @@
       var x = out.getContext('2d');
       x.drawImage(base.src, 0, 0, base.w, base.h);
       redraw(x, base.w / overlay.width);
-      var r = await fetch('/save', {method: 'POST', headers: {'Content-Type': 'application/json'},
+      var r = await fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api('/save'):'/save', {method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({name: host.name(), dataURL: out.toDataURL('image/png'), direct: !!direct,
           target: getTarget(), embed: EMBEDDED,
           notes: strokes.filter(function(s){ return s.note; }).map(function(s){ return {n: s.n, text: s.note}; })})});
