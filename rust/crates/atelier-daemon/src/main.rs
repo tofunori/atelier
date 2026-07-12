@@ -6,6 +6,7 @@ mod control;
 #[allow(dead_code)]
 mod events;
 mod host;
+mod instance;
 #[allow(dead_code)]
 mod lifecycle;
 #[allow(dead_code)]
@@ -31,7 +32,7 @@ use std::{
     },
     time::Duration,
 };
-use tokio::{net::UnixListener, signal, sync::Notify};
+use tokio::{signal, sync::Notify};
 
 #[derive(Parser, Debug)]
 #[command(name = "atelier-daemon", about = "Persistent Atelier daemon")]
@@ -110,28 +111,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         config.session_ttl_seconds,
     )?;
 
+    // Instance safety: exclusive lock → verify port free → claim control socket.
+    // Never delete a live peer's socket; only remove stale paths after probes fail.
+    let _instance_lock = instance::acquire_instance_lock(&config.state_dir)?;
+    instance::ensure_http_port_free(&config.host, config.port)?;
+
     let control_path = args
         .control_socket
         .unwrap_or_else(|| config.control_socket_path());
-    if control_path.exists() {
-        let _ = fs::remove_file(&control_path);
-    }
-    let control_listener = UnixListener::bind(&control_path).map_err(|error| {
-        format!(
-            "failed to bind control socket {}: {error}",
-            control_path.display()
-        )
-    })?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(&control_path, fs::Permissions::from_mode(0o600))?;
-    }
+    let control_listener = instance::bind_control_socket(&control_path, &token)?;
 
     let address = format!("{}:{}", config.host, config.port);
     let http_listener = tokio::net::TcpListener::bind(&address)
         .await
         .map_err(|error| {
+            // Roll back our control socket if HTTP bind fails after we claimed it.
+            let _ = fs::remove_file(&control_path);
             if error.kind() == std::io::ErrorKind::AddrInUse {
                 format!(
                     "port {} already in use on {} — another daemon or process owns it",
