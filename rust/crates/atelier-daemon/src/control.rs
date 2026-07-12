@@ -365,6 +365,16 @@ async fn dispatch(request: ControlRequest, state: &ControlState) -> ControlRespo
                 .get("label")
                 .and_then(Value::as_str)
                 .unwrap_or("Codex task");
+            let automatic = request
+                .params
+                .get("automatic")
+                .and_then(Value::as_bool)
+                .or_else(|| {
+                    request.params.get("mode").and_then(Value::as_str).map(|mode| {
+                        mode.eq_ignore_ascii_case("automatic") || mode.eq_ignore_ascii_case("auto")
+                    })
+                })
+                .unwrap_or(false);
             match state.host.activate(key).await {
                 Ok(runtime) => {
                     let agent_store = runtime.agent();
@@ -374,7 +384,7 @@ async fn dispatch(request: ControlRequest, state: &ControlState) -> ControlRespo
                         thread.to_string(),
                         Some(label.to_string()),
                         Some(thread.to_string()),
-                        Some(false),
+                        Some(automatic),
                         None,
                     ) {
                         Ok(value) => ControlResponse {
@@ -389,7 +399,8 @@ async fn dispatch(request: ControlRequest, state: &ControlState) -> ControlRespo
                 Err(error) => error_response(request.id, error.code(), error.message()),
             }
         }
-        "annotation.list" => {
+        // Claim pending annotations for a consumer (MCP atelier_get_selection).
+        "annotation.claim" | "annotation.list" => {
             let Some(key) = request.params.get("key").and_then(Value::as_str) else {
                 return error_response(request.id, "INVALID_PARAMS", "key required");
             };
@@ -398,18 +409,55 @@ async fn dispatch(request: ControlRequest, state: &ControlState) -> ControlRespo
                 .get("consumer")
                 .and_then(Value::as_str)
                 .unwrap_or("");
+            // Prefer explicit destination; otherwise thread:{consumer} (Codex convention).
+            let destination = request
+                .params
+                .get("destination")
+                .and_then(Value::as_str)
+                .map(str::to_string)
+                .unwrap_or_else(|| format!("thread:{consumer}"));
             match state.host.activate(key).await {
                 Ok(runtime) => {
                     let agent_store = runtime.agent();
                     let mut agent = agent_store.lock().await;
-                    match agent.claim(consumer, &format!("thread:{consumer}")) {
+                    match agent.claim(consumer, &destination) {
                         Ok(items) => ControlResponse {
                             id: request.id,
                             ok: true,
-                            result: Some(json!({ "items": items, "consumer": consumer })),
+                            result: Some(json!({
+                                "ok": true,
+                                "items": items,
+                                "consumer": consumer,
+                                "destination": destination,
+                            })),
                             error: None,
                         },
                         Err(message) => error_response(request.id, "ANNOTATION_FAILED", message),
+                    }
+                }
+                Err(error) => error_response(request.id, error.code(), error.message()),
+            }
+        }
+        // Full bank view: pending + history + consumers (MCP atelier_list_annotations).
+        "annotation.bank" => {
+            let Some(key) = request.params.get("key").and_then(Value::as_str) else {
+                return error_response(request.id, "INVALID_PARAMS", "key required");
+            };
+            let limit = request
+                .params
+                .get("limit")
+                .and_then(Value::as_u64)
+                .unwrap_or(50)
+                .clamp(1, 200) as usize;
+            match state.host.activate(key).await {
+                Ok(runtime) => {
+                    let agent_store = runtime.agent();
+                    let agent = agent_store.lock().await;
+                    ControlResponse {
+                        id: request.id,
+                        ok: true,
+                        result: Some(agent.status(limit)),
+                        error: None,
                     }
                 }
                 Err(error) => error_response(request.id, error.code(), error.message()),
@@ -443,7 +491,7 @@ async fn dispatch(request: ControlRequest, state: &ControlState) -> ControlRespo
                         Ok(count) => ControlResponse {
                             id: request.id,
                             ok: true,
-                            result: Some(json!({ "acked": count, "ids": ids })),
+                            result: Some(json!({ "ok": true, "acked": count, "ids": ids })),
                             error: None,
                         },
                         Err(message) => error_response(request.id, "ANNOTATION_FAILED", message),
@@ -452,19 +500,111 @@ async fn dispatch(request: ControlRequest, state: &ControlState) -> ControlRespo
                 Err(error) => error_response(request.id, error.code(), error.message()),
             }
         }
+        // Mutate annotation lifecycle: processing | completed | failed | …
         "annotation.status" => {
+            let Some(key) = request.params.get("key").and_then(Value::as_str) else {
+                return error_response(request.id, "INVALID_PARAMS", "key required");
+            };
+            let ids: Vec<String> = request
+                .params
+                .get("ids")
+                .and_then(Value::as_array)
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(Value::as_str)
+                        .map(str::to_string)
+                        .collect()
+                })
+                .unwrap_or_default();
+            let status = request
+                .params
+                .get("status")
+                .and_then(Value::as_str)
+                .unwrap_or("");
+            let result = request
+                .params
+                .get("result")
+                .and_then(Value::as_str)
+                .unwrap_or("");
+            let error = request
+                .params
+                .get("error")
+                .and_then(Value::as_str)
+                .unwrap_or("");
+            if ids.is_empty() || status.is_empty() {
+                return error_response(
+                    request.id,
+                    "INVALID_PARAMS",
+                    "ids and status are required",
+                );
+            }
+            match state.host.activate(key).await {
+                Ok(runtime) => {
+                    let agent_store = runtime.agent();
+                    let mut agent = agent_store.lock().await;
+                    match agent.update_status(&ids, status, result, error) {
+                        Ok(changed) => ControlResponse {
+                            id: request.id,
+                            ok: true,
+                            result: Some(json!({
+                                "ok": true,
+                                "updated": changed,
+                                "ids": ids,
+                                "status": status,
+                            })),
+                            error: None,
+                        },
+                        Err(message) => error_response(request.id, "ANNOTATION_FAILED", message),
+                    }
+                }
+                Err(error) => error_response(request.id, error.code(), error.message()),
+            }
+        }
+        // Test/control helper: enqueue an annotation into the project bank.
+        "annotation.enqueue" => {
             let Some(key) = request.params.get("key").and_then(Value::as_str) else {
                 return error_response(request.id, "INVALID_PARAMS", "key required");
             };
             match state.host.activate(key).await {
                 Ok(runtime) => {
                     let agent_store = runtime.agent();
-                    let agent = agent_store.lock().await;
-                    ControlResponse {
-                        id: request.id,
-                        ok: true,
-                        result: Some(agent.status(50)),
-                        error: None,
+                    let mut agent = agent_store.lock().await;
+                    let mut payload = serde_json::Map::new();
+                    payload.insert(
+                        "artifact".into(),
+                        request
+                            .params
+                            .get("artifact")
+                            .cloned()
+                            .unwrap_or(json!("notes.md")),
+                    );
+                    payload.insert(
+                        "comment".into(),
+                        request
+                            .params
+                            .get("comment")
+                            .cloned()
+                            .unwrap_or(json!("test annotation")),
+                    );
+                    payload.insert(
+                        "destination".into(),
+                        request
+                            .params
+                            .get("destination")
+                            .cloned()
+                            .unwrap_or(json!("auto")),
+                    );
+                    if let Some(held) = request.params.get("held") {
+                        payload.insert("held".into(), held.clone());
+                    }
+                    match agent.enqueue_event(payload) {
+                        Ok(event) => ControlResponse {
+                            id: request.id,
+                            ok: true,
+                            result: Some(event),
+                            error: None,
+                        },
+                        Err(message) => error_response(request.id, "ANNOTATION_FAILED", message),
                     }
                 }
                 Err(error) => error_response(request.id, error.code(), error.message()),

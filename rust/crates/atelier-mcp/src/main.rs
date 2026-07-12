@@ -484,8 +484,12 @@ fn call_daemon(name: &str, root: &str, args: &Value) -> Result<Value, String> {
                 .unwrap_or_default()
                 .to_string();
             daemon_client::call(
-                "annotation.list",
-                json!({ "key": key, "consumer": consumer }),
+                "annotation.claim",
+                json!({
+                    "key": key,
+                    "consumer": consumer,
+                    "destination": format!("thread:{consumer}"),
+                }),
             )
         }
         "atelier_wait_for_annotation" => {
@@ -530,7 +534,14 @@ fn call_daemon(name: &str, root: &str, args: &Value) -> Result<Value, String> {
                 .and_then(Value::as_str)
                 .unwrap_or_default()
                 .to_string();
-            daemon_client::call("project.status", json!({ "key": key }))
+            let limit = args
+                .get("limit")
+                .and_then(Value::as_u64)
+                .unwrap_or(50);
+            daemon_client::call(
+                "annotation.bank",
+                json!({ "key": key, "limit": limit }),
+            )
         }
         "atelier_set_annotation_status" => {
             let key = daemon_client::call("project.register", json!({"root": root}))?
@@ -538,11 +549,23 @@ fn call_daemon(name: &str, root: &str, args: &Value) -> Result<Value, String> {
                 .and_then(Value::as_str)
                 .unwrap_or_default()
                 .to_string();
-            let mut params = args.clone();
-            if let Some(obj) = params.as_object_mut() {
-                obj.insert("key".into(), json!(key));
-            }
-            daemon_client::call("annotation.status", params)
+            let ids = args.get("ids").cloned().unwrap_or(json!([]));
+            let status = args
+                .get("status")
+                .cloned()
+                .unwrap_or(json!("processing"));
+            let result = args.get("result").cloned().unwrap_or(json!(""));
+            let error = args.get("error").cloned().unwrap_or(json!(""));
+            daemon_client::call(
+                "annotation.status",
+                json!({
+                    "key": key,
+                    "ids": ids,
+                    "status": status,
+                    "result": result,
+                    "error": error,
+                }),
+            )
         }
         "atelier_rescan" => {
             let key = daemon_client::call("project.register", json!({"root": root}))?
