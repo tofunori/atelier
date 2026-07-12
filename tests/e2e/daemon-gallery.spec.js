@@ -97,6 +97,10 @@ function writeProject(root) {
     path.join(root, 'script.py'),
     'print("daemon-e2e")\n'
   );
+  writeFileSync(
+    path.join(root, 'preview.rs'),
+    'fn daemon_rust_preview() {\n    println!("rust-card-visible");\n}\n'
+  );
   // Build a real gallery index (fills __FOLDERS__/__DATA__/… placeholders).
   const cli = path.join(REPO, 'rust', 'target', 'debug', 'atelier-cli');
   execFileSync(cli, ['build', '--root', root], {
@@ -111,6 +115,7 @@ function writeProject(root) {
 test('daemon gallery loads runtime/CM6/agent_bridge and opens a file', async ({
   page,
 }) => {
+  test.setTimeout(60000);
   const port = await freePort();
   const stateDir = shortStateDir();
   const project = mkdtempSync(path.join(tmpdir(), 'de2e-'));
@@ -189,6 +194,26 @@ test('daemon gallery loads runtime/CM6/agent_bridge and opens a file', async ({
       null,
       { timeout: 10000 }
     );
+
+    // Code cards lazily load their real project-scoped snippet in daemon mode.
+    // This catches incomplete URLs such as `/snippet?path=` that silently
+    // leave the preview card empty.
+    await page.evaluate(() => {
+      const formats = JSON.parse(localStorage.getItem('figExts') || '{}');
+      formats.rs = true;
+      localStorage.setItem('figExts', JSON.stringify(formats));
+      location.reload();
+    });
+    await page.waitForFunction(
+      () => window.AtelierRuntime && window.AtelierRuntime.ready === true,
+      null,
+      { timeout: 10000 }
+    );
+    const rustSnippet = page.locator('.snip[data-snip="preview.rs"]');
+    await rustSnippet.scrollIntoViewIfNeeded();
+    await expect(rustSnippet).toContainText('daemon_rust_preview', {
+      timeout: 10000,
+    });
 
     // Register a second project and switch to it from the project-name menu.
     const registeredB = await controlCall(stateDir, token, 'project.register', {

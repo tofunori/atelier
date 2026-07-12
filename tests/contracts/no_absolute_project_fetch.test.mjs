@@ -84,7 +84,7 @@ test("atelier_runtime.js patches fetch and rewrites fig_thumbs in daemon mode", 
 test("dynamic query values are assembled before AtelierRuntime.api()", () => {
   const offenders = [];
   const incompleteDynamicQuery =
-    /AtelierRuntime\.api\(\s*(["'`])\/(?:code\?path|ls\?dir|pdfannot\?rel|git(?:log|show|head)\?path|versions\?path|lint\?path|texroot\?path)=\1\s*\)/g;
+    /AtelierRuntime\.api\(\s*(["'`])\/(?:code\?path|snippet\?path|ls\?dir|pdfannot\?rel|git(?:log|show|head)\?path|versions\?path|lint\?path|texroot\?path)=\1\s*\)/g;
   for (const file of walk(root)) {
     const rel = relative(root, file);
     const text = readFileSync(file, "utf8");

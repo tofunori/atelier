@@ -1676,7 +1676,9 @@ const snipObserver = new IntersectionObserver((entries,obs)=>{
   for(const e of entries){
     if(!e.isIntersecting) continue;
     const el=e.target; obs.unobserve(el);
-    fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api('/snippet?path='):'/snippet?path='+encodeURIComponent('__ROOT__/'+el.dataset.snip)+'&n=10')
+    const snippetPath='__ROOT__/'+el.dataset.snip;
+    const snippetUrl='/snippet?path='+encodeURIComponent(snippetPath)+'&n=10';
+    fetch((window.AtelierRuntime&&AtelierRuntime.api)?AtelierRuntime.api(snippetUrl):snippetUrl)
       .then(r=>r.ok?r.text():'').then(t=>{
         const highlighter=window.AtelierCM6&&window.AtelierCM6.highlightCode;
         if(highlighter)el.innerHTML=highlighter(t,el.dataset.ext);else el.textContent=t;
