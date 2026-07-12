@@ -7,7 +7,7 @@ use crate::{
     registry::ProjectRegistry,
     sessions::SessionStore,
 };
-use atelier_server::legacy_project_router;
+use atelier_server::{legacy_project_router, rebuild};
 use axum::{
     Json, Router,
     body::Body,
@@ -218,6 +218,9 @@ async fn project_dispatch(State(state): State<DaemonHttpState>, req: Request) ->
     if stripped == "/api/projects/open" && req.method() == Method::POST {
         return open_project_from_browser(&state, req).await;
     }
+    if stripped == "/api/projects/pick" && req.method() == Method::POST {
+        return pick_project_from_browser(&state).await;
+    }
 
     let runtime = match state.host.activate(&project_key).await {
         Ok(runtime) => runtime,
@@ -301,9 +304,6 @@ async fn open_project_from_browser(state: &DaemonHttpState, req: Request) -> Res
             .into_response();
     };
 
-    if let Err(error) = state.host.activate(&key).await {
-        return host_error(error);
-    }
     let theme = payload
         .get("theme")
         .and_then(Value::as_str)
@@ -312,6 +312,73 @@ async fn open_project_from_browser(state: &DaemonHttpState, req: Request) -> Res
         .get("nativeFs")
         .and_then(Value::as_bool)
         .unwrap_or(true);
+    open_registered_project(state, key, theme, native_fs).await
+}
+
+async fn pick_project_from_browser(state: &DaemonHttpState) -> Response {
+    let selected = match tokio::task::spawn_blocking(native_folder_picker).await {
+        Ok(Ok(selected)) => selected,
+        Ok(Err(message)) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"ok": false, "message": message})),
+            )
+                .into_response();
+        }
+        Err(error) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"ok": false, "message": error.to_string()})),
+            )
+                .into_response();
+        }
+    };
+    let Some(root) = selected else {
+        return (
+            StatusCode::OK,
+            Json(json!({"ok": false, "cancelled": true})),
+        )
+            .into_response();
+    };
+    let key = match state.registry.register(&root).await {
+        Ok((key, _)) => key,
+        Err(message) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({"ok": false, "message": format!("cannot open folder: {message}")})),
+            )
+                .into_response();
+        }
+    };
+    open_registered_project(state, key, "Codex", true).await
+}
+
+async fn open_registered_project(
+    state: &DaemonHttpState,
+    key: String,
+    theme: &str,
+    native_fs: bool,
+) -> Response {
+    let runtime = match state.host.activate(&key).await {
+        Ok(runtime) => runtime,
+        Err(error) => return host_error(error),
+    };
+    if !runtime.root().join("figures_index.html").is_file() {
+        let outcome = rebuild(
+            runtime.root(),
+            &runtime.watcher(),
+            &runtime.revision(),
+            &runtime.rebuild_lock(),
+        )
+        .await;
+        if !outcome.ok {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"ok": false, "message": outcome.out})),
+            )
+                .into_response();
+        }
+    }
     match state
         .sessions
         .mint_ticket(&key, None, Some(theme.to_string()), native_fs)
@@ -332,6 +399,31 @@ async fn open_project_from_browser(state: &DaemonHttpState, req: Request) -> Res
         )
             .into_response(),
     }
+}
+
+#[cfg(target_os = "macos")]
+fn native_folder_picker() -> Result<Option<std::path::PathBuf>, String> {
+    let output = std::process::Command::new("/usr/bin/osascript")
+        .args([
+            "-e",
+            r#"POSIX path of (choose folder with prompt "Ouvrir un dossier dans Atelier")"#,
+        ])
+        .output()
+        .map_err(|error| format!("cannot open macOS folder picker: {error}"))?;
+    if output.status.success() {
+        let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        return Ok((!path.is_empty()).then(|| std::path::PathBuf::from(path)));
+    }
+    let message = String::from_utf8_lossy(&output.stderr);
+    if message.contains("User canceled") || message.contains("-128") {
+        return Ok(None);
+    }
+    Err(format!("macOS folder picker failed: {}", message.trim()))
+}
+
+#[cfg(not(target_os = "macos"))]
+fn native_folder_picker() -> Result<Option<std::path::PathBuf>, String> {
+    Err("native folder picker is not available on this platform".into())
 }
 
 fn expand_user_path(raw: &str) -> std::path::PathBuf {

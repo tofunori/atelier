@@ -7,6 +7,7 @@ import vm from "node:vm";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "../..");
 const runtimeSrc = readFileSync(join(root, "assets/atelier_runtime.js"), "utf8");
+const galleryTemplate = readFileSync(join(root, "assets/gallery_template.html"), "utf8");
 
 function loadRuntime({ bootstrap = null, pathname = "/" } = {}) {
   const document = {
@@ -73,4 +74,10 @@ test("bootstrap/path mismatch refuses mutations", () => {
   });
   assert.equal(rt.ready, false);
   assert.match(rt.error, /mismatch/i);
+});
+
+test("daemon project menu uses the native folder picker endpoint", () => {
+  assert.match(galleryTemplate, /\/api\/projects\/pick/);
+  assert.match(galleryTemplate, /Ouverture du Finder/);
+  assert.doesNotMatch(galleryTemplate, /id="projectPath"/);
 });
