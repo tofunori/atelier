@@ -3,6 +3,10 @@ name = "atelier-server"
 version = "0.1.0"
 edition = "2024"
 
+[[bin]]
+name = "atelier-server"
+path = "src/bin/atelier-server.rs"
+
 [dependencies]
 atelier-core = { path = "../atelier-core" }
 axum = "0.8"

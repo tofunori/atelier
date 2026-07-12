@@ -1,6 +1,6 @@
 //! Phase 6 — lecture seule Zotero (copie mtime) + favoris locaux + connecteur add.
 
-use crate::{AppState, request_allowed};
+use crate::{ProjectRuntime, request_allowed};
 use axum::{
     Json,
     body::Bytes,
@@ -330,7 +330,7 @@ pub struct ItemsQuery {
 }
 
 pub async fn zotero_items(
-    State(state): State<AppState>,
+    State(state): State<ProjectRuntime>,
     Query(query): Query<ItemsQuery>,
 ) -> impl IntoResponse {
     let q = query.q.unwrap_or_default();
@@ -344,7 +344,7 @@ pub async fn zotero_items(
     }
 }
 
-pub async fn zotero_collections(State(state): State<AppState>) -> impl IntoResponse {
+pub async fn zotero_collections(State(state): State<ProjectRuntime>) -> impl IntoResponse {
     match list_collections(&state.zotero) {
         Ok(collections) => {
             (StatusCode::OK, Json(json!({"collections": collections}))).into_response()
@@ -365,7 +365,7 @@ pub struct FavBody {
 }
 
 pub async fn zotero_fav(
-    State(state): State<AppState>,
+    State(state): State<ProjectRuntime>,
     headers: HeaderMap,
     Json(body): Json<FavBody>,
 ) -> impl IntoResponse {
@@ -396,7 +396,7 @@ pub async fn zotero_fav(
 
 /// POST /zotero-add?name=*.pdf — body = raw PDF bytes.
 pub async fn zotero_add(
-    State(state): State<AppState>,
+    State(state): State<ProjectRuntime>,
     headers: HeaderMap,
     uri: axum::http::Uri,
     body: Bytes,

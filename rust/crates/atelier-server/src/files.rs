@@ -18,7 +18,7 @@ use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 use tokio::process::Command;
 
-use crate::{AppState, request_allowed};
+use crate::{ProjectRuntime, request_allowed};
 
 // ---------------------------------------------------------------------------
 // Query / body types
@@ -152,7 +152,7 @@ fn first_element_name(s: &str) -> Option<&str> {
 // ---------------------------------------------------------------------------
 
 /// `GET /ls?dir=` — listing non-dot entries, case-insensitive sort.
-pub async fn ls(State(state): State<AppState>, Query(query): Query<LsQuery>) -> impl IntoResponse {
+pub async fn ls(State(state): State<ProjectRuntime>, Query(query): Query<LsQuery>) -> impl IntoResponse {
     let requested = query.dir.as_deref().unwrap_or("");
     let dir = match safe_project_path(&state.root, requested) {
         Ok(path) => path,
@@ -221,7 +221,7 @@ pub async fn ls(State(state): State<AppState>, Query(query): Query<LsQuery>) -> 
 
 /// `GET /snippet?path=&n=` — first lines as text/plain (max 600 chars).
 pub async fn snippet(
-    State(state): State<AppState>,
+    State(state): State<ProjectRuntime>,
     Query(query): Query<SnippetQuery>,
 ) -> impl IntoResponse {
     let Ok(src) = safe_project_path(&state.root, &query.path) else {
@@ -275,7 +275,7 @@ fn snippet_response(text: &str, n: usize) -> axum::response::Response {
 
 /// `GET /raw?path=` — binary blob (PDF → application/pdf).
 pub async fn raw(
-    State(state): State<AppState>,
+    State(state): State<ProjectRuntime>,
     Query(query): Query<PathQuery>,
 ) -> impl IntoResponse {
     let Ok(path) = safe_project_path(&state.root, &query.path) else {
@@ -313,7 +313,7 @@ pub async fn raw(
 
 /// `GET /code?path=` — full text + mtime + absolute path.
 pub async fn code(
-    State(state): State<AppState>,
+    State(state): State<ProjectRuntime>,
     Query(query): Query<PathQuery>,
 ) -> impl IntoResponse {
     let Ok(path) = safe_project_path(&state.root, &query.path) else {
@@ -346,7 +346,7 @@ pub async fn code(
 
 /// `GET /texroot?path=` — root document + sibling PDF path.
 pub async fn texroot(
-    State(state): State<AppState>,
+    State(state): State<ProjectRuntime>,
     Query(query): Query<PathQuery>,
 ) -> impl IntoResponse {
     let Ok(path) = safe_project_path(&state.root, &query.path) else {
@@ -370,7 +370,7 @@ pub async fn texroot(
 
 /// `GET /findscript?stem=` — first project hit via `rg -F` (local origin).
 pub async fn findscript(
-    State(state): State<AppState>,
+    State(state): State<ProjectRuntime>,
     headers: HeaderMap,
     Query(query): Query<FindScriptQuery>,
 ) -> impl IntoResponse {
@@ -433,7 +433,7 @@ async fn run_rg_find(project: &Path, stem: &str) -> Option<String> {
 
 /// `POST /codesave` — write text with optional mtime conflict detection.
 pub async fn codesave(
-    State(state): State<AppState>,
+    State(state): State<ProjectRuntime>,
     headers: HeaderMap,
     Json(body): Json<CodeSaveBody>,
 ) -> impl IntoResponse {
@@ -467,7 +467,7 @@ pub async fn codesave(
 
 /// `POST /save-svg` — overwrite in-project SVG + one-time `.orig.bak` + edits sidecar.
 pub async fn save_svg(
-    State(state): State<AppState>,
+    State(state): State<ProjectRuntime>,
     headers: HeaderMap,
     Json(body): Json<SaveSvgBody>,
 ) -> impl IntoResponse {
@@ -547,7 +547,7 @@ pub async fn save_svg(
 
 /// `POST /selinfo` — live selection for agents (`~/.claude/fig-selection.json`).
 pub async fn selinfo(
-    State(state): State<AppState>,
+    State(state): State<ProjectRuntime>,
     headers: HeaderMap,
     Json(body): Json<Value>,
 ) -> impl IntoResponse {

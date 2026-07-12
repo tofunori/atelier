@@ -26,7 +26,7 @@ use std::{
 };
 use tokio::process::Command;
 
-use crate::{AppState, request_allowed};
+use crate::{ProjectRuntime, request_allowed};
 
 const VERSION_TEXT_LIMIT: usize = 8 * 1024 * 1024;
 const VERSION_SOURCES: &[&str] = &[
@@ -681,7 +681,7 @@ pub struct GitShowQuery {
 }
 
 pub async fn githead(
-    State(state): State<AppState>,
+    State(state): State<ProjectRuntime>,
     Query(query): Query<PathQuery>,
 ) -> impl IntoResponse {
     let path = query.path.as_deref().unwrap_or("");
@@ -713,7 +713,7 @@ pub async fn githead(
 }
 
 pub async fn gitlog(
-    State(state): State<AppState>,
+    State(state): State<ProjectRuntime>,
     Query(query): Query<PathQuery>,
 ) -> impl IntoResponse {
     let path = query.path.as_deref().unwrap_or("");
@@ -760,7 +760,7 @@ pub async fn gitlog(
 }
 
 pub async fn gitshow(
-    State(state): State<AppState>,
+    State(state): State<ProjectRuntime>,
     Query(query): Query<GitShowQuery>,
 ) -> impl IntoResponse {
     let path = query.path.as_deref().unwrap_or("");
@@ -782,7 +782,7 @@ pub async fn gitshow(
 }
 
 pub async fn commitmsg(
-    State(state): State<AppState>,
+    State(state): State<ProjectRuntime>,
     headers: HeaderMap,
     Json(query): Json<PathQuery>,
 ) -> impl IntoResponse {
@@ -880,7 +880,7 @@ pub struct GitCommitBody {
 }
 
 pub async fn gitcommit(
-    State(state): State<AppState>,
+    State(state): State<ProjectRuntime>,
     headers: HeaderMap,
     Json(body): Json<GitCommitBody>,
 ) -> impl IntoResponse {
@@ -937,7 +937,7 @@ pub async fn gitcommit(
 }
 
 pub async fn get_versions(
-    State(state): State<AppState>,
+    State(state): State<ProjectRuntime>,
     Query(query): Query<PathQuery>,
 ) -> impl IntoResponse {
     let path = query.path.as_deref().unwrap_or("");
@@ -966,7 +966,7 @@ pub async fn get_versions(
 }
 
 pub async fn post_versions(
-    State(state): State<AppState>,
+    State(state): State<ProjectRuntime>,
     headers: HeaderMap,
     Json(body): Json<Value>,
 ) -> impl IntoResponse {

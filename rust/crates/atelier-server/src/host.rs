@@ -12,7 +12,7 @@ use serde_json::json;
 use std::process::Stdio;
 use tokio::process::Command;
 
-use crate::{AppState, request_allowed};
+use crate::{ProjectRuntime, request_allowed};
 
 const NATIVE_FULLSCREEN_EXTS: &[&str] = &[
     "png", "jpg", "jpeg", "gif", "webp", "tif", "tiff", "bmp", "svg",
@@ -28,7 +28,7 @@ fn json_status(status: StatusCode, payload: serde_json::Value) -> axum::response
 
 /// Deprecated compatibility no-op (same as Python).
 pub async fn orca_fullscreen_exit(
-    State(state): State<AppState>,
+    State(state): State<ProjectRuntime>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
     if !request_allowed(&headers, &state) {
@@ -50,7 +50,7 @@ pub struct NativeFullscreenBody {
 }
 
 pub async fn orca_native_fullscreen(
-    State(state): State<AppState>,
+    State(state): State<ProjectRuntime>,
     headers: HeaderMap,
     body: Option<Json<NativeFullscreenBody>>,
 ) -> impl IntoResponse {

@@ -1,14 +1,4 @@
-mod agent;
-mod documents;
-mod files;
-mod gallery;
-mod git;
-mod host;
-mod workspace;
-mod zotero;
-
-use agent::AgentStore;
-use atelier_core::{Health, WatcherStatus, artifact_snapshot, is_artifact, is_excluded_dir};
+use atelier_core::{Health, WatcherStatus, is_artifact, is_excluded_dir};
 use axum::{
     Json, Router,
     body::Body,
@@ -19,8 +9,6 @@ use axum::{
     routing::{get, post},
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
-use clap::Parser;
-use gallery::EventStore;
 use notify::{Event, EventKind, RecursiveMode, Watcher};
 use serde_json::{Value, json};
 use std::{
@@ -31,50 +19,12 @@ use std::{
 };
 use tokio::{
     process::Command,
-    sync::{Mutex, RwLock, Semaphore, mpsc},
+    sync::{Mutex, RwLock, mpsc},
     time::sleep,
 };
 use tower_http::trace::TraceLayer;
-use workspace::BoardQueue;
-use zotero::ZoteroCache;
 
-#[derive(Parser, Debug, Clone)]
-#[command(name = "atelier-server", about = "Portable Rust backend for Atelier")]
-struct Args {
-    #[arg(long, default_value = ".")]
-    root: PathBuf,
-    #[arg(long, default_value_t = 9360)]
-    port: u16,
-    #[arg(long, default_value = "127.0.0.1")]
-    host: String,
-    #[arg(long, default_value_t = true)]
-    watch: bool,
-    #[arg(long, hide = true)]
-    no_watch: bool,
-}
-
-#[derive(Clone)]
-pub(crate) struct AppState {
-    root: PathBuf,
-    port: u16,
-    revision: Arc<RwLock<u64>>,
-    watcher: Arc<RwLock<WatcherStatus>>,
-    agent: Arc<Mutex<AgentStore>>,
-    rebuild_lock: Arc<Mutex<()>>,
-    agent_token: String,
-    remote: bool,
-    /// Toast events for GET/POST /agent-events (cap 100, like Python).
-    events: Arc<Mutex<EventStore>>,
-    /// Concurrency caps for thumbnail tools and headless Chrome.
-    thumb_sem: Arc<Semaphore>,
-    chrome_sem: Arc<Semaphore>,
-    /// Whiteboard command queue (drained by GET /board/poll).
-    board: Arc<Mutex<BoardQueue>>,
-    /// Serialize notes/board disk writes.
-    workspace_lock: Arc<Mutex<()>>,
-    /// Zotero readonly copy mtime cache.
-    zotero: Arc<std::sync::Mutex<ZoteroCache>>,
-}
+use crate::project_runtime::ProjectRuntime;
 
 fn now() -> u64 {
     SystemTime::now()
@@ -100,7 +50,7 @@ fn relevant_change(root: &PathBuf, path: &std::path::Path) -> Option<String> {
     Some(relative.to_string_lossy().replace('\\', "/"))
 }
 
-async fn ping(State(state): State<AppState>) -> Json<Health> {
+async fn ping(State(state): State<ProjectRuntime>) -> Json<Health> {
     let codex = (!state.agent_token.is_empty()).then_some("codex".to_string());
     Json(Health {
         ok: true,
@@ -115,7 +65,7 @@ async fn ping(State(state): State<AppState>) -> Json<Health> {
     })
 }
 
-async fn health(State(state): State<AppState>) -> Json<Value> {
+async fn health(State(state): State<ProjectRuntime>) -> Json<Value> {
     let rebuild_busy = state.rebuild_lock.try_lock().is_err();
     let payload = serde_json::json!({
         "ok": true,
@@ -134,11 +84,11 @@ async fn health(State(state): State<AppState>) -> Json<Value> {
     Json(payload)
 }
 
-async fn revision(State(state): State<AppState>) -> Json<Value> {
+async fn revision(State(state): State<ProjectRuntime>) -> Json<Value> {
     Json(serde_json::json!({ "rev": *state.revision.read().await }))
 }
 
-async fn data(State(state): State<AppState>) -> impl IntoResponse {
+async fn data(State(state): State<ProjectRuntime>) -> impl IntoResponse {
     let path = state.root.join("figures_data.json");
     match tokio::fs::read(path).await {
         Ok(bytes) => (
@@ -165,7 +115,7 @@ fn default_gallery_state() -> Value {
     })
 }
 
-async fn gallery_state(State(state): State<AppState>) -> impl IntoResponse {
+async fn gallery_state(State(state): State<ProjectRuntime>) -> impl IntoResponse {
     let path = state.root.join(".fig_state.json");
     match tokio::fs::read_to_string(path).await {
         Ok(raw) => match serde_json::from_str::<Value>(&raw) {
@@ -181,7 +131,7 @@ async fn gallery_state(State(state): State<AppState>) -> impl IntoResponse {
 }
 
 async fn save_gallery_state(
-    State(state): State<AppState>,
+    State(state): State<ProjectRuntime>,
     headers: HeaderMap,
     Json(value): Json<Value>,
 ) -> impl IntoResponse {
@@ -345,7 +295,7 @@ struct AgentStatusQuery {
 }
 
 async fn agent_status(
-    State(state): State<AppState>,
+    State(state): State<ProjectRuntime>,
     headers: HeaderMap,
     Query(query): Query<AgentStatusQuery>,
 ) -> impl IntoResponse {
@@ -375,7 +325,7 @@ struct RegenerateRequest {
 }
 
 async fn provenance(
-    State(state): State<AppState>,
+    State(state): State<ProjectRuntime>,
     Query(query): Query<ProvenanceQuery>,
 ) -> impl IntoResponse {
     let path = state.root.join("figures_data.json");
@@ -416,7 +366,7 @@ async fn provenance(
 }
 
 async fn regenerate(
-    State(state): State<AppState>,
+    State(state): State<ProjectRuntime>,
     headers: HeaderMap,
     Json(request): Json<RegenerateRequest>,
 ) -> impl IntoResponse {
@@ -596,7 +546,7 @@ fn authorized(headers: &HeaderMap, token: &str) -> bool {
         .is_some_and(|value| value == expected)
 }
 
-pub(crate) fn request_allowed(headers: &HeaderMap, state: &AppState) -> bool {
+pub fn request_allowed(headers: &HeaderMap, state: &ProjectRuntime) -> bool {
     (!state.remote && loopback_origin(headers)) || authorized(headers, &state.agent_token)
 }
 
@@ -638,7 +588,7 @@ async fn options_middleware(req: Request, next: Next) -> axum::response::Respons
 }
 
 async fn remote_auth_middleware(
-    State(state): State<AppState>,
+    State(state): State<ProjectRuntime>,
     req: Request,
     next: Next,
 ) -> axum::response::Response {
@@ -653,7 +603,7 @@ async fn remote_auth_middleware(
 }
 
 async fn static_asset(
-    State(state): State<AppState>,
+    State(state): State<ProjectRuntime>,
     method: Method,
     headers: HeaderMap,
     uri: Uri,
@@ -845,7 +795,7 @@ async fn serve_video(
 }
 
 async fn quote(
-    State(state): State<AppState>,
+    State(state): State<ProjectRuntime>,
     headers: HeaderMap,
     Json(request): Json<Value>,
 ) -> impl IntoResponse {
@@ -949,7 +899,7 @@ async fn quote(
     payload.insert("comment".to_string(), json!(comment));
     payload.insert(
         "anchor".to_string(),
-        agent::normalize_anchor(&request, &rel),
+        crate::agent::normalize_anchor(&request, &rel),
     );
     payload.insert("message".to_string(), json!(message));
     payload.insert("requestedDirect".to_string(), json!(direct));
@@ -1000,7 +950,7 @@ fn safe_annotation_stem(value: &str) -> String {
 }
 
 async fn save_annotation(
-    State(state): State<AppState>,
+    State(state): State<ProjectRuntime>,
     headers: HeaderMap,
     Json(request): Json<Value>,
 ) -> impl IntoResponse {
@@ -1134,7 +1084,7 @@ async fn save_annotation(
     );
     payload.insert(
         "notes".to_string(),
-        agent::normalize_notes(request.get("notes")),
+        crate::agent::normalize_notes(request.get("notes")),
     );
     payload.insert(
         "anchor".to_string(),
@@ -1169,7 +1119,7 @@ async fn save_annotation(
 }
 
 async fn get_agent_selection(
-    State(state): State<AppState>,
+    State(state): State<ProjectRuntime>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
     if !request_allowed(&headers, &state) || !authorized(&headers, &state.agent_token) {
@@ -1201,7 +1151,7 @@ struct PreferencesRequest {
 }
 
 async fn agent_preferences(
-    State(state): State<AppState>,
+    State(state): State<ProjectRuntime>,
     headers: HeaderMap,
     Json(request): Json<PreferencesRequest>,
 ) -> impl IntoResponse {
@@ -1230,7 +1180,7 @@ struct BatchRequest {
 }
 
 async fn batch_release(
-    State(state): State<AppState>,
+    State(state): State<ProjectRuntime>,
     headers: HeaderMap,
     Json(request): Json<BatchRequest>,
 ) -> impl IntoResponse {
@@ -1260,7 +1210,7 @@ async fn batch_release(
 }
 
 async fn batch_cancel(
-    State(state): State<AppState>,
+    State(state): State<ProjectRuntime>,
     headers: HeaderMap,
     Json(request): Json<BatchRequest>,
 ) -> impl IntoResponse {
@@ -1290,7 +1240,7 @@ async fn batch_cancel(
 }
 
 async fn selection(
-    State(state): State<AppState>,
+    State(state): State<ProjectRuntime>,
     headers: HeaderMap,
     Json(request): Json<Value>,
 ) -> impl IntoResponse {
@@ -1378,11 +1328,11 @@ async fn selection(
     payload.insert("region".to_string(), region);
     payload.insert(
         "anchor".to_string(),
-        agent::normalize_anchor(&request, &rel),
+        crate::agent::normalize_anchor(&request, &rel),
     );
     payload.insert(
         "notes".to_string(),
-        agent::normalize_notes(request.get("notes")),
+        crate::agent::normalize_notes(request.get("notes")),
     );
     payload.insert("requestedDirect".to_string(), json!(direct));
     payload.extend(agent.delivery(
@@ -1403,7 +1353,7 @@ async fn selection(
 }
 
 async fn register_consumer(
-    State(state): State<AppState>,
+    State(state): State<ProjectRuntime>,
     headers: HeaderMap,
     Json(request): Json<RegisterRequest>,
 ) -> impl IntoResponse {
@@ -1433,7 +1383,7 @@ async fn register_consumer(
 }
 
 async fn selections(
-    State(state): State<AppState>,
+    State(state): State<ProjectRuntime>,
     headers: HeaderMap,
     Query(query): Query<SelectionQuery>,
 ) -> impl IntoResponse {
@@ -1456,7 +1406,7 @@ async fn selections(
 }
 
 async fn acknowledge(
-    State(state): State<AppState>,
+    State(state): State<ProjectRuntime>,
     headers: HeaderMap,
     Json(request): Json<IdsRequest>,
 ) -> impl IntoResponse {
@@ -1482,7 +1432,7 @@ async fn acknowledge(
 }
 
 async fn release(
-    State(state): State<AppState>,
+    State(state): State<ProjectRuntime>,
     headers: HeaderMap,
     Json(request): Json<IdsRequest>,
 ) -> impl IntoResponse {
@@ -1508,7 +1458,7 @@ async fn release(
 }
 
 async fn delete_annotations(
-    State(state): State<AppState>,
+    State(state): State<ProjectRuntime>,
     headers: HeaderMap,
     Json(request): Json<IdsRequest>,
 ) -> impl IntoResponse {
@@ -1527,7 +1477,7 @@ async fn delete_annotations(
 }
 
 async fn restore_annotations(
-    State(state): State<AppState>,
+    State(state): State<ProjectRuntime>,
     headers: HeaderMap,
     Json(request): Json<IdsRequest>,
 ) -> impl IntoResponse {
@@ -1546,7 +1496,7 @@ async fn restore_annotations(
 }
 
 async fn annotation_status(
-    State(state): State<AppState>,
+    State(state): State<ProjectRuntime>,
     headers: HeaderMap,
     Json(request): Json<IdsRequest>,
 ) -> impl IntoResponse {
@@ -1569,7 +1519,7 @@ async fn annotation_status(
     }
 }
 
-async fn rescan(State(state): State<AppState>, headers: HeaderMap) -> impl IntoResponse {
+async fn rescan(State(state): State<ProjectRuntime>, headers: HeaderMap) -> impl IntoResponse {
     if !request_allowed(&headers, &state) {
         return (
             StatusCode::FORBIDDEN,
@@ -1593,7 +1543,7 @@ async fn rescan(State(state): State<AppState>, headers: HeaderMap) -> impl IntoR
 
 /// Résultat d'un rebuild — ce que /rescan renvoie au client, aligné sur le
 /// contrat Python `{"ok": rc == 0, "out": derniers 200 caractères}`.
-pub(crate) struct RebuildOutcome {
+pub struct RebuildOutcome {
     ok: bool,
     out: String,
 }
@@ -1607,7 +1557,7 @@ impl RebuildOutcome {
     }
 }
 
-pub(crate) async fn rebuild(
+pub async fn rebuild(
     root: &std::path::Path,
     status: &Arc<RwLock<WatcherStatus>>,
     revision: &Arc<RwLock<u64>>,
@@ -1656,7 +1606,7 @@ pub(crate) async fn rebuild(
     }
 }
 
-async fn start_watcher(state: AppState) -> Result<(), String> {
+async fn start_watcher(state: ProjectRuntime) -> Result<(), String> {
     let (tx, mut rx) = mpsc::unbounded_channel::<Result<Event, notify::Error>>();
     let root = state.root.clone();
     let tx_for_watcher = tx.clone();
@@ -1705,122 +1655,82 @@ async fn start_watcher(state: AppState) -> Result<(), String> {
     }
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let args = Args::parse();
-    let root = std::fs::canonicalize(args.root)?;
-    let remote = !matches!(
-        args.host.as_str(),
-        "127.0.0.1" | "localhost" | "::1" | "[::1]"
-    );
-    if remote && std::env::var("ATELIER_ALLOW_REMOTE").as_deref() != Ok("1") {
-        return Err("refusing non-loopback bind; set ATELIER_ALLOW_REMOTE=1 explicitly".into());
-    }
-    let agent_token = std::env::var("ATELIER_AGENT_TOKEN").unwrap_or_default();
-    if remote && agent_token.is_empty() {
-        return Err("remote bind requires ATELIER_AGENT_TOKEN".into());
-    }
-    let initial_revision = artifact_snapshot(&root)
-        .map(|snapshot| snapshot.len() as u64)
-        .unwrap_or_default();
-    let cpu = std::thread::available_parallelism()
-        .map(|n| n.get())
-        .unwrap_or(4);
-    let thumb_permits = cpu.clamp(2, 8);
-    let state = AppState {
-        root: root.clone(),
-        port: args.port,
-        revision: Arc::new(RwLock::new(initial_revision)),
-        watcher: Arc::new(RwLock::new(WatcherStatus {
-            enabled: args.watch && !args.no_watch,
-            ..Default::default()
-        })),
-        agent: Arc::new(Mutex::new(AgentStore::load(&root))),
-        rebuild_lock: Arc::new(Mutex::new(())),
-        agent_token,
-        remote,
-        events: Arc::new(Mutex::new(EventStore::new())),
-        thumb_sem: Arc::new(Semaphore::new(thumb_permits)),
-        chrome_sem: Arc::new(Semaphore::new(2)),
-        board: Arc::new(Mutex::new(BoardQueue::default())),
-        workspace_lock: Arc::new(Mutex::new(())),
-        zotero: Arc::new(std::sync::Mutex::new(ZoteroCache::default())),
-    };
-    if args.watch && !args.no_watch {
-        let watcher_state = state.clone();
-        tokio::spawn(async move {
-            if let Err(error) = start_watcher(watcher_state.clone()).await {
-                let mut status = watcher_state.watcher.write().await;
-                status.error = Some(error);
-                status.running = false;
-            }
-        });
-    }
-    let app = Router::new()
+/// Configuration for the legacy mono-project binary.
+#[derive(Debug, Clone)]
+pub struct LegacyServerConfig {
+    pub root: PathBuf,
+    pub port: u16,
+    pub host: String,
+    pub watch: bool,
+}
+
+/// Build the legacy un-prefixed project router (exact historical routes).
+pub fn legacy_project_router(state: ProjectRuntime) -> Router {
+    Router::new()
         .route("/ping", get(ping))
         .route("/health", get(health))
         .route("/rev", get(revision))
         .route("/data", get(data))
         .route("/state", get(gallery_state).post(save_gallery_state))
         // Phase 1 — fichiers, état, éditeurs
-        .route("/ls", get(files::ls))
-        .route("/snippet", get(files::snippet))
-        .route("/raw", get(files::raw))
-        .route("/code", get(files::code))
-        .route("/texroot", get(files::texroot))
-        .route("/findscript", get(files::findscript))
-        .route("/codesave", post(files::codesave))
-        .route("/save-svg", post(files::save_svg))
-        .route("/selinfo", post(files::selinfo))
+        .route("/ls", get(crate::files::ls))
+        .route("/snippet", get(crate::files::snippet))
+        .route("/raw", get(crate::files::raw))
+        .route("/code", get(crate::files::code))
+        .route("/texroot", get(crate::files::texroot))
+        .route("/findscript", get(crate::files::findscript))
+        .route("/codesave", post(crate::files::codesave))
+        .route("/save-svg", post(crate::files::save_svg))
+        .route("/selinfo", post(crate::files::selinfo))
         // Phase 2 — galerie, miniatures, actions, toast events
-        .route("/thumb", get(gallery::thumb))
-        .route("/rasterize", get(gallery::rasterize))
-        .route("/delete", post(gallery::delete))
-        .route("/export", post(gallery::export))
-        .route("/open", post(gallery::open_path))
-        .route("/clear-quote", post(gallery::clear_quote))
-        .route("/claude-targets", get(gallery::claude_targets))
-        .route("/quote", get(gallery::get_quote).post(quote))
-        .route("/agent-events", get(gallery::agent_events))
-        .route("/claude-events", get(gallery::agent_events))
-        .route("/agent-event", post(gallery::post_agent_event))
-        .route("/claude-event", post(gallery::post_agent_event))
+        .route("/thumb", get(crate::gallery::thumb))
+        .route("/rasterize", get(crate::gallery::rasterize))
+        .route("/delete", post(crate::gallery::delete))
+        .route("/export", post(crate::gallery::export))
+        .route("/open", post(crate::gallery::open_path))
+        .route("/clear-quote", post(crate::gallery::clear_quote))
+        .route("/claude-targets", get(crate::gallery::claude_targets))
+        .route("/quote", get(crate::gallery::get_quote).post(quote))
+        .route("/agent-events", get(crate::gallery::agent_events))
+        .route("/claude-events", get(crate::gallery::agent_events))
+        .route("/agent-event", post(crate::gallery::post_agent_event))
+        .route("/claude-event", post(crate::gallery::post_agent_event))
         // Phase 3 — Git + historique de versions
-        .route("/githead", get(git::githead))
-        .route("/gitlog", get(git::gitlog))
-        .route("/gitshow", get(git::gitshow))
-        .route("/commitmsg", post(git::commitmsg))
-        .route("/gitcommit", post(git::gitcommit))
-        .route("/versions", get(git::get_versions).post(git::post_versions))
+        .route("/githead", get(crate::git::githead))
+        .route("/gitlog", get(crate::git::gitlog))
+        .route("/gitshow", get(crate::git::gitshow))
+        .route("/commitmsg", post(crate::git::commitmsg))
+        .route("/gitcommit", post(crate::git::gitcommit))
+        .route("/versions", get(crate::git::get_versions).post(crate::git::post_versions))
         // Phase 4 — LaTeX / PDF / export PNG
-        .route("/compile", post(documents::compile))
-        .route("/synctex", post(documents::synctex))
+        .route("/compile", post(crate::documents::compile))
+        .route("/synctex", post(crate::documents::synctex))
         .route(
             "/pdfannot",
-            get(documents::get_pdfannot).post(documents::post_pdfannot),
+            get(crate::documents::get_pdfannot).post(crate::documents::post_pdfannot),
         )
-        .route("/export-png", post(documents::export_png))
-        .route("/lint", get(documents::lint))
+        .route("/export-png", post(crate::documents::export_png))
+        .route("/lint", get(crate::documents::lint))
         // Phase 5 — notes + whiteboard
-        .route("/notes/load", get(workspace::notes_load))
-        .route("/notes/save", post(workspace::notes_save))
-        .route("/board/load", get(workspace::board_load))
-        .route("/board/save", post(workspace::board_save))
-        .route("/board/poll", get(workspace::board_poll))
-        .route("/board/command", post(workspace::board_command))
-        .route("/notes/open-surface", post(workspace::open_surface))
-        .route("/board/open-surface", post(workspace::open_surface))
+        .route("/notes/load", get(crate::workspace::notes_load))
+        .route("/notes/save", post(crate::workspace::notes_save))
+        .route("/board/load", get(crate::workspace::board_load))
+        .route("/board/save", post(crate::workspace::board_save))
+        .route("/board/poll", get(crate::workspace::board_poll))
+        .route("/board/command", post(crate::workspace::board_command))
+        .route("/notes/open-surface", post(crate::workspace::open_surface))
+        .route("/board/open-surface", post(crate::workspace::open_surface))
         // Phase 6 — Zotero
-        .route("/zotero-items", get(zotero::zotero_items))
-        .route("/zotero-collections", get(zotero::zotero_collections))
-        .route("/zotero-fav", post(zotero::zotero_fav))
-        .route("/zotero-add", post(zotero::zotero_add))
-        .route("/zotero/{key}/{fname}", get(zotero::zotero_pdf))
+        .route("/zotero-items", get(crate::zotero::zotero_items))
+        .route("/zotero-collections", get(crate::zotero::zotero_collections))
+        .route("/zotero-fav", post(crate::zotero::zotero_fav))
+        .route("/zotero-add", post(crate::zotero::zotero_add))
+        .route("/zotero/{key}/{fname}", get(crate::zotero::zotero_pdf))
         // Phase 7 — hôte macOS
-        .route("/orca-fullscreen-exit", post(host::orca_fullscreen_exit))
+        .route("/orca-fullscreen-exit", post(crate::host::orca_fullscreen_exit))
         .route(
             "/orca-native-fullscreen",
-            post(host::orca_native_fullscreen),
+            post(crate::host::orca_native_fullscreen),
         )
         // Phase 8 — agent bridge remaining endpoints
         .route("/agent-status", get(agent_status))
@@ -1846,8 +1756,42 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             remote_auth_middleware,
         ))
         .layer(TraceLayer::new_for_http())
-        .with_state(state);
-    let address = format!("{}:{}", args.host, args.port);
+        .with_state(state)
+}
+
+/// Run the historical mono-project HTTP server.
+pub async fn run_legacy_server(config: LegacyServerConfig) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let root = std::fs::canonicalize(&config.root)?;
+    let remote = !matches!(
+        config.host.as_str(),
+        "127.0.0.1" | "localhost" | "::1" | "[::1]"
+    );
+    if remote && std::env::var("ATELIER_ALLOW_REMOTE").as_deref() != Ok("1") {
+        return Err("refusing non-loopback bind; set ATELIER_ALLOW_REMOTE=1 explicitly".into());
+    }
+    let agent_token = std::env::var("ATELIER_AGENT_TOKEN").unwrap_or_default();
+    if remote && agent_token.is_empty() {
+        return Err("remote bind requires ATELIER_AGENT_TOKEN".into());
+    }
+    let state = ProjectRuntime::new_legacy(
+        root,
+        config.port,
+        agent_token,
+        remote,
+        config.watch,
+    );
+    if config.watch {
+        let watcher_state = state.clone();
+        tokio::spawn(async move {
+            if let Err(error) = start_watcher(watcher_state.clone()).await {
+                let mut status = watcher_state.watcher.write().await;
+                status.error = Some(error);
+                status.running = false;
+            }
+        });
+    }
+    let app = legacy_project_router(state);
+    let address = format!("{}:{}", config.host, config.port);
     let listener = tokio::net::TcpListener::bind(&address).await?;
     eprintln!("atelier Rust backend listening on http://{address}");
     axum::serve(listener, app).await?;

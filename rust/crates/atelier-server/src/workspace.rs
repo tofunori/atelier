@@ -18,7 +18,7 @@ use std::{
 };
 use tokio::process::Command;
 
-use crate::{AppState, request_allowed};
+use crate::{ProjectRuntime, request_allowed};
 
 pub const BOARD_QUEUE_MAX: usize = 500;
 const NOTES_MAX: u64 = 16 * 1024 * 1024;
@@ -61,7 +61,7 @@ fn body_len_ok(headers: &HeaderMap, limit: u64) -> bool {
         .unwrap_or(false)
 }
 
-fn agent_or_no_push(state: &AppState) -> bool {
+fn agent_or_no_push(state: &ProjectRuntime) -> bool {
     !state.agent_token.is_empty()
         || std::env::var("ATELIER_AGENT_HOST")
             .map(|v| !v.is_empty())
@@ -81,7 +81,7 @@ fn keep_previous(path: &Path) {
 // Notes
 // ---------------------------------------------------------------------------
 
-pub async fn notes_load(State(state): State<AppState>) -> impl IntoResponse {
+pub async fn notes_load(State(state): State<ProjectRuntime>) -> impl IntoResponse {
     let path = state.root.join("notes.md");
     match tokio::fs::read(&path).await {
         Ok(bytes) => {
@@ -101,7 +101,7 @@ pub struct NotesSaveBody {
 }
 
 pub async fn notes_save(
-    State(state): State<AppState>,
+    State(state): State<ProjectRuntime>,
     headers: HeaderMap,
     Json(body): Json<NotesSaveBody>,
 ) -> impl IntoResponse {
@@ -131,7 +131,7 @@ pub async fn notes_save(
 // Board
 // ---------------------------------------------------------------------------
 
-pub async fn board_load(State(state): State<AppState>) -> impl IntoResponse {
+pub async fn board_load(State(state): State<ProjectRuntime>) -> impl IntoResponse {
     let path = state.root.join(".fig_thumbs").join("board.tldr.json");
     match tokio::fs::read_to_string(&path).await {
         Ok(raw) => match serde_json::from_str::<Value>(&raw) {
@@ -151,7 +151,7 @@ pub struct BoardSaveBody {
 }
 
 pub async fn board_save(
-    State(state): State<AppState>,
+    State(state): State<ProjectRuntime>,
     headers: HeaderMap,
     Json(body): Json<BoardSaveBody>,
 ) -> impl IntoResponse {
@@ -186,13 +186,13 @@ pub async fn board_save(
     }
 }
 
-pub async fn board_poll(State(state): State<AppState>) -> impl IntoResponse {
+pub async fn board_poll(State(state): State<ProjectRuntime>) -> impl IntoResponse {
     let cmds = state.board.lock().await.drain();
     (StatusCode::OK, Json(json!({"commands": cmds}))).into_response()
 }
 
 pub async fn board_command(
-    State(state): State<AppState>,
+    State(state): State<ProjectRuntime>,
     headers: HeaderMap,
     Json(mut cmd): Json<Value>,
 ) -> impl IntoResponse {
@@ -253,7 +253,7 @@ pub struct OpenSurfaceBody {
 }
 
 pub async fn open_surface(
-    State(state): State<AppState>,
+    State(state): State<ProjectRuntime>,
     headers: HeaderMap,
     uri: axum::http::Uri,
     body: Option<Json<OpenSurfaceBody>>,

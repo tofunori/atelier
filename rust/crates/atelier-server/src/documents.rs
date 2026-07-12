@@ -20,7 +20,7 @@ use std::{
 };
 use tokio::process::Command;
 
-use crate::{AppState, request_allowed};
+use crate::{ProjectRuntime, request_allowed};
 
 // ---------------------------------------------------------------------------
 // Tool discovery
@@ -79,7 +79,7 @@ pub struct CompileBody {
 }
 
 pub async fn compile(
-    State(state): State<AppState>,
+    State(state): State<ProjectRuntime>,
     headers: HeaderMap,
     Json(body): Json<CompileBody>,
 ) -> impl IntoResponse {
@@ -276,7 +276,7 @@ fn value_as_f64(v: Option<&Value>) -> Option<f64> {
 }
 
 pub async fn synctex(
-    State(state): State<AppState>,
+    State(state): State<ProjectRuntime>,
     headers: HeaderMap,
     Json(body): Json<SynctexBody>,
 ) -> impl IntoResponse {
@@ -383,7 +383,7 @@ fn read_pdf_store(path: &Path) -> Value {
 }
 
 pub async fn get_pdfannot(
-    State(state): State<AppState>,
+    State(state): State<ProjectRuntime>,
     Query(query): Query<PdfAnnotQuery>,
 ) -> impl IntoResponse {
     let rel = query.rel.unwrap_or_default();
@@ -393,7 +393,7 @@ pub async fn get_pdfannot(
 }
 
 pub async fn post_pdfannot(
-    State(state): State<AppState>,
+    State(state): State<ProjectRuntime>,
     headers: HeaderMap,
     Json(body): Json<Value>,
 ) -> impl IntoResponse {
@@ -460,7 +460,7 @@ pub struct ExportPngBody {
 }
 
 pub async fn export_png(
-    State(state): State<AppState>,
+    State(state): State<ProjectRuntime>,
     headers: HeaderMap,
     Json(body): Json<ExportPngBody>,
 ) -> impl IntoResponse {

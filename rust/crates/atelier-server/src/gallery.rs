@@ -22,7 +22,7 @@ use std::{
 use tokio::process::Command;
 use zip::{ZipWriter, write::SimpleFileOptions};
 
-use crate::{AppState, request_allowed};
+use crate::{ProjectRuntime, request_allowed};
 
 const SNIP_EXTS: &[&str] = &["py", "r", "jl", "sh", "tex", "md", "csv"];
 const EVENT_CAP: usize = 100;
@@ -189,7 +189,7 @@ fn format_local(secs: i64) -> String {
         .unwrap_or_else(|| "1970-01-01 00:00".into())
 }
 
-fn agent_mode(state: &AppState) -> bool {
+fn agent_mode(state: &ProjectRuntime) -> bool {
     !state.agent_token.is_empty()
         || std::env::var("ATELIER_AGENT_HOST")
             .map(|v| !v.is_empty())
@@ -286,7 +286,7 @@ pub struct AgentEventBody {
 }
 
 pub async fn agent_events(
-    State(state): State<AppState>,
+    State(state): State<ProjectRuntime>,
     Query(query): Query<EventsQuery>,
 ) -> impl IntoResponse {
     let since = query
@@ -304,7 +304,7 @@ pub async fn agent_events(
 }
 
 pub async fn post_agent_event(
-    State(state): State<AppState>,
+    State(state): State<ProjectRuntime>,
     headers: HeaderMap,
     Json(body): Json<AgentEventBody>,
 ) -> impl IntoResponse {
@@ -362,7 +362,7 @@ pub async fn get_quote() -> impl IntoResponse {
     (StatusCode::OK, Json(json!({"pending": pending}))).into_response()
 }
 
-pub async fn clear_quote(State(state): State<AppState>, headers: HeaderMap) -> impl IntoResponse {
+pub async fn clear_quote(State(state): State<ProjectRuntime>, headers: HeaderMap) -> impl IntoResponse {
     if !request_allowed(&headers, &state) {
         return json_error(StatusCode::FORBIDDEN, "cross-origin blocked");
     }
@@ -376,7 +376,7 @@ pub async fn clear_quote(State(state): State<AppState>, headers: HeaderMap) -> i
     }
 }
 
-pub async fn claude_targets(State(state): State<AppState>) -> impl IntoResponse {
+pub async fn claude_targets(State(state): State<ProjectRuntime>) -> impl IntoResponse {
     // NO_PUSH equivalent: mode agent / studio / preview → empty without CLI.
     if agent_mode(&state) {
         return (StatusCode::OK, Json(json!({"targets": []}))).into_response();
@@ -404,7 +404,7 @@ pub struct RasterizeQuery {
 }
 
 pub async fn thumb(
-    State(state): State<AppState>,
+    State(state): State<ProjectRuntime>,
     Query(query): Query<ThumbQuery>,
 ) -> impl IntoResponse {
     let Ok(src) = safe_project_path(&state.root, &query.path) else {
@@ -526,7 +526,7 @@ pub async fn thumb(
 }
 
 pub async fn rasterize(
-    State(state): State<AppState>,
+    State(state): State<ProjectRuntime>,
     Query(query): Query<RasterizeQuery>,
 ) -> impl IntoResponse {
     let Ok(src) = safe_project_path(&state.root, &query.path) else {
@@ -652,7 +652,7 @@ pub struct OpenBody {
 }
 
 pub async fn delete(
-    State(state): State<AppState>,
+    State(state): State<ProjectRuntime>,
     headers: HeaderMap,
     Json(body): Json<DeleteBody>,
 ) -> impl IntoResponse {
@@ -707,7 +707,7 @@ pub async fn delete(
 }
 
 pub async fn export(
-    State(state): State<AppState>,
+    State(state): State<ProjectRuntime>,
     headers: HeaderMap,
     Json(body): Json<ExportBody>,
 ) -> impl IntoResponse {
@@ -915,7 +915,7 @@ fn html_escape(s: &str) -> String {
 }
 
 pub async fn open_path(
-    State(state): State<AppState>,
+    State(state): State<ProjectRuntime>,
     headers: HeaderMap,
     Json(body): Json<OpenBody>,
 ) -> impl IntoResponse {
