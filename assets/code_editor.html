@@ -32,10 +32,30 @@
 :root{--ui-font:-apple-system,'SF Pro Text','Inter Variable',sans-serif;--code-font:ui-monospace,'SF Mono',Menlo,monospace;--bg:#202024;--card:#27272a;--card2:#1f1f23;--txt:#dbdfe5;--muted:#a1a1aa;--accent:#5b9dff;--border:#3f3f46}
   html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);
             font-family:var(--ui-font);display:flex;flex-direction:column}
-  header{background:var(--card);border-bottom:1px solid var(--border);padding:8px 14px;
-         display:flex;gap:12px;align-items:center;font-size:13px;flex-shrink:0;flex-wrap:wrap}
-  #fname{font-weight:600}
-  #state{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:6px;color:var(--muted);font-size:0;flex:none}
+  header{box-sizing:border-box;min-height:44px;background:var(--card);border-bottom:1px solid rgba(255,255,255,.07);padding:6px 12px;
+         display:flex;gap:6px;align-items:center;font-size:13px;flex-shrink:0;flex-wrap:nowrap;overflow:hidden}
+  .tbGroup{display:inline-flex;align-items:center;gap:4px;min-width:0;flex:none}
+  .tbDivider{width:1px;height:20px;background:rgba(255,255,255,.08);margin:0 2px;flex:none}
+  #fname{font-weight:600;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-right:2px}
+  #openFile,#wrapSel,#wrapCustom,.dvBtn,.rewrapCtl{
+    box-sizing:border-box;height:30px;border:1px solid rgba(255,255,255,.08);border-radius:6px;
+    background:rgba(255,255,255,.015);color:var(--muted);font:500 12px/1 var(--ui-font);
+    transition:transform 90ms ease-out,background-color 120ms ease-out,color 120ms ease-out,border-color 120ms ease-out;
+    touch-action:manipulation
+  }
+  #openFile,#wrapSel,#wrapCustom,.dvBtn{padding:0 9px}
+  #openFile{cursor:pointer;white-space:nowrap}
+  #wrapSel{min-width:150px;cursor:pointer;color:var(--txt)}
+  #wrapCustom{width:58px}
+  #openFile:active,.dvBtn:active,.rewrapCtl:active{transform:scale(.96)}
+  @media(hover:hover){
+    #openFile:hover,#wrapSel:hover,.dvBtn:hover,.rewrapCtl:hover{background:rgba(255,255,255,.055);color:var(--txt);border-color:rgba(255,255,255,.12)}
+  }
+  #openFile:focus-visible,#wrapSel:focus-visible,#wrapCustom:focus-visible,.dvBtn:focus-visible,.rewrapCtl:focus-visible{
+    outline:2px solid color-mix(in srgb,var(--accent) 70%,transparent);outline-offset:1px
+  }
+  #state{display:inline-grid;place-items:center;width:26px;height:26px;margin-left:auto;border-radius:6px;color:var(--muted);font-size:0;flex:none}
+  #state:empty{display:none}
   #state::before{font-size:13px;line-height:1;content:'·'}
   #state.dirty{color:#d9a441;background:rgba(217,164,65,.08)}
   #state.dirty::before{content:'●';font-size:8px}
@@ -50,7 +70,13 @@
   .CodeMirror .CodeMirror-selected{background:transparent !important}
   .CodeMirror-focused .CodeMirror-selected{background:transparent !important}
   .CodeMirror-selectedtext{background:rgba(91,157,255,.45) !important;box-shadow:none !important;border-radius:2px}
-  .cm-clsel{background:rgba(91,157,255,.28);border-radius:2px}
+  /* CodeMirror already paints the active selection. The annotation anchor is
+     structural only; giving it a second background creates a doubled tint. */
+  .cm-clsel{background:transparent!important;border-radius:0}
+  /* One selection layer only: CM6 remains visible and stable when the
+     annotation composer receives focus; the browser-native layer stays off. */
+  .cm-editor .cm-content ::selection{background:transparent}
+  .cm-editor .cm-selectionBackground{background:rgba(79,126,190,.46)!important}
   .cm-ghost-suggest{color:#7d858f;opacity:.72;pointer-events:none}
   .texc-hl{background:rgba(232,130,58,.22);border-radius:2px}
   .cm-syncline,.cm-error-line{background:rgba(224,108,117,.12) !important}
@@ -67,21 +93,30 @@
   #pickerList div{padding:7px 14px;font-size:13px;cursor:pointer;display:flex;gap:8px}
   #pickerList div:hover{background:var(--border)}
   #pickerList .d{color:var(--accent)}
-  .dvBtn{background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:6px;
-         padding:3px 8px;font-size:12px;cursor:pointer}
-  .dvBtn:hover{color:var(--txt)}
-  .dvBtn:disabled{cursor:default}
-  #rewrapBtn{width:28px;height:28px;padding:0;display:inline-grid;place-items:center;font-size:15px;line-height:1}
+  .dvBtn{cursor:pointer}
+  .dvBtn:disabled{cursor:default;opacity:.45}
+  #rewrapBtn{width:30px;padding:0;display:inline-grid;place-items:center;line-height:1}
+  #rewrapBtn svg{width:15px;height:15px;display:block}
   #rewrapBtn.fb-ok{color:#75b995;border-color:#75b995}
   #rewrapBtn.fb-noop{color:#d9a441;border-color:#d9a441}
   #rewrapBtn.fb-err{color:#e06c75;border-color:#e06c75}
-  .rewrapCtl{box-sizing:border-box;width:28px;height:28px;display:inline-grid;place-items:center;border:1px solid var(--border);border-radius:6px;color:var(--muted);cursor:pointer;flex:none}
+  .rewrapCtl{width:30px;display:inline-grid;place-items:center;cursor:pointer;flex:none}
   .rewrapCtl input{position:absolute;opacity:0;pointer-events:none}
-  .rewrapCtl::before{content:'↻';font-size:14px;line-height:1}
-  .rewrapCtl:has(input:checked){color:var(--txt);background:var(--border)}
-  .rewrapCtl:hover,#rewrapBtn:hover{color:var(--txt);background:rgba(255,255,255,.04)}
-  #diffTag.on{background:var(--border);color:var(--txt)}
-  #diffGrp{display:inline-flex;align-items:center;gap:4px}
+  .rewrapCtl::before{display:none}
+  .rewrapCtl::after{content:'↵';font:500 14px/1 var(--ui-font)}
+  .rewrapCtl:has(input:checked){color:var(--txt);background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.13)}
+  #diffTag{display:none!important}
+  #diffGrp{display:inline-flex;align-items:center;gap:3px}
+  #diffPrev,#diffNext{width:26px;padding:0}
+  #diffRestore{padding:0 8px}
+  #moduleActions.latexActions{gap:2px;padding-left:2px}
+  .latexActions .dvBtn{width:30px;padding:0;display:inline-grid;place-items:center}
+  .latexActions .dvBtn svg{width:15px;height:15px;display:block}
+  .latexActions .dvBtn.on{color:var(--txt);background:rgba(255,255,255,.075);border-color:rgba(255,255,255,.13)}
+  #latexMoreMenu button:active{transform:scale(.98)}
+  @media(hover:hover){#latexMoreMenu button:hover{background:rgba(255,255,255,.06)}}
+  body:has(.latexActions) #fname{max-width:120px}
+  body:has(.latexActions) #openFile{display:none}
   body.browse #diffGrp{display:none}
   #browser{display:none;flex:1;overflow:auto;padding:14px 18px 40px}
   body.browse #workspace{display:none!important}
@@ -99,9 +134,14 @@
   #workspace{flex:1;display:flex;flex-direction:column;min-height:0}
   #moduleHost{flex:1;display:flex;flex-direction:column;min-height:0}
   #ed{flex:1;display:flex;flex-direction:column;min-height:0;background:#212121}
-  @media (max-width:375px){
-    header{gap:6px;padding:6px 8px}
-    #fname{max-width:40vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  @media (max-width:600px){
+    header{gap:4px;padding:6px 8px}
+    .tbFile{display:none}
+    .tbDivider:first-of-type{display:none}
+    #wrapSel{min-width:132px;width:132px}
+  }
+  @media (prefers-reduced-motion:reduce){
+    #openFile,#wrapSel,#wrapCustom,.dvBtn,.rewrapCtl{transition:none}
   }
   .cm-s-material-darker.CodeMirror{background:#1e2126;color:#d8d3c8}
 </style>
@@ -110,9 +150,13 @@
 <body>
 <script src="/.fig_thumbs/agent_bridge_ui.js"></script>
 <header>
-  <b id="fname"></b>
-  <button id="openFile" style="background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer">Open…</button>
-  <select id="wrapSel" title="Word wrap" style="background:var(--card);color:var(--txt);border:1px solid var(--border);border-radius:6px;padding:3px 6px;font-size:12px;cursor:pointer">
+  <span class="tbGroup tbFile">
+    <b id="fname"></b>
+    <button id="openFile">Ouvrir…</button>
+  </span>
+  <span class="tbDivider" aria-hidden="true"></span>
+  <span class="tbGroup tbWrap">
+  <select id="wrapSel" title="Word wrap">
     <option value="win">Wrap: window</option>
     <option value="off">Wrap: off</option>
     <option value="80">Wrap: 80</option>
@@ -120,11 +164,12 @@
     <option value="120">Wrap: 120</option>
     <option value="custom">Wrap: custom…</option>
   </select>
-  <input id="wrapCustom" type="number" min="20" max="400" step="1" placeholder="cols" title="Wrap column"
-         style="display:none;width:56px;background:var(--card);color:var(--txt);border:1px solid var(--border);border-radius:6px;padding:3px 6px;font-size:12px">
-  <button id="rewrapBtn" class="dvBtn" aria-label="Rewrap" title="Rewrap le paragraphe ou la sélection (⌥Q)">↵</button>
+  <input id="wrapCustom" type="number" min="20" max="400" step="1" placeholder="cols" title="Wrap column" style="display:none">
+  <button id="rewrapBtn" class="dvBtn" aria-label="Rewrap" title="Rewrap le paragraphe ou la sélection (⌥Q)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 4.5h8a3 3 0 0 1 0 6H5"/><path d="m7 8.5-2 2 2 2"/></svg></button>
   <label class="rewrapCtl" aria-label="Rewrap automatique" title="Rewrap automatique à la sauvegarde"><input id="autoRewrap" type="checkbox"><span hidden>Auto</span></label>
-  <span id="moduleActions" style="display:inline-flex;gap:4px;align-items:center"></span>
+  </span>
+  <span id="moduleActions" class="tbGroup"></span>
+  <span class="tbDivider" aria-hidden="true"></span>
   <span id="diffGrp" style="display:none">
     <button id="diffPrev" class="dvBtn" style="display:none" title="Version précédente">&#8249;</button>
     <button id="diffTag" class="dvBtn" disabled style="opacity:.4" title="Historique des modifications — vide pour l’instant (⌘S ou une modif de l’agent crée une version)"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><rect x="2.5" y="1.5" width="11" height="13" rx="2"/><path d="M8 5.2v4M6 7.2h4M6 11h4"/></svg></button>
@@ -156,15 +201,7 @@ const ICO_UP  = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stro
 const ICO_FILE= '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M4 1.5h5.5L13 5v9.5H4z"/><path d="M9.5 1.5V5H13"/></svg>';
 
 function openTarget(target) {
-  const info = AtelierLanguages.resolve(target);
-  // Keep latex on dedicated studio unless shell v2 latex is requested
-  let page = info.page;
-  if (info.surface === "latex" && shellFlag !== "v2") page = "latex_studio.html";
-  if (info.surface === "markdown" && shellFlag !== "v2") page = "md_viewer.html";
-  if (info.surface === "code" || shellFlag === "v2") {
-    if (info.surface === "code") page = "code_editor.html";
-  }
-  const url = "/.fig_thumbs/" + page + "?path=" + encodeURIComponent(target);
+  const url = AtelierLanguages.editorUrl(target);
   if (window.parent !== window) {
     try { window.parent.postMessage({ type: "gallery-open-tab", url, title: target.split("/").pop() }, "*"); return; } catch (e) {}
   }

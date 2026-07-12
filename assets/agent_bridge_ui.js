@@ -204,9 +204,12 @@
   }
   function refresh(){
     nativeFetch('/agent-status?limit=40').then(function(r){return r.json();}).then(function(j){
-      // Visible both in gallery (top-level annotation bank) and in editor iframes.
-      // Hiding at top-level broke /quote queue UI and e2e codex annotation bank.
-      if(j&&j.agentHost==='codex'){state.enabled=true;state.data=j;hub.style.display='block';render();window.dispatchEvent(new CustomEvent('atelier-agent-status',{detail:j}));}
+      // The movable bank belongs to the editor surface and remains available
+      // even before a chat connects. Keep the top-level gallery clean unless a
+      // live Codex host explicitly enables its bank there.
+      var editorSurface=window.self!==window.top||!document.querySelector('.brand');
+      var visible=j&&(editorSurface||j.agentHost==='codex');
+      if(visible){state.enabled=true;state.data=j;hub.style.display='block';render();window.dispatchEvent(new CustomEvent('atelier-agent-status',{detail:j}));}
       else hub.style.display='none';
     }).catch(function(){hub.style.display='none';});
   }

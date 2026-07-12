@@ -1,0 +1,157 @@
+\documentclass[12pt]{report}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{geometry}
+\usepackage{hyperref}
+\usepackage{amsmath}
+\geometry{margin=1in}
+\title{Atelier Long Report Fixture}
+\author{Atelier Test Suite}
+\date{\today}
+
+\begin{document}
+\maketitle
+\tableofcontents
+
+\chapter{Project Overview}
+This report is a second long document for simultaneous-tab testing. It uses the
+report class so that compilation produces a different outline hierarchy and a
+larger PDF with chapter boundaries.
+
+\section{Scope}
+The soak covers source editing, preview resizing, compilation, diagnostics,
+comments, outline navigation, history, and synchronization. It intentionally
+does not depend on external bibliography or image files.
+
+\section{Expected workflow}
+Open this report beside the long article. Keep the preview visible in one tab
+and hidden in the other. Resize both, reload them, and confirm that the stored
+split preference behaves consistently.
+
+\chapter{Long Narrative}
+\section{First sequence}
+The first sequence supplies several paragraphs for scrolling and wrapping. Each
+paragraph is long enough to span multiple visual lines at ordinary editor widths.
+
+During editing, the line number gutter should remain aligned with the source.
+Changing the split width must trigger a CodeMirror refresh without moving the
+cursor or resetting the scroll position.
+
+The preview panel should remain usable when the browser window becomes narrow.
+Neither pane should collapse completely, and the separator should continue to
+indicate that horizontal dragging is available.
+
+\section{Second sequence}
+Background tasks may finish in a different order from the actions that started
+them. The visible status should prioritize save, compile, conflict, and modified
+states over secondary persistence notifications.
+
+The unique phrase REPORT-COMMENT-ANCHOR can be selected for a persistent
+annotation. Rewrap this paragraph and reload the file to validate re-anchoring.
+
+\section{Third sequence}
+Introduce an invalid command on a new line, compile, inspect the gutter marker,
+and click the corresponding log entry. Remove the invalid command and compile
+again; the diagnostic decoration should disappear.
+
+\chapter{Repeated Editing Material}
+\section{Iteration one}
+Iteration one represents an early drafting pass. Add a sentence, save it, and
+inspect the version history. The editor should report a saved state only after
+the server confirms the write.
+
+\section{Iteration two}
+Iteration two represents a revision pass. Select several lines, replace them,
+undo the replacement, and redo it. The history should remain local to this tab.
+
+\section{Iteration three}
+Iteration three represents a formatting pass. Change the wrap column, rewrap a
+comment block, and ensure that ordinary LaTeX commands remain untouched.
+
+\section{Iteration four}
+Iteration four represents a review pass. Add an anchored comment, navigate away,
+return through the outline, and verify that the highlighted range still matches
+the selected source phrase.
+
+\section{Iteration five}
+Iteration five represents a compilation pass. Modify the source without saving
+and press Compile. The shell should persist the buffer before invoking LaTeX.
+
+\section{Iteration six}
+Iteration six represents a synchronization pass. Move from source to PDF, then
+back from the PDF coordinates to the source line. The cursor highlight should be
+brief and should not become a permanent decoration.
+
+\chapter{Technical Notes}
+\section{Split state}
+The split percentage is stored under a dedicated editor preference. Values are
+bounded so that the editor and preview both retain a useful minimum width.
+
+\section{Lifecycle}
+Every listener added by the LaTeX module must be removed when the tab closes.
+This includes cursor events, input events, message events, separator drag events,
+key maps, gutter markers, bookmarks, and annotation marks.
+
+\section{Concurrency}
+The compile lock is acquired before the save operation begins. Rapid repeated
+clicks therefore cannot create overlapping save-and-build chains.
+
+\section{Failure recovery}
+If saving fails, compilation is cancelled and the conflict remains visible. If
+compilation fails, the full log remains available and source diagnostics direct
+the user to the first relevant line.
+
+\chapter{Mathematical Material}
+Consider a sequence $x_1,\ldots,x_n$. Its cumulative sum is
+\begin{equation}
+  S_k = \sum_{i=1}^{k}x_i.
+\end{equation}
+The normalized sequence is
+\begin{equation}
+  z_i = \frac{x_i-\bar{x}}{s}.
+\end{equation}
+
+For repeated measurements indexed by subject $j$ and observation $i$, a simple
+random-intercept model can be written as
+\begin{equation}
+  y_{ij} = \beta_0 + \beta_1 x_{ij} + b_j + \varepsilon_{ij},
+  \qquad b_j \sim \mathcal{N}(0,\tau^2).
+\end{equation}
+
+\chapter{Soak Log Template}
+\section{Session one}
+Record the date, browser width, selected theme, split percentage, compilation
+result, and any unexpected status transition.
+
+\section{Session two}
+Record behavior with two LaTeX tabs, one code tab, and one Markdown tab open at
+the same time. Note any shared state that should have remained independent.
+
+\section{Session three}
+Record behavior after restarting Atelier. Confirm that the gallery still shows
+LaTeX files when the experimental flag is present.
+
+\section{Session four}
+Record comments and SyncTeX behavior after multiple recompilations. Pay attention
+to stale PDF pages and source highlights that point to the wrong line.
+
+\chapter{Conclusion}
+The report provides a durable, editable workload for testing the unified shell.
+The shell should become the default only after these workflows remain reliable
+across several real sessions.
+
+\appendix
+\chapter{Manual Checklist}
+\begin{enumerate}
+  \item Open both long fixtures from the gallery.
+  \item Drag the split separator to several widths.
+  \item Toggle the PDF preview off and on.
+  \item Compile both documents.
+  \item Add and reload anchored comments.
+  \item Trigger and clear a compilation error.
+  \item Exercise SyncTeX in both directions.
+  \item Close one tab while compilation is running.
+  \item Restart Atelier and repeat the key actions.
+\end{enumerate}
+
+\end{document}

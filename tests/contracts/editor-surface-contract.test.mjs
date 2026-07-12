@@ -50,26 +50,21 @@ export const SURFACE_MATRIX = {
   yaml: { surface: "code", page: "code_editor.html", mode: "text", debt: false },
   yml: { surface: "code", page: "code_editor.html", mode: "text", debt: false },
   // document modules
-  tex: { surface: "latex", page: "latex_studio.html", mode: "stex", debt: false },
-  sty: { surface: "latex", page: "latex_studio.html", mode: "stex", debt: false },
-  bib: { surface: "latex", page: "latex_studio.html", mode: "stex", debt: false },
-  md: { surface: "markdown", page: "md_viewer.html", mode: "markdown", debt: false },
+  tex: { surface: "latex", page: "code_editor.html", mode: "stex", debt: false },
+  sty: { surface: "latex", page: "code_editor.html", mode: "stex", debt: false },
+  bib: { surface: "latex", page: "code_editor.html", mode: "stex", debt: false },
+  md: { surface: "markdown", page: "code_editor.html", mode: "markdown", debt: false },
 };
 
 /** Current gallery open routes (inventory). */
 export const OPEN_ROUTES = {
   gallery_tabs_pdf: "/.fig_thumbs/pdf_viewer.html?file=",
-  gallery_tabs_md: "/.fig_thumbs/md_viewer.html?path=",
-  gallery_tabs_tex: "/.fig_thumbs/latex_studio.html?path=",
-  gallery_tabs_code: "/.fig_thumbs/code_editor.html?path=",
-  gallery_lightbox_tex: "/.fig_thumbs/latex_studio.html?path=",
+  gallery_tabs_editor: "canonicalEditorUrl(f.rel)",
   gallery_lightbox_pdf: "/.fig_thumbs/pdf_viewer.html?file=",
-  gallery_lightbox_md: "/.fig_thumbs/md_viewer.html?path=",
-  gallery_lightbox_code: "/.fig_thumbs/code_editor.html?path=",
+  gallery_lightbox_editor: "pdf.src=canonicalEditorUrl(f.rel)",
   gallery_lightbox_svg: "/.fig_thumbs/svg_viewer.html?file=",
   ide_browse: "/.fig_thumbs/code_editor.html?browse=1",
-  explorer_open_tex: "latex_studio.html",
-  explorer_open_code: "code_editor.html",
+  explorer_open_editor: "AtelierLanguages.editorUrl(target)",
 };
 
 /** Shared toolbar primitives required by the common shell. */
@@ -126,31 +121,23 @@ describe("Phase 0 — editor surface inventory", () => {
         `missing open route ${name}: ${fragment}`
       );
     }
-    // Canonical Markdown route is md_viewer (shell); md_studio remains optional WYSIWYG
-    assert.ok(html.includes("md_viewer.html"), "canonical md route");
-    // TeX default remains studio; experimental shell behind latexShell flag
-    assert.ok(html.includes("function latexShellEnabled"), "latexShell flag helper");
-    assert.ok(html.includes("function texEditorUrl"), "tex route helper");
-    assert.ok(html.includes("latex_studio.html"), "default tex studio");
-    assert.ok(html.includes("surface=latex"), "experimental shell tex surface");
-    // latexShell=0 must return false before editorShell=v2 can enable the shell
-    const fn = html.slice(
-      html.indexOf("function latexShellEnabled"),
-      html.indexOf("function texEditorUrl")
+    assert.ok(html.includes("function canonicalEditorUrl"), "shared editor route helper");
+    assert.ok(html.includes("AtelierLanguages.editorUrl"), "gallery delegates routing to language registry");
+    assert.ok(
+      html.includes("if(latexShellEnabled()) exts.tex=true"),
+      "experimental LaTeX soak exposes TeX files despite a stale saved filter"
     );
-    const offPos = fn.indexOf("get('latexShell')==='0'");
-    const v2EnablePos = fn.indexOf("get('editorShell')==='v2'");
-    assert.ok(offPos >= 0, "latexShell=0 branch present");
-    assert.ok(v2EnablePos >= 0, "editorShell=v2 branch present");
-    assert.ok(offPos < v2EnablePos, "latexShell=0 checked before editorShell=v2 enable");
+    assert.ok(
+      html.includes("f.ext==='md'||f.ext==='tex'||codeExt(f.ext)"),
+      "TeX cards use the canonical viewer action instead of a raw-file link"
+    );
   });
 
-  it("code_editor explorer routes tex vs code", () => {
+  it("code_editor explorer delegates every editable file to the canonical router", () => {
     const html = read("assets/code_editor.html");
     assert.ok(
-      html.includes('target.endsWith(".tex") ? "latex_studio.html" : "code_editor.html"') ||
-        html.includes("latex_studio.html") && html.includes("code_editor.html"),
-      "explorer openTarget must distinguish tex vs code"
+      html.includes("AtelierLanguages.editorUrl(target)"),
+      "explorer openTarget must use the shared route registry"
     );
   });
 
@@ -162,7 +149,7 @@ describe("Phase 0 — editor surface inventory", () => {
     for (const ext of ["py", "r", "jl", "sh", "rs"]) {
       assert.ok(body.includes(`'${ext}'`) || body.includes(`"${ext}"`), `codeExt missing ${ext}`);
     }
-    // tex must NOT be classified as code (opens latex_studio)
+    // tex is a document module, not a programming-language card category.
     assert.ok(!body.includes("tex"), "codeExt must not list tex");
   });
 
@@ -182,9 +169,9 @@ describe("Phase 0 — editor surface inventory", () => {
     }
   });
 
-  it("Markdown opens via md_viewer canonically; md_studio remains optional", () => {
-    const html = read("assets/gallery_template.html");
-    assert.ok(html.includes("md_viewer.html"));
+  it("Markdown opens in the unified shell; md_studio remains optional", () => {
+    const languages = read("assets/editor/languages.js");
+    assert.ok(languages.includes('markdown: "code_editor.html"'));
     // Optional WYSIWYG surface still shipped
     assert.ok(existsSync(join(assets, "md_studio.html")));
   });

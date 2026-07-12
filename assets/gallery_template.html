@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>__TITLE__</title>
 <script src="/.fig_thumbs/cm6/editor.bundle.js"></script>
+<script src="/.fig_thumbs/editor/languages.js"></script>
 <style>
   :root{--ui-font:-apple-system,'SF Pro Text','Inter Variable',sans-serif;--code-font:ui-monospace,'SF Mono',Menlo,monospace; --bg:#141619; --card:#1c1f23; --card2:#22262b; --txt:#dbdfe5; --muted:#9aa1ab; --faint:#6b727c;
          --accent:#7fa3d8; --accent-soft:#233246; --arch:#3a2f1a; --border:#2a2e34; --border-strong:#3a4048;
@@ -1279,12 +1280,8 @@ function latexShellEnabled(){
     return localStorage.getItem('atelier.editor.v1.latexShell')==='1';
   }catch(e){ return false; }
 }
-function texEditorUrl(rel){
-  const abs='__ROOT__/'+rel;
-  if(latexShellEnabled()){
-    return '/.fig_thumbs/code_editor.html?surface=latex&path='+encodeURIComponent(abs)+'&v=__VER__';
-  }
-  return '/.fig_thumbs/latex_studio.html?path='+encodeURIComponent(abs)+'&v=__VER__';
+function canonicalEditorUrl(rel){
+  return AtelierLanguages.editorUrl('__ROOT__/'+rel,{v:'__VER__'});
 }
 async function lbShow(i){
   if(lbIdx>=0 && i!==lbIdx && !(await annotGuard())) return;
@@ -1294,13 +1291,10 @@ async function lbShow(i){
   // Embarqué dans Atelier Studio : les fichiers texte/code s'ouvrent dans un
   // ONGLET Studio (la galerie reste navigable), pas dans la lightbox.
   if((isTex||isMd||isCode||isPdf) && (USE_TABS || window.self!==window.top)){
-    // Routes canoniques unifiées : code → code_editor (shell CM6), TeX → latex_studio
-    // (défaut) ou shell expérimental si latexShell=1, Markdown → md_viewer.
+    // Route canonique unique : galerie et explorateur ouvrent le même shell.
     let u;
     if(isPdf) u='/.fig_thumbs/pdf_viewer.html?file='+encodeURIComponent(f.rel)+'&v=__VER__';
-    else if(isMd) u='/.fig_thumbs/md_viewer.html?path='+encodeURIComponent('__ROOT__/'+f.rel)+'&file='+encodeURIComponent(f.rel)+'&v=__VER__';
-    else if(isTex) u=texEditorUrl(f.rel);
-    else u='/.fig_thumbs/code_editor.html?path='+encodeURIComponent('__ROOT__/'+f.rel)+'&v=__VER__';
+    else u=canonicalEditorUrl(f.rel);
     // onglet interne si dispo, sinon onglet de l'hôte Atelier Studio
     if(!TabShell.open(u, f.name)) __atelierPost({type:'atelier-open-tab', url:u, title:f.name});
     lbIdx=-1;
@@ -1314,10 +1308,10 @@ async function lbShow(i){
   if(!isVid && vid.getAttribute('src')){vid.pause();vid.removeAttribute('src');vid.load();}  // stop playback when leaving a video
   lb().classList.toggle('vw', vw);  // full-window editor/viewer
   if(isVid){vid.src=f.rel+'?v='+f.mtime;img.src='';pdf.src='';}
-  else if(isTex){pdf.src=texEditorUrl(f.rel);img.src='';}
+  else if(isTex){pdf.src=canonicalEditorUrl(f.rel);img.src='';}
   else if(isPdf){pdf.src='/.fig_thumbs/pdf_viewer.html?file='+encodeURIComponent(f.rel)+'&v=__VER__';img.src='';}
-  else if(isMd){pdf.src='/.fig_thumbs/md_viewer.html?path='+encodeURIComponent('__ROOT__/'+f.rel)+'&file='+encodeURIComponent(f.rel)+'&v=__VER__';img.src='';}
-  else if(isCode){pdf.src='/.fig_thumbs/code_editor.html?path='+encodeURIComponent('__ROOT__/'+f.rel)+'&v=__VER__';img.src='';}
+  else if(isMd){pdf.src=canonicalEditorUrl(f.rel);img.src='';}
+  else if(isCode){pdf.src=canonicalEditorUrl(f.rel);img.src='';}
   else if(isSvg){pdf.src='/.fig_thumbs/svg_viewer.html?file='+encodeURIComponent(f.rel)+'&v=__VER__';img.src='';}
   else{img.src=f.rel+'?v='+f.mtime;pdf.src='';}
   document.getElementById('lbCap').innerHTML=
@@ -1495,6 +1489,10 @@ function toggleFav(rel, el){
 }
 const DEFAULT_EXTS = {png:true,jpg:true,jpeg:true,svg:true,mp4:true,m4v:true,mov:true,webm:true,pdf:false,html:false,docx:false,xlsx:false,xls:false,csv:false,md:false,py:false,r:false,jl:false,tex:false,sh:false,rs:false};
 const exts = Object.assign({}, DEFAULT_EXTS, JSON.parse(localStorage.getItem('figExts')||'{}'));
+// A gallery explicitly opened for the experimental LaTeX shell must expose
+// TeX files immediately, even when an older saved format filter hid them.
+// Keep this session-only: leaving latexShell mode restores the user's filter.
+if(latexShellEnabled()) exts.tex=true;
 const saveExts = ()=>localStorage.setItem('figExts', JSON.stringify(exts));
 let showArch = true;
 const fmtSize = b => b>1048576?(b/1048576).toFixed(1)+' MB':b>1024?(b/1024).toFixed(0)+' KB':b+' B';
@@ -1638,7 +1636,7 @@ function render(){
     const rt = ratings[f.rel]||0;
     return `<div class="card ${f.archive?'arch':''} ${isHid?'hid':''}">
       <span class="selbox ${selSet.has(f.rel)?'on':''}" data-act="sel" data-rel="${escA(f.rel)}" title="Select — Shift-click to select a range">${selSet.has(f.rel)?'■':'▢'}</span>
-      ${(imgExt(f.ext)||videoExt(f.ext)||f.ext==='pdf'||f.ext==='md'||codeExt(f.ext))?`<div data-act="lb" data-rel="${escA(f.rel)}" style="cursor:zoom-in;position:relative">${videoExt(f.ext)?'<span class="playbtn">&#9654;</span>':''}${thumb}</div>`:appExt(f.ext)?`<div data-act="open" data-rel="${escA(f.rel)}" style="cursor:pointer" title="Open with default app">${thumb}</div>`:`<a href="${escA(f.rel)}" target="_blank" style="text-decoration:none">${thumb}</a>`}
+      ${(imgExt(f.ext)||videoExt(f.ext)||f.ext==='pdf'||f.ext==='md'||f.ext==='tex'||codeExt(f.ext))?`<div data-act="lb" data-rel="${escA(f.rel)}" style="cursor:zoom-in;position:relative">${videoExt(f.ext)?'<span class="playbtn">&#9654;</span>':''}${thumb}</div>`:appExt(f.ext)?`<div data-act="open" data-rel="${escA(f.rel)}" style="cursor:pointer" title="Open with default app">${thumb}</div>`:`<a href="${escA(f.rel)}" target="_blank" style="text-decoration:none">${thumb}</a>`}
       <div class="hov">
         <button data-act="open" data-rel="${escA(f.rel)}" title="Open with default app">Open</button>
         <button data-act="copy" data-rel="${escA(f.rel)}" title="Copy path">Path</button>

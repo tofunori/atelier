@@ -917,8 +917,10 @@ window.DiffVersions = function(opts){
     if(histBtn || !els.group) return;
     histBtn = document.createElement("button");
     histBtn.id = "dvHist";
+    histBtn.className = "dvBtn";
+    histBtn.setAttribute("aria-label", "Historique du fichier");
     histBtn.title = "Historique du fichier — commits et sauvegardes de session";
-    histBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.4 1.6"/></svg>';
+    histBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"><path d="M3.2 4.1A5.8 5.8 0 1 1 2.3 8"/><path d="M1.8 3.2v3.2H5"/><path d="M8 4.7V8l2.2 1.4"/></svg>';
     els.group.appendChild(histBtn);
     histPop = document.createElement("div");
     histPop.style.cssText = "position:fixed;z-index:400;display:none;flex-direction:column;width:400px;max-height:60vh;"
@@ -929,7 +931,9 @@ window.DiffVersions = function(opts){
       const st = document.createElement("style");
       st.id = "dvHistStyles";
       st.textContent =
-        "#dvHistList{overflow-y:auto}"
+        "#dvHist{box-sizing:border-box;width:30px;height:30px;padding:0;display:inline-grid;place-items:center;flex:none}"
+        + "#dvHist.on{color:var(--txt);background:rgba(255,255,255,.07);border-color:var(--border)}"
+        + "#dvHistList{overflow-y:auto}"
         + ".dv-hrow{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:6px}"
         + ".dv-hrow:hover{background:rgba(255,255,255,.05)}"
         + ".dv-hrow .sha{font:10px ui-monospace,Menlo,monospace;opacity:.5;flex:none;width:54px}"
@@ -944,13 +948,18 @@ window.DiffVersions = function(opts){
       document.head.appendChild(st);
     }
     histBtn.onclick = async () => {
-      if(histPop.style.display !== "none"){ histPop.style.display = "none"; return; }
+      if(histPop.style.display !== "none"){
+        histPop.style.display = "none";
+        histBtn.classList.remove("on");
+        return;
+      }
       const name = path.split("/").pop();
       histPop.innerHTML =
         '<div style="font-size:11px;letter-spacing:.05em;text-transform:uppercase;opacity:.55;padding:6px 10px 4px">Historique — ' + name + '</div>'
         + '<div id="dvHistList"><div style="padding:7px 10px;font-size:11px;opacity:.5">chargement…</div></div>';
       const rc = histBtn.getBoundingClientRect();
       histPop.style.display = "flex";
+      histBtn.classList.add("on");
       histPop.style.top = (rc.bottom + 8) + "px";
       histPop.style.left = Math.max(8, Math.min(rc.right - 400, window.innerWidth - 416)) + "px";
       const list = histPop.querySelector("#dvHistList");
@@ -995,23 +1004,31 @@ window.DiffVersions = function(opts){
           const t = await row.text();
           if(t == null){ notify("version introuvable"); return; }
           histPop.style.display = "none";
+          histBtn.classList.remove("on");
           compareExternal(t, row.label);
         };
         el.querySelector('[data-a="rst"]').onclick = async () => {
           const t = await row.text();
           if(t == null){ notify("version introuvable"); return; }
           histPop.style.display = "none";
+          histBtn.classList.remove("on");
           await restoreTarget(t, row.label);
         };
         list.appendChild(el);
       }
     };
     document.addEventListener("mousedown", (e) => {
-      if(histPop.style.display !== "none" && !histPop.contains(e.target) && !histBtn.contains(e.target))
+      if(histPop.style.display !== "none" && !histPop.contains(e.target) && !histBtn.contains(e.target)){
         histPop.style.display = "none";
+        histBtn.classList.remove("on");
+      }
     });
     document.addEventListener("keydown", (e) => {
-      if(e.key === "Escape" && histPop.style.display !== "none"){ e.stopPropagation(); histPop.style.display = "none"; }
+      if(e.key === "Escape" && histPop.style.display !== "none"){
+        e.stopPropagation();
+        histPop.style.display = "none";
+        histBtn.classList.remove("on");
+      }
     }, true);
   }
 

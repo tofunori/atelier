@@ -1,0 +1,187 @@
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{geometry}
+\usepackage{hyperref}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\geometry{margin=1in}
+\title{Long Atelier Shell Soak Article}
+\author{Atelier Test Suite}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This deliberately long document exercises scrolling, wrapping, compilation,
+outline navigation, comments, error markers, and synchronization between the
+source editor and the generated PDF. The prose is repetitive by design so that
+the document remains safe to edit during an extended user soak.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+\section{Introduction}
+Long-form editing behaves differently from a tiny fixture. Cursor movement,
+viewport restoration, line wrapping, and active-section tracking must remain
+stable after hundreds of lines have been visited. This article therefore
+contains many sections with paragraphs long enough to wrap several times.
+
+The experimental shell should preserve the editor width while the PDF preview
+is resized. Closing and reopening the document should restore preferences
+without coupling volatile state to another open tab.
+
+\subsection{Motivation}
+A realistic soak needs enough material to reveal delayed layout defects. Short
+examples rarely expose stale measurements, misplaced gutters, or synchronization
+errors that only appear after scrolling far from the beginning of a document.
+
+\subsection{Objectives}
+The primary objective is to test ordinary work: writing text, saving changes,
+compiling, reading diagnostics, and moving between source and PDF. A secondary
+objective is to confirm that comments remain attached after paragraph reflow.
+
+\section{Background}
+Document editors combine several independent systems. The source surface owns
+text and selections, the compiler reads files from disk, the PDF surface renders
+pages, and SyncTeX maps positions between those representations.
+
+Each system may finish asynchronously. A robust interface must prevent a late
+response from repainting a destroyed tab or replacing a more important status
+message with unrelated background information.
+
+\subsection{Source model}
+The source model stores the current text, cursor, selections, and undo history.
+Edits should mark the document as modified immediately. Compilation should save
+the current buffer before asking the backend to read the file from disk.
+
+\subsection{Preview model}
+The preview model may be refreshed after every successful compilation. Its
+width is independent from the source model and is controlled by the draggable
+separator in the unified shell.
+
+\section{Methods}
+The soak procedure begins by opening this file from the gallery with the
+experimental LaTeX route enabled. The user then resizes the split, edits several
+paragraphs, saves, compiles, and navigates through the outline.
+
+\subsection{Editing protocol}
+First, place the cursor in this paragraph and insert a short sentence. Save the
+document with the keyboard shortcut and confirm that the modified indicator
+returns to the saved state. Undo and redo the edit to exercise history.
+
+Second, select a phrase and add an anchored comment. Rewrap the paragraph at a
+different column width, reload the tab, and verify that the comment remains on
+the intended phrase.
+
+\subsection{Compilation protocol}
+Compile while the buffer contains an unsaved edit. The shell must save before
+compilation, and the PDF should contain the new sentence. Repeated clicks on the
+compile control must start only one save-and-build chain.
+
+\subsection{Synchronization protocol}
+Use forward synchronization from a line near the middle of the document. Then
+use reverse synchronization from the PDF and confirm that the editor returns to
+the corresponding source line without losing the current split width.
+
+\section{Results}
+The following subsections provide enough vertical distance to test navigation
+and scrolling. They contain stable labels that can also be used for comments.
+
+\subsection{Layout stability}
+The unique phrase LAYOUT-STABILITY-ANCHOR belongs to this subsection. Resize the
+separator repeatedly and verify that neither pane collapses below a usable
+width. The permitted range should keep both panes visible.
+
+\subsection{Status stability}
+The unique phrase STATUS-STABILITY-ANCHOR belongs here. A successful compile
+status should remain primary even if background version persistence reports a
+secondary warning.
+
+\subsection{Comment stability}
+The unique phrase COMMENT-STABILITY-ANCHOR is intended for an anchored comment.
+After rewrapping this paragraph, the annotation should still identify the same
+text rather than an obsolete line and column pair.
+
+\subsection{Multiple tabs}
+Open this article beside the long report fixture. Change the wrap preference in
+one tab and move the cursor in the other. Volatile editor state must remain
+independent while intentionally shared preferences remain synchronized.
+
+\section{Extended Discussion}
+This section adds realistic length. An editor used for manuscripts must remain
+responsive after many source lines, repeated compiles, and several preview
+refreshes. The test is not a benchmark, but obvious pauses or layout jumps are
+signals worth recording during the soak.
+
+Paragraph one discusses navigation. Moving through the outline should place the
+cursor at the selected heading and focus the source editor. The outline should
+then close so it does not obscure subsequent edits.
+
+Paragraph two discusses diagnostics. A broken command introduced temporarily
+below should create a visible error marker and a clickable log entry. Remove the
+command afterward and compile again to ensure old markers are cleared.
+
+Paragraph three discusses teardown. Start a compilation and immediately close
+the tab. Reopening the file should not reveal stale logs, duplicate listeners,
+or controls that react more than once to a single click.
+
+Paragraph four discusses persistence. The split percentage is a user preference
+and should survive a reload. Hiding the preview should expand the editor, while
+showing it again should restore the last useful percentage.
+
+Paragraph five discusses accessibility. The separator and controls need stable
+labels so that keyboard and assistive-technology users can understand their
+purpose even when icons are used in the visible interface.
+
+\section{A Small Quantitative Example}
+The following equation gives the editor several mathematical lines to render:
+\begin{equation}
+  \bar{x} = \frac{1}{n}\sum_{i=1}^{n}x_i,
+  \qquad
+  s^2 = \frac{1}{n-1}\sum_{i=1}^{n}(x_i-\bar{x})^2.
+\end{equation}
+
+For a simple linear model,
+\begin{equation}
+  y_i = \beta_0 + \beta_1 x_i + \varepsilon_i,
+  \qquad \varepsilon_i \sim \mathcal{N}(0,\sigma^2).
+\end{equation}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lrr}
+\toprule
+Scenario & Source lines & Expected pages \\
+\midrule
+Short fixture & 20 & 1 \\
+Long article & 150+ & 4+ \\
+Long report & 180+ & 5+ \\
+\bottomrule
+\end{tabular}
+\caption{Illustrative soak documents.}
+\end{table}
+
+\section{Conclusion}
+This long article is successful when ordinary editing remains predictable over
+an extended session. Record any incorrect status, misplaced annotation, broken
+split, stale PDF, or navigation mismatch before enabling the shell by default.
+
+\appendix
+\section{Checklist}
+\begin{enumerate}
+  \item Resize the editor and PDF panes.
+  \item Hide and restore the split preview.
+  \item Edit, save, undo, and redo.
+  \item Compile a dirty buffer.
+  \item Navigate through the outline.
+  \item Add a comment and rewrap its paragraph.
+  \item Exercise forward and reverse SyncTeX.
+  \item Open a second LaTeX tab and compare behavior.
+  \item Close a tab during compilation.
+  \item Reload and verify persisted preferences.
+\end{enumerate}
+
+\end{document}

@@ -407,6 +407,12 @@ test.describe("Phase 4 — shell LaTeX surface (code_editor?surface=latex)", () 
           hasErrors: !!window.AtelierLatexErrors,
           hasCm: !!document.querySelector(".cm-editor"),
           hasLog: !!document.getElementById("latexCompileLog"),
+          hasEditorMode: !!document.getElementById("latexEditorOnly"),
+          hasSplit: !!document.getElementById("latexSplitToggle"),
+          hasPdfTab: !!document.getElementById("latexPdfTab"),
+          hasDivider: !!document.getElementById("latexSplitDivider"),
+          previewInitiallyHidden:
+            document.getElementById("latexSplitPreview")?.style.display === "none",
         };
       });
       expect(info.surface).toBe("latex");
@@ -419,6 +425,24 @@ test.describe("Phase 4 — shell LaTeX surface (code_editor?surface=latex)", () 
       expect(info.hasErrors).toBe(true);
       expect(info.hasCm).toBe(true);
       expect(info.hasLog).toBe(true);
+      expect(info.hasEditorMode).toBe(true);
+      expect(info.hasSplit).toBe(true);
+      expect(info.hasPdfTab).toBe(true);
+      expect(info.hasDivider).toBe(true);
+      expect(info.previewInitiallyHidden).toBe(true);
+
+      const viewModes = await page.evaluate(() => {
+        const preview = document.getElementById("latexSplitPreview");
+        document.getElementById("latexSplitToggle").click();
+        const splitVisible = preview.style.display === "flex";
+        document.getElementById("latexEditorOnly").click();
+        return {
+          splitVisible,
+          editorOnly: preview.style.display === "none",
+        };
+      });
+      expect(viewModes.splitVisible).toBe(true);
+      expect(viewModes.editorOnly).toBe(true);
 
       // Compile via module
       const compiled = await page.evaluate(async () => {

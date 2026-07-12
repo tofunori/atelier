@@ -29,10 +29,17 @@
     function set(cls, label, opts) {
       opts = opts || {};
       clearTimer();
+      // A clean editor is the neutral state, not a status worth occupying
+      // toolbar space. Keep only actionable/transient states visible.
+      if (cls === "saved" && /^saved(?:\s|$)/i.test(String(label || ""))) {
+        cls = "";
+        label = "";
+      }
       el.className = cls || "";
       el.textContent = label || "";
       el.title = label || "";
-      el.setAttribute("aria-label", label || "état de l’éditeur");
+      if (label) el.setAttribute("aria-label", label);
+      else el.removeAttribute("aria-label");
       // Protect compile/save/conflict chrome from async version-store noise
       if (cls === "saved" || cls === "conflict" || cls === "dirty") {
         primaryUntil = Date.now() + 4000;

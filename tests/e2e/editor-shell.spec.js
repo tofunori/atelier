@@ -24,9 +24,11 @@ test.describe("Editor shell (code)", () => {
   let baseURL;
   /** @type {Map<string, {text:string, mtime:number}>} */
   let files;
+  let quotes;
 
   test.beforeAll(async () => {
     files = new Map();
+    quotes = [];
     for (const name of ["sample.rs", "sample.py", "sample.md"]) {
       const text = readFileSync(join(fixtures, name), "utf8");
       files.set("/tmp/atelier-test/" + name, { text, mtime: 1 });
@@ -63,6 +65,41 @@ test.describe("Editor shell (code)", () => {
       if (url.pathname === "/selinfo" && req.method === "POST") {
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ ok: true }));
+        return;
+      }
+      if (url.pathname === "/quote" && req.method === "POST") {
+        let body = "";
+        req.on("data", (c) => (body += c));
+        req.on("end", () => {
+          const quote = JSON.parse(body || "{}");
+          quotes.push(quote);
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({
+            ok: true,
+            queuedForAgent: true,
+            agentSelectionStatus: quote.held ? "staged" : "sent",
+            message: "selection sent",
+          }));
+        });
+        return;
+      }
+      if (url.pathname === "/agent-status") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({
+          agentHost: null,
+          consumers: [],
+          counts: { queued: 0, staged: quotes.filter((q) => q.held).length },
+          pending: quotes.filter((q) => q.held).map((q, index) => ({
+            id: String(index + 1),
+            path: q.rel,
+            page: q.page,
+            comment: q.comment,
+            selection: q.text,
+            held: true,
+            status: "staged",
+          })),
+          history: [],
+        }));
         return;
       }
       if (url.pathname === "/versions") {
@@ -111,6 +148,7 @@ test.describe("Editor shell (code)", () => {
         hasCmEditor: !!document.querySelector(".cm-editor"),
         hasCm5: !!document.querySelector(".CodeMirror-code") && !document.querySelector(".cm-editor"),
         stateLabel: document.getElementById("state")?.getAttribute("aria-label") || "",
+        stateVisible: getComputedStyle(document.getElementById("state")).display !== "none",
       };
     });
     expect(info.surface).toBe("code");
@@ -119,7 +157,8 @@ test.describe("Editor shell (code)", () => {
     expect(info.hasCmEditor).toBe(true);
     expect(info.hasCm5).toBe(false);
     expect(info.value).toContain("fn main");
-    expect(info.stateLabel).toMatch(/saved/i);
+    expect(info.stateLabel).toBe("");
+    expect(info.stateVisible).toBe(false);
   });
 
   test("Rust keyword token is highlighted", async ({ page }) => {
@@ -141,6 +180,80 @@ test.describe("Editor shell (code)", () => {
     expect(color).not.toBe("rgb(0, 0, 0)");
   });
 
+  test("selection composer stages or sends an annotation", async ({ page }) => {
+    quotes.length = 0;
+    const path = "/tmp/atelier-test/sample.rs";
+    await page.goto(
+      baseURL + "/code_editor.html?path=" + encodeURIComponent(path)
+    );
+    await page.waitForFunction(() => window.__ATELIER_SHELL__?.cm?.(), null, {
+      timeout: 15000,
+    });
+    await expect(page.locator("#atelierAgentButton")).toBeVisible();
+    await page.evaluate(() => {
+      const cm = window.__ATELIER_SHELL__.cm();
+      cm.setSelection({ line: 1, ch: 2 }, { line: 1, ch: 9 });
+    });
+
+    const composer = page.locator("#atelierSelectionComposer");
+    await expect(composer).toBeVisible();
+    const anchorBackground = await page.locator(".cm-clsel").first().evaluate((el) =>
+      getComputedStyle(el).backgroundColor
+    );
+    expect(anchorBackground).toBe("rgba(0, 0, 0, 0)");
+    const selectionLayers = await page.locator(".cm-selectionBackground").evaluateAll((els) =>
+      els.map((el) => getComputedStyle(el).backgroundColor)
+    );
+    expect(selectionLayers.every((color) => color === "rgba(79, 126, 190, 0.46)")).toBe(true);
+    await composer.locator("textarea").fill("Vérifie cette sélection");
+    await composer.locator("button.stage").click();
+    await expect.poll(() => quotes.length).toBe(1);
+    expect(quotes[0]).toMatchObject({
+      rel: path,
+      comment: "Vérifie cette sélection",
+      direct: false,
+      held: true,
+      action: "ask",
+    });
+    expect(quotes[0].text).toBeTruthy();
+
+    await page.waitForTimeout(800);
+    await page.evaluate(() => {
+      const cm = window.__ATELIER_SHELL__.cm();
+      cm.setSelection({ line: 2, ch: 2 }, { line: 2, ch: 10 });
+    });
+    await expect(composer).toBeVisible();
+    await composer.locator("button.send").click();
+    await expect.poll(() => quotes.length).toBe(2);
+    expect(quotes[1]).toMatchObject({
+      rel: path,
+      direct: true,
+      held: false,
+      action: "apply",
+    });
+  });
+
+  test("clicking outside clears the annotation selection and composer", async ({ page }) => {
+    const path = "/tmp/atelier-test/sample.rs";
+    await page.goto(
+      baseURL + "/code_editor.html?path=" + encodeURIComponent(path)
+    );
+    await page.waitForFunction(() => window.__ATELIER_SHELL__?.cm?.(), null, {
+      timeout: 15000,
+    });
+    await page.evaluate(() => {
+      const cm = window.__ATELIER_SHELL__.cm();
+      cm.setSelection({ line: 1, ch: 2 }, { line: 1, ch: 9 });
+    });
+    const composer = page.locator("#atelierSelectionComposer");
+    await expect(composer).toBeVisible();
+    await page.locator("#fname").click();
+    await expect(composer).toBeHidden();
+    await expect.poll(() => page.evaluate(() =>
+      window.__ATELIER_SHELL__.cm().getSelection()
+    )).toBe("");
+  });
+
   test("save updates state and persists text", async ({ page }) => {
     const path = "/tmp/atelier-test/sample.py";
     await page.goto(
@@ -154,10 +267,7 @@ test.describe("Editor shell (code)", () => {
       cm.setValue(cm.getValue() + "\n# edited\n");
     });
     await page.keyboard.press("Meta+s");
-    await page.waitForFunction(() => {
-      const label = document.getElementById("state")?.getAttribute("aria-label") || "";
-      return /saved/i.test(label);
-    });
+    await expect.poll(() => files.get(path)?.text || "").toContain("# edited");
     // reload
     await page.goto(
       baseURL + "/code_editor.html?path=" + encodeURIComponent(path)

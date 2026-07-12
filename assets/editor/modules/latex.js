@@ -52,6 +52,16 @@
     var logEl = null;
     var outlineEl = null;
     var toolbarEl = null;
+    var sideEl = null;
+    var dividerEl = null;
+    var splitBtn = null;
+    var editorBtn = null;
+    var pdfTabBtn = null;
+    var pdfEmptyEl = null;
+    var moreBtn = null;
+    var moreMenu = null;
+    var onMoreOutside = null;
+    var viewMode = "editor";
     var compiling = false;
     var pdfPath = null;
     var lastCompile = null;
@@ -65,11 +75,65 @@
     var onLogClick = null;
     var onOutlineClick = null;
     var onMessage = null;
+    var onSplitDown = null;
+    var onSplitMove = null;
+    var onSplitUp = null;
     var destroyed = false;
     var keyMap = null;
 
     function annotRel() {
       return "tex-comments:" + (ctx.path || "");
+    }
+
+    function pdfViewerUrl() {
+      if (!pdfPath) return null;
+      return (
+        "/.fig_thumbs/pdf_viewer.html?file=" +
+        encodeURIComponent(pdfPath) +
+        "&t=" +
+        Date.now()
+      );
+    }
+
+    function setViewMode(mode) {
+      viewMode = mode === "split" ? "split" : "editor";
+      try {
+        localStorage.setItem("atelier.editor.v1.latexView", viewMode);
+      } catch (_) {}
+      var split = viewMode === "split";
+      if (sideEl) sideEl.style.display = split ? "flex" : "none";
+      if (dividerEl) dividerEl.style.display = split ? "block" : "none";
+      if (editorBtn) editorBtn.classList.toggle("on", !split);
+      if (splitBtn) splitBtn.classList.toggle("on", split);
+      var ed = ctx.els && ctx.els.ed;
+      if (ed) {
+        var pct = parseFloat(
+          localStorage.getItem("atelier.editor.v1.latexSplitPct") || "50"
+        );
+        ed.style.flex = split
+          ? "0 0 " + Math.max(25, Math.min(75, pct)) + "%"
+          : "1";
+      }
+      var cm = ctx.getCm && ctx.getCm();
+      if (cm) cm.refresh();
+    }
+
+    async function openPdfTab() {
+      if (!lastCompile || !lastCompile.ok) {
+        var built = await compile();
+        if (!built || !built.ok || destroyed) return;
+      }
+      var url = pdfViewerUrl();
+      if (!url) return;
+      var title = (ctx.path || "document.tex").split("/").pop() + " — PDF";
+      if (window.parent !== window) {
+        window.parent.postMessage(
+          { type: "gallery-open-tab", url: url, title: title },
+          "*"
+        );
+      } else {
+        window.open(url, "_blank", "noopener");
+      }
     }
 
     function rewrapColumn() {
@@ -219,11 +283,9 @@
         else pdfPath = global.AtelierLatexSynctex.siblingPdf(ctx.path);
         if (ctx.status) ctx.status.set("saved", "compiled");
         if (pdfFrame && pdfPath) {
-          pdfFrame.src =
-            "/.fig_thumbs/pdf_viewer.html?file=" +
-            encodeURIComponent(pdfPath) +
-            "&t=" +
-            Date.now();
+          pdfFrame.style.display = "block";
+          if (pdfEmptyEl) pdfEmptyEl.style.display = "none";
+          pdfFrame.src = pdfViewerUrl();
         }
         return j;
       } catch (e) {
@@ -379,10 +441,10 @@
         host.style.minHeight = "0";
         host.style.flexDirection = "column";
 
-        toolbarEl = document.createElement("div");
-        toolbarEl.className = "latex-module-bar";
-        toolbarEl.style.cssText =
-          "display:flex;gap:6px;padding:4px 8px;border-bottom:1px solid var(--border);flex:none;align-items:center;flex-wrap:wrap";
+        toolbarEl = ctx.els && ctx.els.moduleActions;
+        if (!toolbarEl) return;
+        toolbarEl.innerHTML = "";
+        toolbarEl.classList.add("latexActions");
 
         function mkBtn(label, aria, fn) {
           var b = document.createElement("button");
@@ -392,44 +454,92 @@
           b.onclick = fn;
           return b;
         }
-        toolbarEl.appendChild(
-          mkBtn("Compile", "Compile LaTeX", function () {
-            compile();
-          })
-        );
-        toolbarEl.appendChild(
-          mkBtn("SyncTeX →", "SyncTeX source to PDF", function () {
-            synctexForward();
-          })
-        );
-        toolbarEl.appendChild(
-          mkBtn("Plan", "Document outline", function () {
-            if (!outlineEl) return;
-            outlineEl.style.display =
-              outlineEl.style.display === "none" ? "block" : "none";
-            if (outlineEl.style.display !== "none") refreshOutline();
-          })
-        );
-        toolbarEl.appendChild(
-          mkBtn("Commenter", "Ancrer un commentaire sur la sélection", function () {
-            var note = window.prompt("Commentaire ancré :", "");
-            if (note == null) return;
-            var c = addCommentForSelection(note);
-            if (!c && ctx.status)
-              ctx.status.flash("conflict", "sélectionne du texte d’abord", 1400);
-            else if (ctx.status)
-              ctx.status.flash("saved", "commentaire ancré", 900);
-          })
-        );
-        if (ctx.els && ctx.els.moduleActions) {
-          ctx.els.moduleActions.innerHTML = "";
-          ctx.els.moduleActions.appendChild(
-            mkBtn("Compile", "Compile LaTeX", function () {
-              compile();
-            })
-          );
+        var compileBtn = mkBtn("", "Compiler le document LaTeX", function () {
+          compile();
+        });
+        compileBtn.id = "latexCompile";
+        compileBtn.title = "Compiler (⌘Entrée)";
+        compileBtn.innerHTML = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 1.75h5l3.5 3.5v9H3.5z"/><path d="M8.5 1.75v3.5H12"/><path d="m6.25 7 3.25 2-3.25 2z"/></svg>';
+        toolbarEl.appendChild(compileBtn);
+        editorBtn = mkBtn("Éditeur", "Afficher uniquement l’éditeur", function () {
+          setViewMode("editor");
+        });
+        editorBtn.id = "latexEditorOnly";
+        editorBtn.title = "Éditeur seulement";
+        editorBtn.innerHTML = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"><rect x="2" y="2.5" width="12" height="11" rx="1.5"/><path d="M5 6h6M5 8.5h6M5 11h3.5"/></svg>';
+        toolbarEl.appendChild(editorBtn);
+        splitBtn = mkBtn("Split", "Afficher l’éditeur et le PDF", function () {
+          setViewMode("split");
+        });
+        splitBtn.id = "latexSplitToggle";
+        splitBtn.title = "Éditeur + PDF";
+        splitBtn.innerHTML = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.25"><rect x="1.75" y="2.5" width="12.5" height="11" rx="1.5"/><path d="M8 2.5v11"/></svg>';
+        toolbarEl.appendChild(splitBtn);
+        pdfTabBtn = mkBtn("PDF ↗", "Ouvrir le PDF dans un autre onglet", function () {
+          openPdfTab();
+        });
+        pdfTabBtn.id = "latexPdfTab";
+        pdfTabBtn.title = "PDF dans un autre onglet";
+        pdfTabBtn.innerHTML = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2.5h4.5V7M13.5 2.5 8 8"/><path d="M12 9.5v3H3v-9h3"/></svg>';
+        toolbarEl.appendChild(pdfTabBtn);
+
+        moreBtn = mkBtn("", "Plus d’actions LaTeX", function () {
+          if (!moreMenu) return;
+          var opening = moreMenu.style.display === "none";
+          moreMenu.style.display = opening ? "flex" : "none";
+          moreBtn.classList.toggle("on", opening);
+          if (opening) {
+            var rc = moreBtn.getBoundingClientRect();
+            moreMenu.style.top = rc.bottom + 7 + "px";
+            moreMenu.style.left = Math.max(8, rc.right - 184) + "px";
+          }
+        });
+        moreBtn.id = "latexMore";
+        moreBtn.title = "Plus d’actions LaTeX";
+        moreBtn.innerHTML = '<svg viewBox="0 0 16 16" fill="currentColor"><circle cx="3" cy="8" r="1.1"/><circle cx="8" cy="8" r="1.1"/><circle cx="13" cy="8" r="1.1"/></svg>';
+        toolbarEl.appendChild(moreBtn);
+
+        moreMenu = document.createElement("div");
+        moreMenu.id = "latexMoreMenu";
+        moreMenu.style.cssText =
+          "display:none;position:fixed;z-index:450;width:176px;flex-direction:column;padding:5px;background:var(--card);border:1px solid rgba(255,255,255,.09);border-radius:8px;box-shadow:0 14px 40px rgba(0,0,0,.42)";
+        function menuAction(label, fn) {
+          var b = document.createElement("button");
+          b.textContent = label;
+          b.style.cssText =
+            "height:30px;padding:0 9px;text-align:left;border:0;border-radius:5px;background:transparent;color:var(--txt);font:500 12px var(--ui-font);cursor:pointer";
+          b.onclick = function () {
+            moreMenu.style.display = "none";
+            moreBtn.classList.remove("on");
+            fn();
+          };
+          moreMenu.appendChild(b);
         }
-        host.appendChild(toolbarEl);
+        menuAction("SyncTeX → PDF", function () { synctexForward(); });
+        menuAction("Plan du document", function () {
+          if (!outlineEl) return;
+          outlineEl.style.display =
+            outlineEl.style.display === "none" ? "block" : "none";
+          if (outlineEl.style.display !== "none") refreshOutline();
+        });
+        menuAction("Commenter la sélection", function () {
+          var note = window.prompt("Commentaire ancré :", "");
+          if (note == null) return;
+          var c = addCommentForSelection(note);
+          if (!c && ctx.status)
+            ctx.status.flash("conflict", "sélectionne du texte d’abord", 1400);
+          else if (ctx.status)
+            ctx.status.flash("saved", "commentaire ancré", 900);
+        });
+        document.body.appendChild(moreMenu);
+        onMoreOutside = function (e) {
+          if (!moreMenu || moreMenu.style.display === "none") return;
+          if (!moreMenu.contains(e.target) && !moreBtn.contains(e.target)) {
+            moreMenu.style.display = "none";
+            moreBtn.classList.remove("on");
+          }
+        };
+        document.addEventListener("mousedown", onMoreOutside);
 
         var row = document.createElement("div");
         row.style.cssText =
@@ -437,7 +547,11 @@
 
         var ed = ctx.els.ed;
         if (ed && ed.parentNode !== row) row.appendChild(ed);
-        ed.style.flex = "1";
+        var initialSplit = parseFloat(
+          localStorage.getItem("atelier.editor.v1.latexSplitPct") || "50"
+        );
+        initialSplit = Math.max(25, Math.min(75, initialSplit));
+        ed.style.flex = "0 0 " + initialSplit + "%";
         ed.style.minWidth = "0";
         ed.style.minHeight = "0";
         ed.style.display = "flex";
@@ -461,12 +575,49 @@
         outlineEl.addEventListener("click", onOutlineClick);
         row.appendChild(outlineEl);
 
-        var side = document.createElement("div");
-        side.style.cssText =
-          "flex:1;min-width:0;display:flex;flex-direction:column;border-left:1px solid var(--border)";
+        dividerEl = document.createElement("div");
+        dividerEl.id = "latexSplitDivider";
+        dividerEl.setAttribute("role", "separator");
+        dividerEl.setAttribute("aria-label", "Redimensionner éditeur et PDF");
+        dividerEl.style.cssText =
+          "flex:0 0 5px;cursor:col-resize;background:var(--border);position:relative;z-index:5";
+        onSplitMove = function (e) {
+          var rect = row.getBoundingClientRect();
+          if (!rect.width) return;
+          var pct = Math.max(25, Math.min(75, ((e.clientX - rect.left) / rect.width) * 100));
+          ed.style.flex = "0 0 " + pct + "%";
+          localStorage.setItem("atelier.editor.v1.latexSplitPct", String(pct));
+          var cm = ctx.getCm();
+          if (cm) cm.refresh();
+        };
+        onSplitUp = function () {
+          window.removeEventListener("mousemove", onSplitMove);
+          window.removeEventListener("mouseup", onSplitUp);
+          document.body.style.cursor = "";
+          document.body.style.userSelect = "";
+        };
+        onSplitDown = function (e) {
+          e.preventDefault();
+          document.body.style.cursor = "col-resize";
+          document.body.style.userSelect = "none";
+          window.addEventListener("mousemove", onSplitMove);
+          window.addEventListener("mouseup", onSplitUp);
+        };
+        dividerEl.addEventListener("mousedown", onSplitDown);
+        row.appendChild(dividerEl);
+
+        sideEl = document.createElement("div");
+        sideEl.id = "latexSplitPreview";
+        sideEl.style.cssText =
+          "flex:1;min-width:0;display:flex;flex-direction:column";
         pdfFrame = document.createElement("iframe");
         pdfFrame.title = "PDF preview";
-        pdfFrame.style.cssText = "flex:1;border:0;background:#111";
+        pdfFrame.style.cssText = "display:none;flex:1;border:0;background:#111";
+        pdfEmptyEl = document.createElement("div");
+        pdfEmptyEl.id = "latexPdfEmpty";
+        pdfEmptyEl.textContent = "Compile pour générer l’aperçu PDF";
+        pdfEmptyEl.style.cssText =
+          "display:flex;flex:1;align-items:center;justify-content:center;color:var(--muted);font-size:12px;text-align:center;padding:24px";
         logEl = document.createElement("pre");
         logEl.id = "latexCompileLog";
         logEl.style.cssText =
@@ -482,20 +633,18 @@
           }
         };
         logEl.addEventListener("click", onLogClick);
-        side.appendChild(pdfFrame);
-        side.appendChild(logEl);
-        row.appendChild(side);
+        sideEl.appendChild(pdfEmptyEl);
+        sideEl.appendChild(pdfFrame);
+        sideEl.appendChild(logEl);
+        row.appendChild(sideEl);
         host.appendChild(row);
 
         pdfPath = global.AtelierLatexSynctex.siblingPdf(ctx.path);
-        // Prefer existing sibling PDF if any (no compile required to open panel)
-        if (pdfFrame && pdfPath) {
-          pdfFrame.src =
-            "/.fig_thumbs/pdf_viewer.html?file=" +
-            encodeURIComponent(pdfPath) +
-            "&t=" +
-            Date.now();
-        }
+        var storedView = "editor";
+        try {
+          storedView = localStorage.getItem("atelier.editor.v1.latexView") || "editor";
+        } catch (_) {}
+        setViewMode(storedView);
 
         var cm = ctx.getCm();
         if (cm) {
@@ -583,12 +732,33 @@
         window.removeEventListener("message", onMessage);
         onMessage = null;
       }
+      if (onMoreOutside) {
+        document.removeEventListener("mousedown", onMoreOutside);
+        onMoreOutside = null;
+      }
+      if (moreMenu && moreMenu.parentNode) moreMenu.parentNode.removeChild(moreMenu);
+      if (dividerEl && onSplitDown) {
+        dividerEl.removeEventListener("mousedown", onSplitDown);
+      }
+      if (onSplitMove) window.removeEventListener("mousemove", onSplitMove);
+      if (onSplitUp) window.removeEventListener("mouseup", onSplitUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      onSplitDown = onSplitMove = onSplitUp = null;
       ghostClear();
       clearAnnotMarks();
       pdfFrame = null;
       logEl = null;
       outlineEl = null;
       toolbarEl = null;
+      sideEl = null;
+      dividerEl = null;
+      splitBtn = null;
+      editorBtn = null;
+      pdfTabBtn = null;
+      pdfEmptyEl = null;
+      moreBtn = null;
+      moreMenu = null;
     }
 
     function destroy() {

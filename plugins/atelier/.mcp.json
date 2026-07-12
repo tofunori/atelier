@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "atelier": {
+      "title": "Atelier",
+      "description": "Local project gallery and annotation bridge.",
+      "cwd": ".",
+      "command": "atelier-mcp",
+      "args": []
+    }
+  }
+}

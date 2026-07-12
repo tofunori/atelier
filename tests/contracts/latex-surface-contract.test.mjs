@@ -217,12 +217,21 @@ describe("Gate C — studio wires shared helpers (no deletion of surface)", () =
       "addCommentForSelection",
       "removeEventListener",
       "destroyUi",
+      "latexSplitToggle",
+      "latexSplitDivider",
+      "atelier.editor.v1.latexSplitPct",
     ]) {
       assert.ok(mod.includes(token), "module mentions " + token);
     }
     const err = read("assets/editor/modules/latex/errors.js");
     assert.ok(err.includes("applyErrorGutters"));
     assert.ok(err.includes("errorLinesFromLog"));
+  });
+
+  it("PDF viewer loads absolute compile outputs through the Rust raw route", () => {
+    const html = read("assets/pdf_viewer.html");
+    assert.ok(html.includes("rel.startsWith('/')"));
+    assert.ok(html.includes("'/raw?path=' + encodeURIComponent(rel)"));
   });
 });
 

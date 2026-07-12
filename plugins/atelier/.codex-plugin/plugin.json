@@ -1,0 +1,45 @@
+{
+  "name": "atelier",
+  "version": "0.1.6",
+  "description": "Browse local project artifacts, annotate figures and send precise feedback to Codex.",
+  "author": {
+    "name": "Tofunori",
+    "url": "https://github.com/tofunori"
+  },
+  "homepage": "https://github.com/tofunori/atelier",
+  "repository": "https://github.com/tofunori/atelier.git",
+  "license": "MIT",
+  "keywords": [
+    "atelier",
+    "artifacts",
+    "figures",
+    "annotations",
+    "gallery",
+    "codex",
+    "mcp"
+  ],
+  "mcpServers": "./.mcp.json",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Atelier",
+    "shortDescription": "Browse and annotate local project artifacts",
+    "longDescription": "Open a searchable local gallery for figures, PDFs, documents, code and media; send precise annotations to the active Codex task; and refresh regenerated artifacts without leaving the project workflow.",
+    "developerName": "Tofunori",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://github.com/tofunori/atelier",
+    "defaultPrompt": [
+      "Open Atelier for this project",
+      "Wait for my next Atelier annotation",
+      "Apply my latest Atelier annotation and refresh the artifact"
+    ],
+    "brandColor": "#B5653B",
+    "composerIcon": "./assets/logo.svg",
+    "logo": "./assets/logo.svg",
+    "screenshots": []
+  }
+}

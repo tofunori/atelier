@@ -36,8 +36,8 @@
 
   var PAGE = {
     code: "code_editor.html",
-    latex: "latex_studio.html",
-    markdown: "md_viewer.html",
+    latex: "code_editor.html",
+    markdown: "code_editor.html",
   };
 
   function extOf(path) {
@@ -77,6 +77,9 @@
     var info = resolve(absPath);
     var page = opts.page || info.page;
     var q = "path=" + encodeURIComponent(absPath);
+    if (page === "code_editor.html" && info.surface !== "code") {
+      q += "&surface=" + encodeURIComponent(info.surface);
+    }
     if (opts.v) q += "&v=" + encodeURIComponent(opts.v);
     if (opts.file) q += "&file=" + encodeURIComponent(opts.file);
     if (opts.extra) q += "&" + opts.extra;

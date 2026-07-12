@@ -115,7 +115,10 @@ let selPage = 1;
 async function main(){
   let pdf;
   try {
-    pdf = await pdfjsLib.getDocument({url: "/" + rel,
+    const pdfUrl = rel && rel.startsWith('/')
+      ? '/raw?path=' + encodeURIComponent(rel)
+      : '/' + rel;
+    pdf = await pdfjsLib.getDocument({url: pdfUrl,
       standardFontDataUrl: "/.fig_thumbs/pdfjs/standard_fonts/",
       cMapUrl: "/.fig_thumbs/pdfjs/cmaps/", cMapPacked: true}).promise;
   } catch(e) {
