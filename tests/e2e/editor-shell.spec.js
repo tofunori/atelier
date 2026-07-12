@@ -33,6 +33,10 @@ test.describe("Editor shell (code)", () => {
       const text = readFileSync(join(fixtures, name), "utf8");
       files.set("/tmp/atelier-test/" + name, { text, mtime: 1 });
     }
+    files.set("/tmp/atelier-test/jitter.rs", {
+      text: readFileSync(join(fixtures, "sample.rs"), "utf8"),
+      mtime: 1,
+    });
 
     server = createServer((req, res) => {
       const url = new URL(req.url || "/", "http://127.0.0.1");
@@ -107,6 +111,19 @@ test.describe("Editor shell (code)", () => {
         res.end(JSON.stringify({ versions: [] }));
         return;
       }
+      if (url.pathname === "/githead") {
+        const p = url.searchParams.get("path") || "";
+        const reply = () => {
+          const f = files.get(p);
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify(f && p.endsWith("jitter.rs")
+            ? { ok: true, text: f.text, sha: "fixture-head", ts: 1 }
+            : { ok: false }));
+        };
+        if (p.endsWith("jitter.rs")) setTimeout(reply, 500);
+        else reply();
+        return;
+      }
 
       let rel = url.pathname;
       if (rel.startsWith("/.fig_thumbs/")) rel = rel.slice("/.fig_thumbs/".length);
@@ -178,6 +195,25 @@ test.describe("Editor shell (code)", () => {
     });
     expect(color).toBeTruthy();
     expect(color).not.toBe("rgb(0, 0, 0)");
+  });
+
+  test("delayed Git gutter does not shift code after reload", async ({ page }) => {
+    const path = "/tmp/atelier-test/jitter.rs";
+    await page.goto(
+      baseURL + "/code_editor.html?path=" + encodeURIComponent(path)
+    );
+    await page.waitForFunction(() => window.__ATELIER_SHELL__?.cm?.(), null, {
+      timeout: 15000,
+    });
+    const before = await page.locator(".cm-content").evaluate((el) =>
+      el.getBoundingClientRect().left
+    );
+    await page.waitForTimeout(800);
+    const after = await page.locator(".cm-content").evaluate((el) =>
+      el.getBoundingClientRect().left
+    );
+    expect(after).toBe(before);
+    await expect(page.locator(".cm-gutter.dv-git")).toBeAttached();
   });
 
   test("selection composer stages or sends an annotation", async ({ page }) => {

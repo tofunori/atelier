@@ -200,6 +200,10 @@
         value: text || "",
         mode: mode,
         lineWrapping: toolbar.getWrapValue() !== "off",
+        // DiffVersions populates this gutter after the asynchronous HEAD
+        // request. Mount it from the first CM6 frame so adding markers never
+        // shifts the code horizontally after a reload.
+        gutters: dv ? ["CodeMirror-linenumbers", "dv-git"] : [],
       });
       toolbar.applyWrap(toolbar.getWrapValue());
       cm.on("change", function (_, ch) {

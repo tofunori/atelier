@@ -7,7 +7,7 @@
 
   /**
    * @param {HTMLElement} parent
-   * @param {{value?:string, mode?:string|null, lineWrapping?:boolean, readOnly?:boolean}} options
+   * @param {{value?:string, mode?:string|null, lineWrapping?:boolean, readOnly?:boolean, gutters?:string[]}} options
    */
   async function create(parent, options) {
     options = options || {};
@@ -29,6 +29,7 @@
       viewportMargin: 50,
       styleSelectedText: true,
       readOnly: !!options.readOnly,
+      gutters: Array.isArray(options.gutters) ? options.gutters : [],
     });
 
     // Prefer code theme from versioned prefs
