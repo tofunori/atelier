@@ -87,6 +87,15 @@ impl ProjectRuntime {
     pub fn watcher(&self) -> Arc<RwLock<WatcherStatus>> {
         self.watcher.clone()
     }
+
+    /// Shared access for daemon control methods (annotations, consumers).
+    pub fn agent(&self) -> Arc<Mutex<AgentStore>> {
+        self.agent.clone()
+    }
+
+    pub fn rebuild_lock(&self) -> Arc<Mutex<()>> {
+        self.rebuild_lock.clone()
+    }
 }
 
 #[cfg(test)]

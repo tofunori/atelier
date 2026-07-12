@@ -1544,8 +1544,8 @@ async fn rescan(State(state): State<ProjectRuntime>, headers: HeaderMap) -> impl
 /// Résultat d'un rebuild — ce que /rescan renvoie au client, aligné sur le
 /// contrat Python `{"ok": rc == 0, "out": derniers 200 caractères}`.
 pub struct RebuildOutcome {
-    ok: bool,
-    out: String,
+    pub ok: bool,
+    pub out: String,
 }
 
 impl RebuildOutcome {

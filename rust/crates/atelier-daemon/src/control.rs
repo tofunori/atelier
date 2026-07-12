@@ -350,6 +350,181 @@ async fn dispatch(request: ControlRequest, state: &ControlState) -> ControlRespo
                 Err(message) => error_response(request.id, "TICKET_FAILED", message),
             }
         }
+
+        "consumer.register" => {
+            let Some(key) = request.params.get("key").and_then(Value::as_str) else {
+                return error_response(request.id, "INVALID_PARAMS", "key required");
+            };
+            let thread = request
+                .params
+                .get("thread")
+                .and_then(Value::as_str)
+                .unwrap_or("consumer");
+            let label = request
+                .params
+                .get("label")
+                .and_then(Value::as_str)
+                .unwrap_or("Codex task");
+            match state.host.activate(key).await {
+                Ok(runtime) => {
+                    let agent_store = runtime.agent();
+                    let mut agent = agent_store.lock().await;
+                    match agent.register(
+                        format!("thread:{thread}"),
+                        thread.to_string(),
+                        Some(label.to_string()),
+                        Some(thread.to_string()),
+                        Some(false),
+                        None,
+                    ) {
+                        Ok(value) => ControlResponse {
+                            id: request.id,
+                            ok: true,
+                            result: Some(value),
+                            error: None,
+                        },
+                        Err(message) => error_response(request.id, "REGISTER_FAILED", message),
+                    }
+                }
+                Err(error) => error_response(request.id, error.code(), error.message()),
+            }
+        }
+        "annotation.list" => {
+            let Some(key) = request.params.get("key").and_then(Value::as_str) else {
+                return error_response(request.id, "INVALID_PARAMS", "key required");
+            };
+            let consumer = request
+                .params
+                .get("consumer")
+                .and_then(Value::as_str)
+                .unwrap_or("");
+            match state.host.activate(key).await {
+                Ok(runtime) => {
+                    let agent_store = runtime.agent();
+                    let mut agent = agent_store.lock().await;
+                    match agent.claim(consumer, &format!("thread:{consumer}")) {
+                        Ok(items) => ControlResponse {
+                            id: request.id,
+                            ok: true,
+                            result: Some(json!({ "items": items, "consumer": consumer })),
+                            error: None,
+                        },
+                        Err(message) => error_response(request.id, "ANNOTATION_FAILED", message),
+                    }
+                }
+                Err(error) => error_response(request.id, error.code(), error.message()),
+            }
+        }
+        "annotation.ack" => {
+            let Some(key) = request.params.get("key").and_then(Value::as_str) else {
+                return error_response(request.id, "INVALID_PARAMS", "key required");
+            };
+            let consumer = request
+                .params
+                .get("consumer")
+                .and_then(Value::as_str)
+                .unwrap_or("");
+            let ids: Vec<String> = request
+                .params
+                .get("ids")
+                .and_then(Value::as_array)
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(Value::as_str)
+                        .map(str::to_string)
+                        .collect()
+                })
+                .unwrap_or_default();
+            match state.host.activate(key).await {
+                Ok(runtime) => {
+                    let agent_store = runtime.agent();
+                    let mut agent = agent_store.lock().await;
+                    match agent.acknowledge(&ids, consumer) {
+                        Ok(count) => ControlResponse {
+                            id: request.id,
+                            ok: true,
+                            result: Some(json!({ "acked": count, "ids": ids })),
+                            error: None,
+                        },
+                        Err(message) => error_response(request.id, "ANNOTATION_FAILED", message),
+                    }
+                }
+                Err(error) => error_response(request.id, error.code(), error.message()),
+            }
+        }
+        "annotation.status" => {
+            let Some(key) = request.params.get("key").and_then(Value::as_str) else {
+                return error_response(request.id, "INVALID_PARAMS", "key required");
+            };
+            match state.host.activate(key).await {
+                Ok(runtime) => {
+                    let agent_store = runtime.agent();
+                    let agent = agent_store.lock().await;
+                    ControlResponse {
+                        id: request.id,
+                        ok: true,
+                        result: Some(agent.status(50)),
+                        error: None,
+                    }
+                }
+                Err(error) => error_response(request.id, error.code(), error.message()),
+            }
+        }
+        "project.rescan" => {
+            let Some(key) = request.params.get("key").and_then(Value::as_str) else {
+                return error_response(request.id, "INVALID_PARAMS", "key required");
+            };
+            match state.host.activate(key).await {
+                Ok(runtime) => {
+                    let root = runtime.root().to_path_buf();
+                    let outcome = atelier_server::rebuild(
+                        &root,
+                        &runtime.watcher(),
+                        &runtime.revision(),
+                        &runtime.rebuild_lock(),
+                    )
+                    .await;
+                    ControlResponse {
+                        id: request.id,
+                        ok: outcome.ok,
+                        result: Some(json!({
+                            "key": key,
+                            "ok": outcome.ok,
+                            "revision": *runtime.revision().read().await,
+                            "message": outcome.out,
+                        })),
+                        error: if outcome.ok {
+                            None
+                        } else {
+                            Some(ControlError {
+                                code: "RESCAN_FAILED".into(),
+                                message: outcome.out,
+                            })
+                        },
+                    }
+                }
+                Err(error) => error_response(request.id, error.code(), error.message()),
+            }
+        }
+        "project.event" => {
+            let Some(key) = request.params.get("key").and_then(Value::as_str) else {
+                return error_response(request.id, "INVALID_PARAMS", "key required");
+            };
+            match state.host.activate(key).await {
+                Ok(_runtime) => ControlResponse {
+                    id: request.id,
+                    ok: true,
+                    result: Some(json!({
+                        "key": key,
+                        "rel": request.params.get("rel"),
+                        "note": request.params.get("note"),
+                        "accepted": true,
+                    })),
+                    error: None,
+                },
+                Err(error) => error_response(request.id, error.code(), error.message()),
+            }
+        }
         "project.suspend" => {
             let Some(key) = request.params.get("key").and_then(Value::as_str) else {
                 return error_response(request.id, "INVALID_PARAMS", "key required");

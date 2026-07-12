@@ -3,6 +3,8 @@
 //! Commandes : serve, status, doctor, stop, run.
 //! Le binaire `atelier-server` est cherché à côté du CLI, puis sur PATH.
 
+mod control_client;
+
 use clap::{Parser, Subcommand};
 use md5::{Digest, Md5};
 use serde_json::{Value, json};
@@ -144,6 +146,35 @@ enum SvgCommand {
         #[arg(long)]
         stdout: bool,
     },
+}
+
+
+fn open_via_daemon(root: &Path, no_open: bool) -> Result<(), String> {
+    let root = project_root(root)?;
+    let result = control_client::call(
+        "project.open",
+        serde_json::json!({
+            "root": root.to_string_lossy(),
+            "nativeFs": true,
+            "theme": "Codex",
+        }),
+    )?;
+    let url = result.get("url").and_then(|v| v.as_str()).unwrap_or("");
+    let open_url = result
+        .get("openUrl")
+        .and_then(|v| v.as_str())
+        .unwrap_or(url);
+    println!("{}", serde_json::json!({
+        "ok": true,
+        "runtime": "daemon",
+        "project": root,
+        "url": url,
+        "openUrl": open_url,
+    }));
+    if !no_open && !open_url.is_empty() {
+        let _ = Command::new("open").arg(open_url).status();
+    }
+    Ok(())
 }
 
 fn http_get(port: u16, path: &str) -> Result<(u16, String), String> {
@@ -583,7 +614,13 @@ fn main() -> Result<(), String> {
             root,
             port,
             no_open,
-        } => start_detached(&root, port, !no_open),
+        } => {
+            if control_client::use_daemon() {
+                open_via_daemon(&root, no_open)
+            } else {
+                start_detached(&root, port, !no_open)
+            }
+        }
         CommandKind::Foreground { root, port } => serve(&root, port, true),
     }
 }

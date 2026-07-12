@@ -1,3 +1,5 @@
+mod daemon_client;
+
 use md5::{Digest as Md5Digest, Md5};
 use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
 use serde_json::{Value, json};
@@ -415,8 +417,182 @@ fn register(root: &str, label: Option<&str>, automatic: bool) -> Result<Value, S
     )
 }
 
+
+fn consumer_id() -> String {
+    env::var("CODEX_THREAD_ID").unwrap_or_else(|_| format!("codex-{}", std::process::id()))
+}
+
+fn call_daemon(name: &str, root: &str, args: &Value) -> Result<Value, String> {
+    match name {
+        "atelier_open" => {
+            let consumer = consumer_id();
+            let opened = daemon_client::project_open(
+                root,
+                &consumer,
+                args.get("label").and_then(Value::as_str),
+            )?;
+            let key = opened.get("key").and_then(Value::as_str).unwrap_or_default();
+            let url = opened.get("url").and_then(Value::as_str).unwrap_or_default();
+            let open_url = opened
+                .get("openUrl")
+                .and_then(Value::as_str)
+                .unwrap_or(url);
+            let _ = daemon_client::call(
+                "consumer.register",
+                json!({
+                    "key": key,
+                    "thread": consumer,
+                    "label": args.get("label").and_then(Value::as_str).unwrap_or("Codex task"),
+                    "mode": if args.get("automatic").and_then(Value::as_bool).unwrap_or(false) {
+                        "automatic"
+                    } else {
+                        "manual"
+                    },
+                }),
+            );
+            Ok(json!({
+                "ok": true,
+                "serverReady": true,
+                "panelVisible": false,
+                "runtime": "daemon",
+                "project": root,
+                "projectKey": key,
+                "url": url,
+                "openUrl": open_url,
+                "nextAction": "Open openUrl in the visible Codex browser; after redirect the final URL must match url. Keep that tab as a deliverable before reporting success."
+            }))
+        }
+        "atelier_connect" => {
+            let consumer = consumer_id();
+            let opened = daemon_client::project_open(root, &consumer, args.get("label").and_then(Value::as_str))?;
+            let key = opened.get("key").cloned().unwrap_or(json!(null));
+            daemon_client::call(
+                "consumer.register",
+                json!({
+                    "key": key,
+                    "thread": consumer,
+                    "label": args.get("label").and_then(Value::as_str).unwrap_or("Codex task"),
+                    "mode": "manual",
+                }),
+            )
+        }
+        "atelier_get_selection" => {
+            let consumer = consumer_id();
+            let key = daemon_client::call("project.register", json!({"root": root}))?
+                .get("key")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_string();
+            daemon_client::call(
+                "annotation.list",
+                json!({ "key": key, "consumer": consumer }),
+            )
+        }
+        "atelier_wait_for_annotation" => {
+            let seconds = args
+                .get("timeoutSeconds")
+                .and_then(Value::as_f64)
+                .unwrap_or(30.0)
+                .clamp(1.0, 55.0);
+            let deadline = Instant::now() + Duration::from_secs_f64(seconds);
+            loop {
+                let value = call_daemon("atelier_get_selection", root, args)?;
+                if value
+                    .get("items")
+                    .and_then(Value::as_array)
+                    .is_some_and(|items| !items.is_empty())
+                    || Instant::now() >= deadline
+                {
+                    break Ok(value);
+                }
+                thread::sleep(Duration::from_millis(350));
+            }
+        }
+        "atelier_ack_selection" => {
+            let consumer = consumer_id();
+            let key = daemon_client::call("project.register", json!({"root": root}))?
+                .get("key")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_string();
+            daemon_client::call(
+                "annotation.ack",
+                json!({
+                    "key": key,
+                    "consumer": consumer,
+                    "ids": args.get("ids").cloned().unwrap_or(json!([])),
+                }),
+            )
+        }
+        "atelier_list_annotations" => {
+            let key = daemon_client::call("project.register", json!({"root": root}))?
+                .get("key")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_string();
+            daemon_client::call("project.status", json!({ "key": key }))
+        }
+        "atelier_set_annotation_status" => {
+            let key = daemon_client::call("project.register", json!({"root": root}))?
+                .get("key")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_string();
+            let mut params = args.clone();
+            if let Some(obj) = params.as_object_mut() {
+                obj.insert("key".into(), json!(key));
+            }
+            daemon_client::call("annotation.status", params)
+        }
+        "atelier_rescan" => {
+            let key = daemon_client::call("project.register", json!({"root": root}))?
+                .get("key")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_string();
+            daemon_client::call("project.rescan", json!({ "key": key }))
+        }
+        "atelier_mark_updated" => {
+            let key = daemon_client::call("project.register", json!({"root": root}))?
+                .get("key")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_string();
+            daemon_client::call(
+                "project.event",
+                json!({
+                    "key": key,
+                    "rel": args.get("path"),
+                    "note": args.get("note"),
+                }),
+            )
+        }
+        "atelier_stop" => {
+            // Daemon is process-global; stop does not kill it. Suspend project instead.
+            let key = daemon_client::call("project.register", json!({"root": root}))?
+                .get("key")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_string();
+            let _ = daemon_client::call("project.suspend", json!({ "key": key }));
+            Ok(json!({
+                "ok": true,
+                "stopped": false,
+                "suspended": true,
+                "runtime": "daemon",
+                "project": root,
+                "note": "atelier-daemon stays running; project runtime suspended"
+            }))
+        }
+        _ => Err(format!("unknown tool: {name}")),
+    }
+}
+
 fn call(name: &str, args: &Value) -> Result<Value, String> {
     let root = canonical_root(args.get("root"))?;
+    if daemon_client::use_daemon() {
+        return call_daemon(name, &root, args);
+    }
     match name {
         "atelier_open" => {
             let (port, _) = ensure_server(&root)?;
@@ -434,7 +610,7 @@ fn call(name: &str, args: &Value) -> Result<Value, String> {
                 "project": root,
                 "port": port,
                 "url": format!("http://127.0.0.1:{port}/figures_index.html?nativeFs=1&theme=Codex"),
-                "nextAction": "Open the returned URL in the visible Codex in-app browser and keep that tab as a deliverable before reporting success."
+                "nextAction": "Open the returned openUrl (or url after redirect) in the visible Codex in-app browser and keep that tab as a deliverable before reporting success."
             }))
         }
         "atelier_connect" => register(
